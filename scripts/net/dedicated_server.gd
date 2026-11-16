@@ -6,6 +6,7 @@ extends Node
 ##
 ##   godot --headless --path . -- --server [--port 24565] [--name "My Server"]
 ##         [--goal 10] [--team-size 4] [--skill 1] [--free] [--round-break 15]
+##         [--map path/to/saved.bwmap]   (every round then starts on that map)
 ##
 ## or, from an exported build:  BurrowWars.exe --headless -- --server
 
@@ -31,7 +32,7 @@ static func parse_args() -> Dictionary:
 			var key := a.substr(2)
 			if key in ["server", "free"]:
 				out[key] = true
-			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break"] and i + 1 < args.size():
+			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break", "map"] and i + 1 < args.size():
 				out[key] = args[i + 1]
 				i += 1
 		i += 1
@@ -63,7 +64,8 @@ func _settings() -> Dictionary:
 	return {
 		"mode": "free" if free else "race",
 		"seed": seed_value if seed_value > 0 else randi_range(1, 999999),
-		"goal": 9999 if free else clampi(int(options.get("goal", 10)), 1, 40),
+		"goal": 9999 if free else clampi(int(options.get("goal", 10)), 1, 250),
+		"map_file": String(options.get("map", "")),
 		"team_size": clampi(int(options.get("team-size", 4)), 1, 8),
 		"bot_rest": [7.0, 3.0, 0.0][skill],
 		"server_name": _server_name(),

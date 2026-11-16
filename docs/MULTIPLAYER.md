@@ -44,12 +44,13 @@ On Windows: `BurrowWars.exe --headless -- --server`.
 |---|---|---|
 | `--port N` | 24565 | UDP port. Run several servers on one machine with different ports. |
 | `--name "..."` | Burrow Wars server | Shown to players (16 characters max). |
-| `--goal N` | 10 | Cheese to win a round (1-40). |
+| `--goal N` | 10 | Cheese to win a round (1-250). The map always holds at least 2.5x the goal. |
 | `--team-size N` | 4 | Seats per team, bots included (1-8). |
 | `--skill 0/1/2` | 1 | Bot skill: relaxed, normal, fierce. |
 | `--round-break S` | 15 | Seconds between a win and the next map. |
 | `--seed N` | random | Fix the first map (later rounds are random). |
 | `--free` | off | Run Free Build instead of Cheese Race. |
+| `--map FILE` | none | Start every round on a saved/exported `.bwmap` (from Esc > Export map) instead of a new map. |
 
 ### Hosting one on a VPS
 

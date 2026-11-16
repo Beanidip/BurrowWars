@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.0 - Big goals, map export/import, paint brush, pantograph transforms (2026-11-16)
+
+| Change | Files |
+|---|---|
+| Cheese goal up to 250; every race map holds at least 2.5 cheese per point of goal, spread by sector and split evenly | `world/map_generator.gd`, `match/match.gd`, `ui/main_menu.gd`, `net/dedicated_server.gd` |
+| Esc > Export map (offline or hosting) saves the map with carvings, gate layers and machines | `ui/hud.gd`, `world/voxel_world.gd` |
+| Map picker on Cheese Race, Host and Free Build setup: import a saved map as a bot race, a hosted game or Free Build. Races get both bases stamped back and cheese topped up in matching pairs. Maps folder button | `ui/main_menu.gd`, `world/map_generator.gd`, `match/match.gd` |
+| Dedicated servers take `--map file.bwmap` | `net/dedicated_server.gd` |
+| Paint slot + left click dyes dirt, stone or painted blocks (other blocks are dug as usual) | `match/match.gd`, `actors/player_controller.gd`, `net/net_server.gd` |
+| Pantograph: Z mirrors, Y flips upside down, U inverts (filled <-> empty), alongside X rotate; carvings transform too | `match/blueprint.gd`, `actors/player_controller.gd`, `core/inputs.gd` |
+
 ## 1.6.0 - Procedural maps (2026-11-16)
 
 | Change | Files |

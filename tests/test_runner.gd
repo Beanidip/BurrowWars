@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -1186,6 +1186,124 @@ func test_painted_blocks() -> void:
 		var dest := ARENA + Vector3i(0, 0, 3)
 		check(m.try_paste(r, res["blueprint"], dest) == "" and (m.world.micro[dest] as PackedByteArray)[0 + 7 * (0 + 7 * 6)] == 9, "and pastes it with its colours")
 	end(m)
+
+
+func test_paint_on_click() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "scout")
+	run(m, 0.2)
+	var c := ARENA + Vector3i(2, 0, 0)
+	m.world.set_block(c, Blocks.STONE)
+	var mats := r.mats.duplicate()
+	r.dig_cd = 0.0
+	check(m.paintable(c) and m.try_paint_block(r, c, 5) == "" and m.world.get_cell(c) == Blocks.PAINT_0 + 5, "left click with paint dyes a stone block")
+	check(r.mats == mats, "dyeing costs nothing")
+	r.dig_cd = 0.0
+	check(m.try_paint_block(r, c, Blocks.PALETTE_SOLID + 1) == "" and Blocks.is_glass(m.world.get_cell(c)), "a painted block can be recoloured, even to glass")
+	var ob := ARENA + Vector3i(2, 0, 1)
+	m.world.set_block(ob, Blocks.OBSIDIAN)
+	r.dig_cd = 0.0
+	check(not m.paintable(ob) and m.try_paint_block(r, ob, 2) != "" and m.world.get_cell(ob) == Blocks.OBSIDIAN, "obsidian (and other tough blocks) cannot be painted weaker")
+	r.position = Vector3(14.0, MapGenerator.GROUND, 10.5)
+	r.dig_cd = 0.0
+	check(m.try_paint_block(r, Vector3i(12, MapGenerator.GROUND - 1, 10), 2) != "", "base blocks cannot be painted")
+	end(m)
+
+
+func test_pantograph_transforms() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var r := arena_rat(m, 0, "builder")
+	var a := ARENA + Vector3i(2, 0, 0)
+	# an L of stone with one carved block: 3 wide, 2 tall, 1 deep
+	m.world.set_block(a, Blocks.STONE)
+	m.world.set_block(a + Vector3i(1, 0, 0), Blocks.STONE)
+	m.world.set_block(a + Vector3i(2, 0, 0), Blocks.ICE)
+	var carved := mask_layers(3)
+	carved[0] = 0
+	m.world.set_mask(a + Vector3i(0, 1, 0), Blocks.STONE, carved)
+	var bp: Blueprint = m.copy_region(r, a, a + Vector3i(2, 1, 0))["blueprint"]
+	check(bp.cells.size() == 4 and bp.size == Vector3i(3, 2, 1), "copied the L")
+	var mir := bp.mirrored()
+	var by_o := {}
+	for e in mir.cells:
+		by_o[e["o"]] = e
+	check(int(by_o[Vector3i(0, 0, 0)]["id"]) == Blocks.ICE and by_o.has(Vector3i(2, 1, 0)), "mirror swaps left and right")
+	var mk: PackedByteArray = by_o[Vector3i(2, 1, 0)]["mask"]
+	check(mk[6] == 0 and mk[0] == 1, "and mirrors the carving inside the block")
+	check(_same(bp, bp.mirrored().mirrored()), "mirroring twice restores the original")
+	var flp := bp.flipped()
+	by_o.clear()
+	for e in flp.cells:
+		by_o[e["o"]] = e
+	check(by_o.has(Vector3i(0, 0, 0)) and by_o[Vector3i(0, 0, 0)]["mask"] != null and by_o.has(Vector3i(1, 1, 0)), "flip turns it upside down")
+	var fm: PackedByteArray = by_o[Vector3i(0, 0, 0)]["mask"]
+	check(fm[0 + 49 * 6] == 0 and fm.count(1) == 146 and fm[0] == 0 and fm[1 + 49 * 6] == 1, "the carving is flipped too (layers now at the top)")
+	check(_same(bp, bp.flipped().flipped()), "flipping twice restores the original")
+	var inv := bp.inverted()
+	by_o.clear()
+	for e in inv.cells:
+		by_o[e["o"]] = e
+	check(by_o.has(Vector3i(1, 1, 0)) and by_o.has(Vector3i(2, 1, 0)) and int(by_o[Vector3i(1, 1, 0)]["id"]) == Blocks.STONE, "invert fills the empty spots with the main material")
+	check(not by_o.has(Vector3i(0, 0, 0)) and not by_o.has(Vector3i(2, 0, 0)), "and empties the full blocks")
+	check(by_o.has(Vector3i(0, 1, 0)) and (by_o[Vector3i(0, 1, 0)]["mask"] as PackedByteArray).count(1) == 343 - 146, "a carved block keeps exactly the carved-away part")
+	check(inv.validate() == "" and mir.validate() == "" and flp.validate() == "", "transformed blueprints pass the authority's checks")
+	r.mats["stone"] = 9
+	check(m.try_paste(r, inv, ARENA + Vector3i(-5, 0, -2)) == "", "an inverted blueprint pastes")
+	end(m)
+
+
+func _same(a: Blueprint, b: Blueprint) -> bool:
+	if a.size != b.size or a.cells.size() != b.cells.size():
+		return false
+	for e in a.cells:
+		var hit := false
+		for f in b.cells:
+			if f["o"] == e["o"] and f["id"] == e["id"] and f["mask"] == e["mask"]:
+				hit = true
+		if not hit:
+			return false
+	return true
+
+
+func test_big_goal_and_map_import() -> void:
+	var m := new_match({"goal": 250, "seed": 31})
+	check(m.world.cheese_cells.size() >= 625, "a 250 goal puts at least 625 cheese on the map (%d)" % m.world.cheese_cells.size())
+	var halves := [0, 0]
+	for c: Vector3i in m.world.cheese_cells:
+		halves[0 if c.x < VoxelWorld.SX / 2 else 1] += 1
+	check(halves[0] == halves[1], "split evenly (%d / %d)" % [halves[0], halves[1]])
+	var low := new_match({"goal": 8, "seed": 31})
+	check(low.world.cheese_cells.size() >= 20, "small goals still get a full map (%d)" % low.world.cheese_cells.size())
+	# export a Free Build map with a carving and a machine, import it as a race and as Free Build
+	var fb := new_match({"mode": "free", "seed": 5})
+	var r := fb.spawn_rat(0, "maestro", false)
+	r.position = Vector3(40.5, 58, 40.5)
+	fb.world.set_block(Vector3i(40, 57, 42), Blocks.STONE)
+	fb.world.set_mask(Vector3i(41, 57, 42), Blocks.STONE, mask_layers(2))
+	# wreck a base to prove an import restores it
+	for x in range(MapGenerator.BASE_MIN, MapGenerator.BASE_MIN + MapGenerator.BASE_SIZE):
+		fb.world.set_block(Vector3i(x, MapGenerator.GROUND - 1, 9), Blocks.AIR)
+	var path := VoxelWorld.MAPS_DIR + "/test_export.bwmap"
+	check(fb.world.save_to(path, {"machines": fb.siege.to_save()}) and VoxelWorld.file_ok(path) and VoxelWorld.list_maps().has(path), "exported and listed")
+	end(fb)
+	var race := new_match({"goal": 40, "map_file": path, "seed": 6})
+	check(race.world.get_cell(Vector3i(40, 57, 42)) == Blocks.STONE and race.world.has_micro(Vector3i(41, 57, 42)), "an imported map keeps its builds and carvings")
+	check(race.world.get_cell(Vector3i(9, MapGenerator.GROUND - 1, 9)) == Blocks.BASE_BLUE and race.world.get_cell(MapGenerator.rot_cell(Vector3i(9, MapGenerator.GROUND - 1, 9))) == Blocks.BASE_RED, "both bases are stamped back for a race")
+	check(race.world.cheese_cells.size() >= MapGenerator.min_cheese(40), "cheese is topped up to 2.5x the goal (%d)" % race.world.cheese_cells.size())
+	var spawn := MapGenerator.spawn_point(1)
+	check(race.world.block_at(spawn + Vector3(0, 0.5, 0)) == Blocks.AIR, "the spawn is clear")
+	end(race)
+	var free2 := new_match({"mode": "free", "map_file": path, "seed": 6})
+	check(free2.world.has_micro(Vector3i(41, 57, 42)), "and loads as Free Build")
+	end(free2)
+	var bad := new_match({"map_file": "user://maps/does_not_exist.bwmap"})
+	check(bad.world.cheese_cells.size() > 0, "a missing map falls back to a generated one")
+	end(bad)
+	DirAccess.remove_absolute(path)
+	end(m)
+	end(low)
 
 
 func test_cheese_drop_and_springs() -> void:

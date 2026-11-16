@@ -98,12 +98,19 @@ func _run() -> void:
 	var before := {}
 	for r in m.rats:
 		before[r.id] = r.position
-	await wait(3.0)
-	var moved := 0
+	var count_moved := func() -> int:
+		var n := 0
+		for r in m.rats:
+			if r != me and r.position.distance_to(before[r.id]) > 1.0:
+				n += 1
+		return n
+	await wait_for(func() -> bool: return count_moved.call() >= 1, 10.0)   # bots may be busy digging for a few seconds
+	var moved: int = count_moved.call()
+	var detail := ""
 	for r in m.rats:
-		if r != me and r.position.distance_to(before[r.id]) > 1.0:
-			moved += 1
-	check(moved >= 1, "other rats move on our screen (%d of 3)" % moved)
+		if r != me:
+			detail += " [%d %s %s->%s]" % [r.id, "bot" if r.is_bot else "human", str(before[r.id]), str(r.position)]
+	check(moved >= 1, "other rats move on our screen (%d of 3)%s" % [moved, detail if moved == 0 else ""])
 
 	# cheating is corrected: a 30-block teleport is put back by the server
 	await wait_for(func() -> bool: return me.on_floor, 3.0)

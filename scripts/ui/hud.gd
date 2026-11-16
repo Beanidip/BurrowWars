@@ -403,7 +403,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("color_picker"):
 		_toggle("colors")
 	elif m.free_mode and event.is_action_pressed("save_map"):
-		var ok := m.world.save_to("user://maps/free_build.bwmap", {"machines": m.siege.to_save()})
+		var ok := m.world.save_to(VoxelWorld.MAPS_DIR + "/free_build.bwmap", {"machines": m.siege.to_save()})
 		_push_toast("Map saved to %s" % ProjectSettings.globalize_path("user://maps/free_build.bwmap") if ok else "Map save failed - see log", UiKit.BRASS)
 	elif m.free_mode and event.is_action_pressed("load_map") and m.networked:
 		_push_toast("Loading a map is only possible offline", UiKit.PAPER)
@@ -635,9 +635,21 @@ func _fill_pause(v: VBoxContainer) -> void:
 	var h := HBoxContainer.new()
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 12)
-	h.add_child(UiKit.button("Resume", close_dialog, Vector2(200, 44)))
-	h.add_child(UiKit.button("Quit to menu", _exit, Vector2(200, 44)))
+	h.add_child(UiKit.button("Resume", close_dialog, Vector2(180, 44)))
+	if not m.replica:   # offline or hosting: you hold the real map
+		h.add_child(UiKit.button("Export map", export_map, Vector2(180, 44)))
+	h.add_child(UiKit.button("Quit to menu", _exit, Vector2(180, 44)))
 	v.add_child(h)
+
+
+func export_map() -> String:
+	## Saves a copy of the current map (carvings, gate layers and siege
+	## machines included) that the setup screens can load again.
+	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
+	var path := "%s/%s_%s.bwmap" % [VoxelWorld.MAPS_DIR, "freebuild" if m.free_mode else "map", stamp]
+	var ok := m.world.save_to(path, {"machines": m.siege.to_save()})
+	_push_toast(("Exported %s - pick it under Map when you set up a game" % path.get_file()) if ok else "Export failed - see the log", UiKit.BRASS)
+	return path if ok else ""
 
 
 func _exit() -> void:

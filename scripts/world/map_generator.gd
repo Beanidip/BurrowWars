@@ -67,9 +67,17 @@ static func approach_point(team: int) -> Vector3:
 
 # ---------------------------------------------------------------- generation
 
-static func generate(world: VoxelWorld, map_seed: int) -> void:
-	if _cache.has(map_seed):
-		var hit: Array = _cache[map_seed]
+const CHEESE_PER_GOAL := 2.5       # a race map always holds at least this many cheese per point of goal
+
+
+static func min_cheese(goal: int) -> int:
+	return ceili(float(goal) * CHEESE_PER_GOAL)
+
+
+static func generate(world: VoxelWorld, map_seed: int, cheese_at_least := 0) -> void:
+	var key := "%d:%d" % [map_seed, cheese_at_least]
+	if _cache.has(key):
+		var hit: Array = _cache[key]
 		world.data = (hit[0] as PackedByteArray).duplicate()
 		world.points_of_interest.assign(hit[1])
 		world.micro.clear()
@@ -87,11 +95,70 @@ static func generate(world: VoxelWorld, map_seed: int) -> void:
 	_resources(world, rng, heights)
 	_surface(world, rng, heights)
 	_base(world)
+	_more_cheese(world, rng, heights, (cheese_at_least + 1) / 2)
 	_rotate_copy(world)
 	world.reindex()
 	if _cache.size() >= 3:
 		_cache.clear()
-	_cache[map_seed] = [world.data.duplicate(), world.points_of_interest.duplicate()]
+	_cache[key] = [world.data.duplicate(), world.points_of_interest.duplicate()]
+
+
+static func _more_cheese(world: VoxelWorld, rng: RandomNumberGenerator, heights: PackedInt32Array, half_target: int) -> void:
+	## Big goals need more cheese: add it underground, a sector at a time, so
+	## it stays spread over the whole map (the other half gets the same).
+	var have := 0
+	var i := world.data.find(Blocks.CHEESE)
+	while i >= 0:
+		if i % VoxelWorld.SX < HALF:
+			have += 1
+		i = world.data.find(Blocks.CHEESE, i + 1)
+	var cols := HALF / SECTOR
+	var rows := VoxelWorld.SZ / SECTOR
+	var k := 0
+	var guard := 0
+	while have < half_target and guard < half_target * 40 + 400:
+		guard += 1
+		var sx := k % cols
+		var sz := (k / cols) % rows
+		k += 1
+		var p := _sector_spot(rng, sx, sz, 1)
+		if _near_base(p.x, p.y, 16.0):
+			continue
+		var y := rng.randi_range(3, maxi(4, surface(heights, p.x, p.y) - 3))
+		var cur := world.get_block(p.x, y, p.y)
+		if cur == Blocks.STONE or cur == Blocks.DIRT:
+			world.set_raw(p.x, y, p.y, Blocks.CHEESE)
+			have += 1
+
+
+static func prepare_imported(world: VoxelWorld, map_seed: int, cheese_at_least: int) -> void:
+	## A map loaded from a file, made ready for a Cheese Race: both base
+	## platforms are stamped back in, and cheese is topped up in matching
+	## pairs (a cell and its turned-around twin) until there is enough.
+	_base(world)
+	var b1 := base_zone(1)
+	for x in range(BASE_MIN, BASE_MIN + BASE_SIZE):
+		for z in range(BASE_MIN, BASE_MIN + BASE_SIZE):
+			for y in range(GROUND - 4, GROUND + 6):
+				world.set_raw(VoxelWorld.SX - 1 - x, y, VoxelWorld.SZ - 1 - z, Blocks.rotate180(world.get_block(x, y, z)))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = map_seed
+	world.reindex()
+	var have := world.cheese_cells.size()
+	var guard := 0
+	while have < cheese_at_least and guard < cheese_at_least * 60 + 600:
+		guard += 1
+		var c := Vector3i(rng.randi_range(2, VoxelWorld.SX - 3), rng.randi_range(3, GROUND - 3), rng.randi_range(2, VoxelWorld.SZ - 3))
+		var t := rot_cell(c)
+		if _near_base(c.x, c.z, 16.0) or _near_base(t.x, t.z, 16.0) or c == t:
+			continue
+		var a := world.get_cell(c)
+		var b := world.get_cell(t)
+		if (a == Blocks.STONE or a == Blocks.DIRT) and (b == Blocks.STONE or b == Blocks.DIRT) and not world.has_micro(c) and not world.has_micro(t):
+			world.set_raw(c.x, c.y, c.z, Blocks.CHEESE)
+			world.set_raw(t.x, t.y, t.z, Blocks.CHEESE)
+			have += 2
+	world.reindex()
 
 
 static func _noise(seed_value: int, freq: float, fractal := FastNoiseLite.FRACTAL_FBM, octaves := 3) -> FastNoiseLite:

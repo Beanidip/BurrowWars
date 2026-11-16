@@ -53,6 +53,77 @@ func rotated() -> Blueprint:
 	return out
 
 
+func mirrored() -> Blueprint:
+	## Left-right mirror image (across the blueprint's own x axis); carvings too.
+	return _remap(func(o: Vector3i) -> Vector3i: return Vector3i(size.x - 1 - o.x, o.y, o.z),
+		func(x: int, y: int, z: int) -> int: return (Blocks.MICRO - 1 - x) + Blocks.MICRO * (z + Blocks.MICRO * y))
+
+
+func flipped() -> Blueprint:
+	## Upside down; carvings too.
+	return _remap(func(o: Vector3i) -> Vector3i: return Vector3i(o.x, size.y - 1 - o.y, o.z),
+		func(x: int, y: int, z: int) -> int: return x + Blocks.MICRO * (z + Blocks.MICRO * (Blocks.MICRO - 1 - y)))
+
+
+func _remap(cell_map: Callable, micro_index: Callable) -> Blueprint:
+	var out := Blueprint.new()
+	out.size = size
+	out.skipped = skipped
+	var m := Blocks.MICRO
+	for e in cells:
+		var mask: Variant = null
+		if e["mask"] != null:
+			var src: PackedByteArray = e["mask"]
+			var dst := PackedByteArray()
+			dst.resize(Blocks.MICRO_COUNT)
+			for y in m:
+				for z in m:
+					for x in m:
+						dst[int(micro_index.call(x, y, z))] = src[x + m * (z + m * y)]
+			mask = dst
+		out.cells.append({"o": cell_map.call(e["o"]), "id": e["id"], "mask": mask})
+	return out
+
+
+func inverted() -> Blueprint:
+	## Inside out: every empty spot in the box becomes a block of the
+	## blueprint's most-used material, every full block becomes empty, and
+	## carved blocks keep exactly the microvoxels that were carved away.
+	var out := Blueprint.new()
+	out.size = size
+	out.skipped = skipped
+	var tally := {}
+	var at := {}
+	for e in cells:
+		at[e["o"]] = e
+		tally[e["id"]] = int(tally.get(e["id"], 0)) + 1
+	var fill := Blocks.DIRT
+	var best := -1
+	for id: int in tally:
+		if int(tally[id]) > best:
+			best = int(tally[id])
+			fill = id
+	for y in size.y:
+		for z in size.z:
+			for x in size.x:
+				var o := Vector3i(x, y, z)
+				if not at.has(o):
+					out.cells.append({"o": o, "id": fill, "mask": null})
+					continue
+				var e: Dictionary = at[o]
+				if e["mask"] == null:
+					continue
+				var src: PackedByteArray = e["mask"]
+				var dst := PackedByteArray()
+				dst.resize(Blocks.MICRO_COUNT)
+				for i in Blocks.MICRO_COUNT:
+					dst[i] = 1 if src[i] == 0 else 0
+				if dst.count(1) == 0:
+					continue
+				out.cells.append({"o": o, "id": e["id"], "mask": null if dst.count(1) == Blocks.MICRO_COUNT else dst})
+	return out
+
+
 func cost() -> Dictionary:
 	## Material name -> microvoxels needed (343 per uncarved block).
 	var need := {}

@@ -80,7 +80,19 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 		world.block_changed.connect(water.on_block_changed)
 		world.block_changed.connect(_on_block_changed)
 		world.block_changed.connect(siege.on_block_changed)
-	MapGenerator.generate(world, map_seed)
+	var need := 0 if free_mode else MapGenerator.min_cheese(goal)
+	var map_file := String(settings.get("map_file", ""))
+	var imported := false
+	if map_file != "" and not replica:
+		imported = world.load_from(map_file)
+		if not imported:
+			Log.warn("could not load map %s; generating one instead" % map_file)
+	if imported:
+		if not free_mode:
+			MapGenerator.prepare_imported(world, map_seed, need)
+		siege.from_save(world.loaded_extra.get("machines", []))
+	else:
+		MapGenerator.generate(world, map_seed, need)
 	for cell: Vector3i in _find_blocks(Blocks.TNT):
 		tnt[cell] = {"owner": -1, "fuse": -1.0}
 	Log.info("match setup: mode=%s seed=%d goal=%d cheese_on_map=%d" % [
@@ -540,6 +552,44 @@ func try_place_paint(rat: Rat, cell: Vector3i, color: int) -> String:
 	rat.play_action("build", 0.3)
 	fx.emit("place", Vector3(cell), block)
 	return ""
+
+
+func try_paint_block(rat: Rat, cell: Vector3i, color: int) -> String:
+	## Left click with the Paint slot: dye the block you hit. Dirt, grass and
+	## stone become a painted block (digging it later gives a dirt, like any
+	## painted block); painted blocks and glass just change colour. Free, at
+	## dig speed.
+	if over or rat.stun > 0.0 or rat.dig_cd > cd_slack(rat):
+		return "wait"
+	if remote != null:
+		rat.dig_cd = 1.0 / Config.DIG_RATE
+		rat.play_action("build", 0.25)
+		return remote.act("try_paint_block", [cell, color])
+	if color < 0 or color >= Blocks.PALETTE_SIZE:
+		return "Unknown colour"
+	if not VoxelWorld.in_bounds(cell) or (Vector3(cell) + Vector3(0.5, 0.5, 0.5)).distance_to(rat.eye()) > Config.DIG_REACH + 1.0:
+		return "Too far"
+	var id := world.get_cell(cell)
+	if not paintable(cell):
+		return "Only dirt, stone and painted blocks take paint" if not world.has_micro(cell) else "Carved blocks keep their own colours - use the chisel to add paint"
+	for t in 2:
+		if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
+			return "Bases are protected"
+	if world.layered_gate(cell) >= 0:
+		return "That is inside a gate"
+	rat.dig_cd = 1.0 / Config.DIG_RATE
+	var block := Blocks.PAINT_0 + color
+	if block == id:
+		return ""
+	world.set_block(cell, block)
+	rat.play_action("build", 0.25)
+	fx.emit("place", Vector3(cell), block)
+	return ""
+
+
+func paintable(cell: Vector3i) -> bool:
+	var id := world.get_cell(cell)
+	return (id == Blocks.DIRT or id == Blocks.GRASS or id == Blocks.STONE or Blocks.is_paint(id)) and not world.has_micro(cell)
 
 
 func paint_material(rat: Rat, micro := 0) -> String:

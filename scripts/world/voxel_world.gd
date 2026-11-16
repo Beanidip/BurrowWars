@@ -511,6 +511,35 @@ func micro_mask(c: Vector3i) -> Variant:
 	return micro[c] if has_micro(c) else null
 
 
+const MAPS_DIR := "user://maps"
+
+
+static func file_ok(path: String) -> bool:
+	## Quick header check (magic + size) without loading the whole map.
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return false
+	var ok := f.get_length() > 16 and f.get_pascal_string() == SAVE_MAGIC and f.get_32() == SX and f.get_32() == SY and f.get_32() == SZ
+	f.close()
+	return ok
+
+
+static func list_maps() -> Array[String]:
+	## Saved / exported maps this version can load, newest first.
+	var out: Array[String] = []
+	var d := DirAccess.open(MAPS_DIR)
+	if d == null:
+		return out
+	var found: Array = []
+	for f in d.get_files():
+		if f.ends_with(".bwmap") and file_ok(MAPS_DIR + "/" + f):
+			found.append([FileAccess.get_modified_time(MAPS_DIR + "/" + f), f])
+	found.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) > int(b[0]))
+	for e: Array in found:
+		out.append(MAPS_DIR + "/" + String(e[1]))
+	return out
+
+
 func load_from(path: String) -> bool:
 	## Rejects malformed or mismatched saves instead of corrupting the world.
 	if not FileAccess.file_exists(path):

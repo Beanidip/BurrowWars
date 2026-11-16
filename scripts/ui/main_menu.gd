@@ -4,7 +4,9 @@ extends Control
 
 signal start_requested(settings: Dictionary)
 
-const HELP := """GOAL  Dig up golden cheese and carry it home. First team to the cheese goal wins.
+const HELP := """GOAL  Dig up golden cheese and carry it home. First team to the cheese goal wins. Goals go up to 250; the map always holds at least 2.5 cheese per point of goal.
+
+MAPS  Esc > Export map saves the current map. Pick it under Map when you set up a Cheese Race, a hosted game or Free Build. The Maps folder button opens the folder, so you can share .bwmap files.
 
 DIG  Hold left mouse. Dirt takes 2 hits, stone 4, scrap 5. Mined dirt, stone, ice and obsidian go into your stash; place them with right mouse (1-4 picks the material). Wood is scenery: it breaks but gives nothing.
 
@@ -14,7 +16,7 @@ BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a chee
 
 SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Conveyors and highways are laid into the floor you aim at; a conveyor runs toward the bright edge of your target square. Aim at a ladder and press Q to extend it up or down. Q places the equipped gadget, R changes it, I opens your pack.
 
-COLOUR  Press C to pick one of 36 colours, including greys and see-through glass. Slot 5 places painted blocks with right mouse (each costs one dirt, or stone when you have no dirt; digging one gives a dirt back); with the chisel (9) right mouse adds painted microvoxels (glass is full blocks only).
+COLOUR  Press C to pick one of 36 colours, including greys and see-through glass. With slot 5, left click dyes a dirt, stone or painted block (anything else is dug as usual) and right mouse places painted blocks (each costs one dirt, or stone when you have no dirt; digging one gives a dirt back); with the chisel (9) right mouse adds painted microvoxels (glass is full blocks only).
 
 RAIDS  Stand inside the ENEMY base for 3 seconds to steal a cheese they already banked. Everyone hears the alarm, and any defender standing in their own base locks the vault - so guard it, gate it, trap it.
 
@@ -24,7 +26,7 @@ CLASSES  Digger: carries 3, Super Dig (E) smashes a 3x3x3. Scout: fast, sniffs o
 
 CHISEL (9)  Every block is 7x7x7 microvoxels. Left mouse carves one, right mouse adds one from the selected material. You climb ledges up to 4 microvoxels automatically, so you can carve stairs. Carving and refilling is zero-sum: 343 microvoxels is one block.
 
-PANTOGRAPH (0)  Left-click two corners to copy a build (up to 9 blocks a side, carvings included), aim, X to rotate, right-click to paste. It costs the materials. Only building materials copy - never cheese, scrap, traps or TNT.
+PANTOGRAPH (0)  Left-click two corners to copy a build (up to 9 blocks a side, carvings included), aim, then right-click to paste. X rotates, Z mirrors left-right, Y flips upside down, U inverts (empty spots fill with the main material, blocks become empty). Pasting costs the materials. Only building materials copy - never cheese, scrap, traps or TNT.
 
 MOBILE TNT  Q throws a bouncing dynamite stick (Ctrl+Q sets it down). Springs launch it, conveyors carry it, ice lets it slide, wall springs bat it back, glue stops it, pitfalls swallow it.
 
@@ -48,6 +50,9 @@ var _name_edit: LineEdit
 var _address_edit: LineEdit
 var _port_edit: LineEdit
 var _server_list: VBoxContainer
+var _map_pick: OptionButton
+var _map_paths: Array[String] = []
+var _free_hosting := false
 var _status: Label
 
 ## Public servers are listed in servers.json in the game's GitHub repository,
@@ -125,7 +130,7 @@ func _show_home() -> void:
 	var play := UiKit.button("Cheese Race (Bot Game)", _show_setup, Vector2(320, 52))
 	col.add_child(play)
 	col.add_child(UiKit.button("Play Online", _show_online, Vector2(320, 44)))
-	col.add_child(UiKit.button("Free Build", _start_free, Vector2(320, 44)))
+	col.add_child(UiKit.button("Free Build", _show_free.bind(false), Vector2(320, 44)))
 	col.add_child(UiKit.button("How to Play", _show_help, Vector2(320, 44)))
 	col.add_child(UiKit.button("Settings & Controls", _show_settings, Vector2(320, 44)))
 	col.add_child(UiKit.button("Quit", func() -> void: get_tree().quit(), Vector2(320, 44)))
@@ -185,11 +190,11 @@ func _setup_page() -> void:
 	_page.add_child(_blurb)
 	# goal
 	var goal_label := UiKit.label("", 17)
-	var goal_slider := UiKit.slider(3, 16, 1, _goal, func(v: float) -> void:
+	var goal_slider := UiKit.slider(3, 250, 1, _goal, func(v: float) -> void:
 		_goal = int(v)
-		goal_label.text = "Cheese goal: %d" % _goal
+		goal_label.text = _goal_text()
 	)
-	goal_label.text = "Cheese goal: %d" % _goal
+	goal_label.text = _goal_text()
 	_page.add_child(UiKit.row(goal_label, goal_slider))
 	var size_label := UiKit.label("", 17)
 	var size_slider := UiKit.slider(1, 4, 1, _team_size, func(v: float) -> void:
@@ -209,6 +214,7 @@ func _setup_page() -> void:
 	_seed_edit.placeholder_text = "random"
 	_seed_edit.custom_minimum_size = Vector2(220, 34)
 	_page.add_child(UiKit.row(UiKit.label("Map seed (same seed = same map)"), _seed_edit))
+	_page.add_child(_map_row())
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
@@ -245,6 +251,34 @@ func _pick_class(id: String) -> void:
 	_blurb.text = ClassDefs.CLASSES[id]["blurb"]
 
 
+func _goal_text() -> String:
+	return "Cheese goal: %d  (map holds %d+ cheese)" % [_goal, MapGenerator.min_cheese(_goal)]
+
+
+func _map_row() -> Control:
+	## "New map" or a saved / exported map from the maps folder.
+	_map_pick = OptionButton.new()
+	_map_pick.custom_minimum_size = Vector2(300, 34)
+	_map_pick.add_item("New map from the seed")
+	_map_paths = VoxelWorld.list_maps()
+	for path in _map_paths:
+		_map_pick.add_item("Import: " + path.get_file().get_basename())
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	box.add_child(_map_pick)
+	box.add_child(UiKit.button("Maps folder", func() -> void:
+		DirAccess.make_dir_recursive_absolute(VoxelWorld.MAPS_DIR)
+		OS.shell_open(ProjectSettings.globalize_path(VoxelWorld.MAPS_DIR)), Vector2(140, 34)))
+	box.tooltip_text = "Maps saved with F5 in Free Build or with Export map in the Esc menu. Put .bwmap files from friends in the maps folder to import them."
+	return UiKit.row(UiKit.label("Map"), box)
+
+
+func _selected_map() -> String:
+	if _map_pick == null or not is_instance_valid(_map_pick) or _map_pick.selected <= 0:
+		return ""
+	return _map_paths[_map_pick.selected - 1]
+
+
 func _seed() -> int:
 	var text := _seed_edit.text.strip_edges() if _seed_edit != null else ""
 	if text == "":
@@ -261,6 +295,8 @@ func _start_race() -> void:
 	Config.save()
 	var s := {"mode": "race", "seed": _seed(), "goal": _goal, "team": _team, "class": _class, "team_size": _team_size,
 		"bot_rest": [7.0, 3.0, 0.0][_skill]}
+	if _selected_map() != "":
+		s["map_file"] = _selected_map()
 	if _hosting:
 		s["net"] = "host"
 		var port_text := _port_edit.text.strip_edges() if _port_edit != null else ""
@@ -269,8 +305,30 @@ func _start_race() -> void:
 	start_requested.emit(s)
 
 
+func _show_free(hosting := false) -> void:
+	_free_hosting = hosting
+	_clear()
+	_page.add_child(UiKit.label("Host Free Build" if hosting else "Free Build", 28, UiKit.BRASS))
+	_page.add_child(UiKit.wrapped("A creative sandbox: fly with N, everything is free. Start on a fresh map, or import one you saved (F5) or exported (Esc > Export map). Imported maps keep their carvings and machines.", 15, UiKit.PAPER.darkened(0.1)))
+	_page.add_child(_map_row())
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 12)
+	buttons.add_child(UiKit.button("Back", _show_online if hosting else _show_home, Vector2(160, 46)))
+	var go := UiKit.button("Open server & build" if hosting else "Start building", _start_free, Vector2(260, 46))
+	buttons.add_child(go)
+	_page.add_child(buttons)
+	go.grab_focus()
+
+
 func _start_free() -> void:
-	start_requested.emit({"mode": "free", "seed": randi_range(1, 999999), "goal": 9999, "team": 0, "class": "maestro", "team_size": 1})
+	var s := {"mode": "free", "seed": randi_range(1, 999999), "goal": 9999, "team": 0, "class": "maestro", "team_size": 1}
+	if _selected_map() != "":
+		s["map_file"] = _selected_map()
+	if _free_hosting:
+		s["net"] = "host"
+		s["port"] = Net.DEFAULT_PORT
+	start_requested.emit(s)
 
 
 func _show_help() -> void:
@@ -365,8 +423,7 @@ func _host_free() -> void:
 	## A creative sandbox friends can join: everyone builds with everything.
 	if not _save_identity():
 		return
-	start_requested.emit({"mode": "free", "seed": randi_range(1, 999999), "goal": 9999, "team": 0, "class": "maestro",
-		"team_size": 1, "net": "host", "port": Net.DEFAULT_PORT})
+	_show_free(true)
 
 
 func _save_identity() -> bool:

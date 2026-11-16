@@ -182,10 +182,23 @@ func _unhandled_input(event: InputEvent) -> void:
 			corner_set = false
 		else:
 			tool = Tool.PANTOGRAPH
-			_say("Pantograph: left-click two corners to copy, right-click to paste, %s rotates" % Inputs.key_name("rotate_blueprint"))
-	elif event.is_action_pressed("rotate_blueprint"):
-		if tool == Tool.PANTOGRAPH and blueprint != null:
-			blueprint = blueprint.rotated()
+			_say("Pantograph: left-click two corners to copy, right-click to paste. %s rotates, %s mirrors, %s flips, %s inverts" % [
+				Inputs.key_name("rotate_blueprint"), Inputs.key_name("mirror_blueprint"), Inputs.key_name("flip_blueprint"), Inputs.key_name("invert_blueprint")])
+	elif tool == Tool.PANTOGRAPH and blueprint != null and event.is_action_pressed("rotate_blueprint"):
+		blueprint = blueprint.rotated()
+	elif tool == Tool.PANTOGRAPH and blueprint != null and event.is_action_pressed("mirror_blueprint"):
+		blueprint = blueprint.mirrored()
+		_say("Blueprint mirrored")
+	elif tool == Tool.PANTOGRAPH and blueprint != null and event.is_action_pressed("flip_blueprint"):
+		blueprint = blueprint.flipped()
+		_say("Blueprint flipped upside down")
+	elif tool == Tool.PANTOGRAPH and blueprint != null and event.is_action_pressed("invert_blueprint"):
+		var inv := blueprint.inverted()
+		if inv.cells.is_empty():
+			_say("Inverting that would leave nothing to build")
+		else:
+			blueprint = inv
+			_say("Blueprint inverted: now needs %s" % blueprint.cost_text())
 	else:
 		for i in ClassDefs.MATS.size() + 1:
 			if event.is_action_pressed("slot_%d" % (i + 1)):
@@ -344,7 +357,9 @@ func _swing() -> void:
 	if best != null and rat.bonk_cd <= 0.0:
 		if m.try_bonk(rat, best):
 			return
-	if not aim.is_empty():
+	if not aim.is_empty() and painting() and m.paintable(aim["cell"]):
+		_say(m.try_paint_block(rat, aim["cell"], selected_color))   # Paint slot: left click dyes the block
+	elif not aim.is_empty():
 		m.try_dig(rat, aim["cell"])
 	else:
 		rat.dig_cd = 1.0 / Config.DIG_RATE
@@ -475,8 +490,9 @@ func _update_pantograph() -> void:
 	if blueprint == null:
 		tool_text = "Pantograph  -  left-click the first corner of what you want to copy"
 		return
-	tool_text = "Blueprint %dx%dx%d  needs %s  -  RMB paste, %s rotate, LMB new copy" % [
-		blueprint.size.x, blueprint.size.y, blueprint.size.z, blueprint.cost_text(), Inputs.key_name("rotate_blueprint")]
+	tool_text = "Blueprint %dx%dx%d  needs %s  -  RMB paste, %s rotate, %s mirror, %s flip, %s invert, LMB new copy" % [
+		blueprint.size.x, blueprint.size.y, blueprint.size.z, blueprint.cost_text(), Inputs.key_name("rotate_blueprint"),
+		Inputs.key_name("mirror_blueprint"), Inputs.key_name("flip_blueprint"), Inputs.key_name("invert_blueprint")]
 	if aim.is_empty():
 		return
 	if _ghost_for != blueprint:

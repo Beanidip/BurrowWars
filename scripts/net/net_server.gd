@@ -237,6 +237,9 @@ func on_act(id: int, method: String, a: Array) -> void:
 		"try_place_mat":
 			if _ok(a, [TYPE_VECTOR3I, TYPE_STRING]):
 				res = m.try_place_mat(rat, a[0], a[1])
+		"try_paint_block":
+			if _ok(a, [TYPE_VECTOR3I, TYPE_INT]):
+				res = m.try_paint_block(rat, a[0], a[1])
 		"try_place_paint":
 			if _ok(a, [TYPE_VECTOR3I, TYPE_INT]):
 				res = m.try_place_paint(rat, a[0], a[1])
