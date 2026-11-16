@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.0 - Procedural maps (2026-11-16)
+
+| Change | Files |
+|---|---|
+| Bigger world: 128 x 128 (was 96 x 48), 64 tall | `world/voxel_world.gd` |
+| Procedural terrain: plains, ridged snow-capped mountain ranges and valleys with lakes, different every seed | `world/map_generator.gd` |
+| Bases in opposite corners; the map has exact 180-degree symmetry so both sides get identical terrain and resources | `world/map_generator.gd`, `world/blocks.gd` (`rotate180`) |
+| Scrap and cheese scattered by sector across the whole map (scrap in nearly every 16 x 16 area) | `world/map_generator.gd` |
+| Sewer runs from just outside each base to the centre chapel; lava basins, ruins, vaults and dikes placed by seed | `world/map_generator.gd` |
+| Faster loading: generated maps are cached, cheese indexing uses a search, and chunks near you are built first while the rest stream in | `world/map_generator.gd`, `world/voxel_world.gd`, `match/game_session.gd` |
+| Bots find the doorway of a corner base | `actors/bot_brain.gd` |
+| Map tests: exact symmetry, equal resources per side, scrap spread, plains + mountains + valleys present | `tests/test_runner.gd` |
+
+Free Build maps saved by earlier versions do not load (different world size). Net protocol 4.
+
 ## 1.5.0 - Playtest round 2 (2026-11-16)
 
 | Change | Files |

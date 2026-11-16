@@ -48,6 +48,17 @@ fuse; radius 2.6; chains; obsidian, bases and bedrock survive; cheese blocks pop
 pickups), team gate (own team walks through; two blasts destroy it; owners can pick it up).
 Digging a gadget returns it to the digger's pack.
 
+## The map
+
+Every match generates a new 128 x 128 map from its seed: plains, mountain ranges (the highest
+peaks are icy), and valleys whose deepest floors hold lakes. Blue's base is in one corner and
+Red's in the opposite corner. The map is exactly symmetric through its centre (Red's half is
+Blue's half turned 180 degrees), so terrain, scrap, cheese, lava, water and landmarks are the
+same for both teams. Scrap and loose cheese are scattered sector by sector so every part of
+the map has some; obsidian vaults, lava basins, ruins (one is a scrap lab) and obsidian dikes
+are placed by the seed. A brick sewer runs from just outside each base to the mushroom chapel
+at the centre. The ground is flat for about 15 blocks around each base.
+
 ## Hazards and safety valves
 
 Lava bounces a rat out on the first touch; a second touch within 8 s bounces it again, spills everything it carries right there, and sends it back to base 0.7 s later. Water slows everyone

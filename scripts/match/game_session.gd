@@ -112,7 +112,7 @@ func _ready() -> void:
 	hud.exit_requested.connect(func() -> void: exit_requested.emit())
 	hud.rematch_requested.connect(func() -> void: rematch_requested.emit())
 	m.won.connect(_celebrate)
-	m.world.rebuild_dirty(9999)   # build every chunk before the first frame
+	m.world.rebuild_near(player.position, 56.0)   # the rest of this big map streams in over the next frames
 
 
 func _attach_sprite(rat: Rat) -> void:

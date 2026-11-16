@@ -510,8 +510,8 @@ func _run() -> void:
 	await shot("28_painted_blocks_and_highway")
 	var pool := Vector3i(-1, -1, -1)
 	for cy in range(6, 16):
-		for cz in range(4, 44):
-			for cx in range(16, 46):
+		for cz in range(4, VoxelWorld.SZ - 4):
+			for cx in range(4, VoxelWorld.SX - 4):
 				if pool.y < 0 and w.get_block(cx, cy, cz) == Blocks.LAVA and w.get_block(cx, cy + 2, cz) == Blocks.AIR and w.get_block(cx + 2, cy, cz) == Blocks.LAVA and w.get_block(cx - 2, cy, cz) == Blocks.LAVA:
 					pool = Vector3i(cx, cy, cz)
 	check(pool.y > 0, "an underground lava pool exists on this map")

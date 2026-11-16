@@ -117,7 +117,7 @@ func spawn_rat(team: int, class_id: String, is_bot: bool, fixed_id := -1) -> Rat
 		if r.team == team:
 			slot += 1
 	rat.position = MapGenerator.spawn_point(team, slot)
-	rat.yaw = -PI / 2.0 if team == 0 else PI / 2.0
+	rat.yaw = MapGenerator.spawn_yaw(team)
 	rat.display_name = BOT_NAMES[(rat.id * 3 + team) % BOT_NAMES.size()] if is_bot else "You"
 	rat.name = "Rat%d" % rat.id
 	rat.scrap = 6

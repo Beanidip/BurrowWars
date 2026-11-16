@@ -215,6 +215,23 @@ static func solid_for(id: int, team: int) -> bool:
 	return SOLID[id] == 1
 
 
+static func rotate180(id: int) -> int:
+	## Block swap used when turning team 0's half around onto the other team's
+	## half: team colours swap and directions reverse.
+	match id:
+		BASE_BLUE: return BASE_RED
+		CONV_XP: return CONV_XN
+		CONV_XN: return CONV_XP
+		CONV_ZP: return CONV_ZN
+		CONV_ZN: return CONV_ZP
+		TRAP_BLUE: return TRAP_RED
+		GATE_BLUE: return GATE_RED
+		STICKY_BLUE: return STICKY_RED
+		PIT_BLUE: return PIT_RED
+		TEAM_BLUE: return TEAM_RED
+	return id
+
+
 static func mirror(id: int) -> int:
 	## Block swap used when mirroring the blue half of the map onto the red half.
 	match id:

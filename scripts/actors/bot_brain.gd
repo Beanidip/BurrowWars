@@ -91,7 +91,8 @@ func _retarget() -> void:
 		var zone := MapGenerator.base_zone(rat.team)
 		var gate := MapGenerator.approach_point(rat.team)
 		# front edge of the platform: the first spot that counts as "home"
-		var door := Vector3(zone.position.x + (zone.size.x - 0.5 if rat.team == 0 else 0.5), zone.position.y, gate.z)
+		var door := Vector3(clampf(gate.x, zone.position.x + 0.5, zone.end.x - 0.5), zone.position.y,
+			clampf(gate.z, zone.position.z + 0.5, zone.end.z - 0.5))
 		var flat := Vector2(rat.position.x - gate.x, rat.position.z - gate.z).length()
 		if not final_run and flat < 1.5 and rat.position.y > MapGenerator.GROUND - 0.5:
 			final_run = true

@@ -104,19 +104,49 @@ func test_map_is_mirrored_and_deterministic() -> void:
 	check(a.world.data == b.world.data, "same seed gives identical maps")
 	var c := new_match({"seed": 99})
 	check(a.world.data != c.world.data, "different seed gives a different map")
+	var sx := VoxelWorld.SX
+	var sz := VoxelWorld.SZ
 	var mismatches := 0
 	for y in VoxelWorld.SY:
-		for z in VoxelWorld.SZ:
-			for x in VoxelWorld.SX / 2:
-				if Blocks.mirror(a.world.get_block(x, y, z)) != a.world.get_block(VoxelWorld.SX - 1 - x, y, z):
+		for z in sz:
+			for x in sx / 2:
+				if Blocks.rotate180(a.world.get_block(x, y, z)) != a.world.get_block(sx - 1 - x, y, sz - 1 - z):
 					mismatches += 1
-	check(mismatches == 0, "red half mirrors blue half (%d mismatches)" % mismatches)
-	var blue := 0
-	for cell: Vector3i in a.world.cheese_cells:
-		if cell.x < VoxelWorld.SX / 2:
-			blue += 1
-	check(blue * 2 == a.world.cheese_cells.size(), "cheese is split evenly between halves")
-	check(a.world.cheese_cells.size() >= 24, "enough cheese on the map (%d)" % a.world.cheese_cells.size())
+	check(mismatches == 0, "red's half is blue's half turned 180 degrees (%d mismatches)" % mismatches)
+	var b0 := MapGenerator.base_center(0)
+	var b1 := MapGenerator.base_center(1)
+	check(b0.x < 16 and b0.z < 16 and b1.x > sx - 16 and b1.z > sz - 16, "the bases sit in opposite corners")
+	check(MapGenerator.spawn_point(1).is_equal_approx(MapGenerator.rot_point(MapGenerator.spawn_point(0))), "spawns match through the centre")
+	# every resource is shared out equally
+	var per := [{}, {}]
+	for i in a.world.data.size():
+		var side := 0 if i % sx < sx / 2 else 1
+		var id := a.world.data[i]
+		per[side][id] = int(per[side].get(id, 0)) + 1
+	for id: int in [Blocks.SCRAP, Blocks.CHEESE, Blocks.OBSIDIAN, Blocks.LAVA, Blocks.WATER, Blocks.STONE, Blocks.DIRT, Blocks.GRASS, Blocks.ICE]:
+		check(int(per[0].get(id, 0)) == int(per[1].get(id, 0)), "%s is split evenly (%d / %d)" % [Blocks.block_name(id), int(per[0].get(id, 0)), int(per[1].get(id, 0))])
+	check(a.world.cheese_cells.size() >= 60, "plenty of cheese on the bigger map (%d)" % a.world.cheese_cells.size())
+	# scrap is spread out: nearly every 16x16 sector has some
+	var sectors := {}
+	for i in a.world.data.size():
+		if a.world.data[i] == Blocks.SCRAP:
+			sectors[Vector2i((i % sx) / 16, ((i / sx) % sz) / 16)] = true
+	check(sectors.size() >= (sx / 16) * (sz / 16) * 85 / 100, "scrap is dispersed over the map (%d of %d sectors)" % [sectors.size(), (sx / 16) * (sz / 16)])
+	# the landscape has plains, mountains and valleys, on every seed tried
+	for m: Match in [a, c]:
+		var plains := 0
+		var high := 0
+		var low := 0
+		for x in range(0, sx, 2):
+			for z in range(0, sz, 2):
+				var top := m.world.surface_y(x, z)
+				if absi(top - MapGenerator.GROUND) <= 2:
+					plains += 1
+				elif top >= MapGenerator.GROUND + 10:
+					high += 1
+				elif top <= MapGenerator.GROUND - 4:
+					low += 1
+		check(plains > 600 and high > 60 and low > 60, "seed %d has plains (%d), mountains (%d) and valleys (%d)" % [int(m.settings["seed"]), plains, high, low])
 	var counts := {}
 	for id in a.world.data:
 		counts[id] = int(counts.get(id, 0)) + 1
@@ -126,7 +156,6 @@ func test_map_is_mirrored_and_deterministic() -> void:
 	print("    cheese=%d scrap=%d air_ratio=%.2f" % [a.world.cheese_cells.size(), counts.get(Blocks.SCRAP, 0),
 		float(counts.get(Blocks.AIR, 0)) / a.world.data.size()])
 	end(a); end(b); end(c)
-
 
 func test_raycast() -> void:
 	var m := new_match()
@@ -245,8 +274,8 @@ func test_dig_durability_and_rate() -> void:
 			count += 1
 	check(count >= 8 and count <= 10, "about 3 dig actions per second (%d in 3 s)" % count)
 	check(not m.try_dig(r, ARENA + Vector3i(0, -30, 0)), "cannot dig beyond reach")
-	var base_cell := Vector3i(5, MapGenerator.GROUND - 1, 24)
-	r.position = Vector3(5.5, MapGenerator.GROUND, 23.5)
+	var base_cell := Vector3i(8, MapGenerator.GROUND - 1, 10)
+	r.position = Vector3(8.5, MapGenerator.GROUND, 9.5)
 	run(m, 0.4)
 	m.try_dig(r, base_cell)
 	check(m.world.get_cell(base_cell) == Blocks.BASE_BLUE, "base blocks are indestructible")
@@ -291,7 +320,7 @@ func test_dig_durability_and_rate() -> void:
 		run(m, 1.1)
 		m.use_ability(d, 0, {"cell": ARENA + Vector3i(1, 0, 0), "normal": Vector3i(-1, 0, 0)})
 	check(m.world.get_cell(ARENA + Vector3i(0, -1, 0)) == Blocks.DIRT, "Super Dig does not undermine the digger's own footing when digging level")
-	check(m.use_ability(d, 0, {"cell": Vector3i(5, MapGenerator.GROUND - 1, 24), "normal": Vector3i(0, 1, 0)}) != "", "Super Dig is refused out of reach / on base blocks")
+	check(m.use_ability(d, 0, {"cell": Vector3i(8, MapGenerator.GROUND - 1, 10), "normal": Vector3i(0, 1, 0)}) != "", "Super Dig is refused out of reach / on base blocks")
 	end(m)
 
 
@@ -307,8 +336,8 @@ func test_placement_rules() -> void:
 	check(m.try_place_mat(r, cell, "dirt") != "", "cannot place into an occupied cell")
 	check(m.try_place_mat(r, r.feet_cell(), "dirt") != "", "cannot entomb a rat")
 	check(m.try_place_mat(r, ARENA + Vector3i(0, 0, 30), "dirt") != "", "cannot place out of reach")
-	r.position = Vector3(11.0, MapGenerator.GROUND, 24.5)
-	check(m.try_place_mat(r, Vector3i(8, MapGenerator.GROUND, 24), "dirt") != "", "bases are protected from building")
+	r.position = Vector3(14.0, MapGenerator.GROUND, 10.5)
+	check(m.try_place_mat(r, Vector3i(11, MapGenerator.GROUND, 10), "dirt") != "", "bases are protected from building")
 	check(int(r.mats["dirt"]) == 1, "failed placements cost nothing")
 	end(m)
 
@@ -1008,7 +1037,7 @@ func test_ladder_stack_and_floor_gadgets() -> void:
 	m.world.set_block(ARENA + Vector3i(3, 0, 3), Blocks.STONE)
 	check(m.try_use_equipped(r, {"cell": ARENA + Vector3i(3, 0, 3), "normal": Vector3i(-1, 0, 0)}, look, false) == "" and m.world.get_cell(ARENA + Vector3i(2, 0, 3)) == Blocks.HIGHWAY, "on a side face the gadget goes beside the block")
 	r.gadgets["highway"] = 1
-	check(m.try_use_equipped(r, {"cell": Vector3i(5, MapGenerator.GROUND - 1, 24), "normal": Vector3i(0, 1, 0)}, look, false) != "" and int(r.gadgets["highway"]) == 1, "base floor cannot be converted")
+	check(m.try_use_equipped(r, {"cell": Vector3i(8, MapGenerator.GROUND - 1, 10), "normal": Vector3i(0, 1, 0)}, look, false) != "" and int(r.gadgets["highway"]) == 1, "base floor cannot be converted")
 	end(m)
 
 
@@ -1560,10 +1589,10 @@ func test_chisel_rules() -> void:
 	for bad: int in [Blocks.CHEESE, Blocks.SCRAP, Blocks.TNT, Blocks.LADDER]:
 		m.world.set_block(cell, bad)
 		check(chisel(m, r, cell, Vector3i(0, 3, 3)) != "" and not m.world.has_micro(cell), "%s cannot be chiseled" % Blocks.block_name(bad))
-	r.position = Vector3(11.0, MapGenerator.GROUND, 24.5)
+	r.position = Vector3(14.0, MapGenerator.GROUND, 10.5)
 	r.mats["stone"] = 5
-	check(chisel(m, r, Vector3i(9, MapGenerator.GROUND - 1, 24), Vector3i(6, 6, 3)) != "", "base blocks cannot be carved")
-	check(chisel(m, r, Vector3i(9, MapGenerator.GROUND, 24), Vector3i(6, 0, 3), true) != "", "cannot chisel material into a base")
+	check(chisel(m, r, Vector3i(12, MapGenerator.GROUND - 1, 10), Vector3i(6, 6, 3)) != "", "base blocks cannot be carved")
+	check(chisel(m, r, Vector3i(12, MapGenerator.GROUND, 10), Vector3i(6, 0, 3), true) != "", "cannot chisel material into a base")
 	end(m)
 
 
@@ -1718,8 +1747,8 @@ func test_pantograph() -> void:
 	r.mats["stone"] = 9
 	r.mats["ice"] = 9
 	check(m.try_paste(r, bp, r.feet_cell() - Vector3i(0, 0, 0)) != "", "cannot paste on top of a rat")
-	r.position = Vector3(12.0, MapGenerator.GROUND, 24.5)
-	check(m.try_paste(r, bp, Vector3i(8, MapGenerator.GROUND, 24)) == "Bases are protected", "cannot paste into a base")
+	r.position = Vector3(15.0, MapGenerator.GROUND, 10.5)
+	check(m.try_paste(r, bp, Vector3i(11, MapGenerator.GROUND, 10)) == "Bases are protected", "cannot paste into a base")
 	# a forged blueprint is rejected by the authority
 	var forged := Blueprint.new()
 	forged.size = Vector3i.ONE

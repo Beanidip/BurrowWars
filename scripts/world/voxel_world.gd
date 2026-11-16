@@ -9,9 +9,9 @@ signal block_changed(cell: Vector3i, old_id: int, new_id: int)
 signal micro_changed(cell: Vector3i)
 signal gate_layer_changed(cell: Vector3i)
 
-const SX := 96
-const SY := 48
-const SZ := 48
+const SX := 128
+const SY := 64
+const SZ := 128
 const CHUNK := 16
 const SAVE_MAGIC := "BWJAM1"
 const M := Blocks.MICRO
@@ -116,11 +116,10 @@ func reindex() -> void:
 	micro_flag.fill(0)
 	for mc: Vector3i in micro:
 		micro_flag[mc.x + SX * (mc.z + SZ * mc.y)] = 1
-	for y in SY:
-		for z in SZ:
-			for x in SX:
-				if data[x + SX * (z + SZ * y)] == Blocks.CHEESE:
-					cheese_cells[Vector3i(x, y, z)] = true
+	var i := data.find(Blocks.CHEESE)
+	while i >= 0:
+		cheese_cells[Vector3i(i % SX, i / (SX * SZ), (i / SX) % SZ)] = true
+		i = data.find(Blocks.CHEESE, i + 1)
 	mark_all_dirty()
 
 
@@ -351,6 +350,16 @@ func mark_all_dirty() -> void:
 		for cz in SZ / CHUNK:
 			for cx in SX / CHUNK:
 				_dirty[Vector3i(cx, cy, cz)] = true
+
+
+func rebuild_near(p: Vector3, radius: float) -> void:
+	## Build the chunks around a point right away; the rest stream in over the
+	## next frames (6 per frame), so a big map does not stall the first frame.
+	for k: Vector3i in _dirty.keys():
+		var centre := (Vector3(k) + Vector3(0.5, 0.5, 0.5)) * float(CHUNK)
+		if Vector2(centre.x - p.x, centre.z - p.z).length() <= radius:
+			_dirty.erase(k)
+			_rebuild_chunk(k)
 
 
 func rebuild_dirty(budget: int) -> void:
