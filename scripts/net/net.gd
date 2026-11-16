@@ -16,7 +16,7 @@ signal join_failed(reason: String)     # client: could not connect or was refuse
 signal disconnected(reason: String)    # client: lost the server mid-game
 
 const DEFAULT_PORT := 24565
-const PROTOCOL := 5                    # bump whenever the wire format or block ids change
+const PROTOCOL := 6                    # bump whenever the wire format or block ids change
 const MAX_CLIENTS := 15
 const NAME_MAX := 16
 
@@ -170,14 +170,18 @@ func _s_welcome(info: Dictionary) -> void:
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func _s_snap(pkt: Dictionary) -> void:
-	if client != null:
+func _s_snap(data: PackedByteArray) -> void:
+	## Snapshots and events travel pre-encoded (the server encodes each once
+	## for all players). bytes_to_var never decodes objects.
+	var pkt: Variant = bytes_to_var(data)
+	if client != null and pkt is Dictionary:
 		client.on_snap(pkt)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _s_events(pkt: Dictionary) -> void:
-	if client != null:
+func _s_events(data: PackedByteArray) -> void:
+	var pkt: Variant = bytes_to_var(data)
+	if client != null and pkt is Dictionary:
 		client.on_events(pkt)
 
 

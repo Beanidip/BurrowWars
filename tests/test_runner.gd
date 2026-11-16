@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -1160,7 +1160,7 @@ func test_painted_blocks() -> void:
 		r.dig_cd = 0.0
 		m.try_dig(r, cell)
 		n += 1
-	check(n == 3 and int(r.mats["dirt"]) == 2 and int(r.mats["stone"]) == 2, "digging one takes 3 hits and gives a dirt back")
+	check(n == 2 and int(r.mats["dirt"]) == 2 and int(r.mats["stone"]) == 2, "digging one takes 2 hits, like dirt, and gives a dirt back")
 	r.chisel_cd = 0.0
 	check(m.try_chisel_add(r, cell, Vector3i(0, 0, 0), "stone", Blocks.PALETTE_SOLID + 2) != "" and m.world.get_cell(cell) == Blocks.AIR, "glass is whole blocks only (no glass microvoxels)")
 	# chisel: a painted microvoxel on a block of another material
@@ -1194,6 +1194,74 @@ func test_painted_blocks() -> void:
 	end(m)
 
 
+func test_review_fixes() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 6)
+	# a remote player standing on an enemy sticky trap: slowed, but the server
+	# has nothing to correct, so no kick storm
+	var r := arena_rat(m, 0, "scout")
+	run(m, 0.3)
+	m.world.set_block(r.feet_cell(), Blocks.STICKY_RED)
+	r.net_peer = 7
+	r.net_pre = Match.net_state(r)
+	var diffs := 0
+	for i in 30:
+		m.step(DT)
+		if Match.net_state(r) != r.net_pre:
+			diffs += 1
+	check(r.slow > 0.0, "an enemy sticky trap still slows a remote player")
+	check(diffs == 0, "and the server sees nothing to correct (%d corrections in 30 ticks)" % diffs)
+	r.net_peer = 0
+	# a spring landing reported by a remote player is played for everyone
+	var ns := NetServer.new()
+	ns.m = m
+	ns.seats[7] = r
+	r.net_peer = 7
+	var springs := [0]
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void:
+		if kind == "spring":
+			springs[0] += 1)
+	var pkt := {"k": r.net_kick, "p": r.position, "v": Vector3.ZERO, "y": 0.0, "f": 1, "s": r.stamina, "sp": true}
+	ns.on_input(7, pkt)
+	ns.on_input(7, pkt)   # a spammed claim right after is ignored
+	check(springs[0] == 1, "a remote player's spring bounce plays once for everyone (%d)" % springs[0])
+	ns.free()
+	r.net_peer = 0
+	# a forged blueprint without a mask key is refused, not crashed on
+	var forged := Blueprint.new()
+	forged.size = Vector3i.ONE
+	forged.cells.append({"o": Vector3i.ZERO, "id": Blocks.STONE})
+	check(forged.validate() != "" and m.try_paste(r, forged, ARENA + Vector3i(3, 0, 3)) != "", "a blueprint entry without a mask is malformed")
+	# paint dabs come back as dirt, so carve + dab + break cannot mint stone
+	var b := ARENA + Vector3i(2, 0, 2)
+	m.world.set_block(b, Blocks.STONE)
+	r.position = Vector3(ARENA) + Vector3(1.5, 0, 1.5)
+	r.mats["dirt"] = 2
+	r.mats["stone"] = 0
+	r.micro_bank.clear()
+	r.chisel_cd = 0.0
+	m.try_chisel_remove(r, b, Vector3i(0, 6, 0))
+	r.chisel_cd = 0.0
+	check(m.try_chisel_add(r, b, Vector3i(0, 6, 0), "stone", 3) == "", "dab of paint into the carved spot")
+	var before := int(r.mats["stone"]) * 343 + int(r.micro_bank.get("stone", 0)) + int(r.mats["dirt"]) * 343 + int(r.micro_bank.get("dirt", 0))   # 1 + 685
+	for i in 6:
+		r.dig_cd = 0.0
+		m.try_dig(r, b)
+	var stone_after := int(r.mats["stone"]) * 343 + int(r.micro_bank.get("stone", 0))
+	var dirt_after := int(r.mats["dirt"]) * 343 + int(r.micro_bank.get("dirt", 0))
+	check(m.world.get_cell(b) == Blocks.AIR and stone_after == 343, "breaking it refunds the stone part as stone (%d)" % stone_after)
+	# start: 2 dirt blocks (686 micro). Carve (+1 stone), dab (-1 dirt), break: 342 stone + 1 dirt back.
+	check(dirt_after == 686 and stone_after + dirt_after == before + 343, "and the dab as dirt: nothing minted (%d dirt, %d stone)" % [dirt_after, stone_after])
+	end(m)
+	# an online player's replica does not build a map of its own
+	var rep := Match.new()
+	rep.auto_step = false
+	add_child(rep)
+	rep.setup({"mode": "race", "seed": 4242, "goal": 3}, false, true)
+	check(rep.world.data.count(Blocks.AIR) == rep.world.data.size(), "a replica waits for the server's world instead of generating one")
+	end(rep)
+
+
 func test_dash_with_cheese() -> void:
 	var m := new_match()
 	flat_arena(m, ARENA, 9)
@@ -1221,10 +1289,15 @@ func test_paint_on_click() -> void:
 	var r := arena_rat(m, 0, "scout")
 	run(m, 0.2)
 	var c := ARENA + Vector3i(2, 0, 0)
-	m.world.set_block(c, Blocks.STONE)
+	m.world.set_block(c, Blocks.DIRT)
 	var mats := r.mats.duplicate()
 	r.dig_cd = 0.0
-	check(m.paintable(c) and m.try_paint_block(r, c, 5) == "" and m.world.get_cell(c) == Blocks.PAINT_0 + 5, "left click with paint dyes a stone block")
+	check(m.paintable(c) and m.try_paint_block(r, c, 5) == "" and m.world.get_cell(c) == Blocks.PAINT_0 + 5, "left click with paint dyes a dirt block")
+	check(Blocks.HITS[Blocks.PAINT_0 + 5] == Blocks.HITS[Blocks.DIRT], "painting never changes how tough a block is")
+	var st := ARENA + Vector3i(2, 0, -1)
+	m.world.set_block(st, Blocks.STONE)
+	r.dig_cd = 0.0
+	check(not m.paintable(st) and m.try_paint_block(r, st, 5) != "" and m.world.get_cell(st) == Blocks.STONE, "stone cannot be painted weaker (enemy walls stay stone)")
 	check(r.mats == mats, "dyeing costs nothing")
 	r.dig_cd = 0.0
 	check(m.try_paint_block(r, c, Blocks.PALETTE_SOLID + 1) == "" and Blocks.is_glass(m.world.get_cell(c)), "a painted block can be recoloured, even to glass")

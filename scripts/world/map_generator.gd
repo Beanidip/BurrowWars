@@ -49,6 +49,13 @@ static func base_zone(team: int) -> AABB:
 	return zone
 
 
+static func in_any_base(cell: Vector3i, margin := 0.5) -> bool:
+	## True when the centre of `cell` is inside either team's base (grown by
+	## `margin`). The single rule for "bases are protected".
+	var p := Vector3(cell) + Vector3(0.5, 0.5, 0.5)
+	return base_zone(0).grow(margin).has_point(p) or base_zone(1).grow(margin).has_point(p)
+
+
 static func spawn_point(team: int, slot := 0) -> Vector3:
 	var p := Vector3(BASE_MIN + 3.5 + float(slot % 2) * 1.2, GROUND, BASE_MIN + 3.5 + float((slot / 2) % 2) * 1.2)
 	return p if team == 0 else rot_point(p)

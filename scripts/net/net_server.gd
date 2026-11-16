@@ -27,6 +27,7 @@ var _won := -1
 var _frame := 0
 var _last_input: Dictionary = {}   # peer id -> msec of the last accepted input
 var _dirty_private: Dictionary = {}
+var _spring_t: Dictionary = {}     # peer id -> msec of the last spring effect they reported
 
 
 func _ready() -> void:
@@ -103,6 +104,7 @@ func on_peer_left(id: int) -> void:
 	var rat: Rat = seats.get(id)
 	seats.erase(id)
 	_last_input.erase(id)
+	_spring_t.erase(id)
 	if rat == null or not is_instance_valid(rat):
 		return
 	var who := rat.display_name
@@ -175,6 +177,9 @@ func on_input(id: int, pkt: Dictionary) -> void:
 	rat.stamina = clampf(float(pkt.get("s", rat.stamina)), 0.0, rat.max_stamina())
 	if pkt.get("a") is String and String(pkt["a"]) != "":
 		rat.play_action(String(pkt["a"]), 0.3)
+	if pkt.get("sp") == true and now - int(_spring_t.get(id, 0)) > 150:
+		_spring_t[id] = now          # at most a few per second, whatever a client claims
+		m.fx.emit("spring", rat.position, null)
 	rat.net_pre = Match.net_state(rat)
 
 
@@ -317,11 +322,11 @@ func _physics_process(_delta: float) -> void:
 		var rat: Rat = seats[id]
 		if is_instance_valid(rat) and Match.net_state(rat) != rat.net_pre:
 			_send_kick(id, rat)
-	var peers := multiplayer.get_peers()
+	var peers := multiplayer.get_peers()   # once per tick
 	if not seats.is_empty():
-		_flush_events()
+		_flush_events(peers)
 		if _frame % SNAP_EVERY == 0:
-			var snap := _snapshot()
+			var snap := var_to_bytes(_snapshot())   # encoded once, sent to every seat as-is
 			for id: int in seats:
 				if peers.has(id):
 					Net._s_snap.rpc_id(id, snap)
@@ -342,7 +347,7 @@ func _clear_events() -> void:
 	_won = -1
 
 
-func _flush_events() -> void:
+func _flush_events(peers: PackedInt32Array) -> void:
 	if _blocks.is_empty() and _micro.is_empty() and _gates.is_empty() and _fx.is_empty() and _toasts.is_empty() and _won < 0:
 		return
 	var mi: Array = []
@@ -351,9 +356,9 @@ func _flush_events() -> void:
 	var gl: Array = []
 	for c: Vector3i in _gates:
 		gl.append([c, m.world.layered_gate(c)])
-	var pkt := {"b": _blocks, "mi": mi, "g": gl, "fx": _fx, "to": _toasts, "won": _won}
+	var pkt := var_to_bytes({"b": _blocks, "mi": mi, "g": gl, "fx": _fx, "to": _toasts, "won": _won})
 	for id: int in seats:
-		if multiplayer.get_peers().has(id):
+		if peers.has(id):
 			Net._s_events.rpc_id(id, pkt)
 	_blocks = PackedInt32Array()
 	_micro = {}

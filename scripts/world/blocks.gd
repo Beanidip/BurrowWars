@@ -63,43 +63,43 @@ const DEFS := [
 	["Team Block", 1, Color(0.42, 0.66, 1.0), false, true, "item:teamblock"],
 	["Team Block", 1, Color(1.0, 0.50, 0.45), false, true, "item:teamblock"],
 	# Painted blocks: dyed dirt (or stone), placed with the Paint slot, colour picked with C.
-	# Hits 3. The last 10 are see-through glass.
-	["Red Block", 3, Color(0.86, 0.22, 0.22), true, true, "mat:dirt"],
-	["Orange Block", 3, Color(0.95, 0.52, 0.16), true, true, "mat:dirt"],
-	["Yellow Block", 3, Color(0.97, 0.84, 0.25), true, true, "mat:dirt"],
-	["Lime Block", 3, Color(0.58, 0.85, 0.28), true, true, "mat:dirt"],
-	["Green Block", 3, Color(0.18, 0.58, 0.30), true, true, "mat:dirt"],
-	["Teal Block", 3, Color(0.15, 0.66, 0.66), true, true, "mat:dirt"],
-	["Sky Block", 3, Color(0.45, 0.76, 0.98), true, true, "mat:dirt"],
-	["Blue Block", 3, Color(0.20, 0.36, 0.86), true, true, "mat:dirt"],
-	["Purple Block", 3, Color(0.56, 0.32, 0.82), true, true, "mat:dirt"],
-	["Pink Block", 3, Color(0.96, 0.52, 0.76), true, true, "mat:dirt"],
-	["White Block", 3, Color(0.95, 0.95, 0.93), true, true, "mat:dirt"],
-	["Charcoal Block", 3, Color(0.20, 0.20, 0.23), true, true, "mat:dirt"],
-	["Light Grey Block", 3, Color(0.76, 0.76, 0.78), true, true, "mat:dirt"],
-	["Grey Block", 3, Color(0.55, 0.55, 0.58), true, true, "mat:dirt"],
-	["Dark Grey Block", 3, Color(0.36, 0.36, 0.39), true, true, "mat:dirt"],
-	["Black Block", 3, Color(0.08, 0.08, 0.09), true, true, "mat:dirt"],
-	["Maroon Block", 3, Color(0.50, 0.12, 0.16), true, true, "mat:dirt"],
-	["Coral Block", 3, Color(0.98, 0.45, 0.40), true, true, "mat:dirt"],
-	["Peach Block", 3, Color(0.99, 0.76, 0.60), true, true, "mat:dirt"],
-	["Gold Block", 3, Color(0.85, 0.65, 0.13), true, true, "mat:dirt"],
-	["Olive Block", 3, Color(0.45, 0.48, 0.18), true, true, "mat:dirt"],
-	["Mint Block", 3, Color(0.60, 0.92, 0.76), true, true, "mat:dirt"],
-	["Navy Block", 3, Color(0.12, 0.17, 0.45), true, true, "mat:dirt"],
-	["Lavender Block", 3, Color(0.74, 0.66, 0.94), true, true, "mat:dirt"],
-	["Magenta Block", 3, Color(0.85, 0.20, 0.62), true, true, "mat:dirt"],
-	["Brown Block", 3, Color(0.45, 0.29, 0.16), true, true, "mat:dirt"],
-	["Clear Glass", 3, Color(0.85, 0.95, 1.00, 0.28), true, false, "mat:dirt"],
-	["Smoke Glass", 3, Color(0.30, 0.30, 0.34, 0.45), true, false, "mat:dirt"],
-	["Red Glass", 3, Color(0.95, 0.25, 0.25, 0.42), true, false, "mat:dirt"],
-	["Orange Glass", 3, Color(1.00, 0.60, 0.20, 0.42), true, false, "mat:dirt"],
-	["Yellow Glass", 3, Color(1.00, 0.92, 0.30, 0.40), true, false, "mat:dirt"],
-	["Green Glass", 3, Color(0.30, 0.85, 0.40, 0.40), true, false, "mat:dirt"],
-	["Cyan Glass", 3, Color(0.30, 0.90, 0.95, 0.40), true, false, "mat:dirt"],
-	["Blue Glass", 3, Color(0.30, 0.45, 1.00, 0.42), true, false, "mat:dirt"],
-	["Purple Glass", 3, Color(0.65, 0.40, 0.95, 0.42), true, false, "mat:dirt"],
-	["Pink Glass", 3, Color(1.00, 0.55, 0.80, 0.40), true, false, "mat:dirt"],
+	# Hits 2, like the dirt they are made of. The last 10 are see-through glass.
+	["Red Block", 2, Color(0.86, 0.22, 0.22), true, true, "mat:dirt"],
+	["Orange Block", 2, Color(0.95, 0.52, 0.16), true, true, "mat:dirt"],
+	["Yellow Block", 2, Color(0.97, 0.84, 0.25), true, true, "mat:dirt"],
+	["Lime Block", 2, Color(0.58, 0.85, 0.28), true, true, "mat:dirt"],
+	["Green Block", 2, Color(0.18, 0.58, 0.30), true, true, "mat:dirt"],
+	["Teal Block", 2, Color(0.15, 0.66, 0.66), true, true, "mat:dirt"],
+	["Sky Block", 2, Color(0.45, 0.76, 0.98), true, true, "mat:dirt"],
+	["Blue Block", 2, Color(0.20, 0.36, 0.86), true, true, "mat:dirt"],
+	["Purple Block", 2, Color(0.56, 0.32, 0.82), true, true, "mat:dirt"],
+	["Pink Block", 2, Color(0.96, 0.52, 0.76), true, true, "mat:dirt"],
+	["White Block", 2, Color(0.95, 0.95, 0.93), true, true, "mat:dirt"],
+	["Charcoal Block", 2, Color(0.20, 0.20, 0.23), true, true, "mat:dirt"],
+	["Light Grey Block", 2, Color(0.76, 0.76, 0.78), true, true, "mat:dirt"],
+	["Grey Block", 2, Color(0.55, 0.55, 0.58), true, true, "mat:dirt"],
+	["Dark Grey Block", 2, Color(0.36, 0.36, 0.39), true, true, "mat:dirt"],
+	["Black Block", 2, Color(0.08, 0.08, 0.09), true, true, "mat:dirt"],
+	["Maroon Block", 2, Color(0.50, 0.12, 0.16), true, true, "mat:dirt"],
+	["Coral Block", 2, Color(0.98, 0.45, 0.40), true, true, "mat:dirt"],
+	["Peach Block", 2, Color(0.99, 0.76, 0.60), true, true, "mat:dirt"],
+	["Gold Block", 2, Color(0.85, 0.65, 0.13), true, true, "mat:dirt"],
+	["Olive Block", 2, Color(0.45, 0.48, 0.18), true, true, "mat:dirt"],
+	["Mint Block", 2, Color(0.60, 0.92, 0.76), true, true, "mat:dirt"],
+	["Navy Block", 2, Color(0.12, 0.17, 0.45), true, true, "mat:dirt"],
+	["Lavender Block", 2, Color(0.74, 0.66, 0.94), true, true, "mat:dirt"],
+	["Magenta Block", 2, Color(0.85, 0.20, 0.62), true, true, "mat:dirt"],
+	["Brown Block", 2, Color(0.45, 0.29, 0.16), true, true, "mat:dirt"],
+	["Clear Glass", 2, Color(0.85, 0.95, 1.00, 0.28), true, false, "mat:dirt"],
+	["Smoke Glass", 2, Color(0.30, 0.30, 0.34, 0.45), true, false, "mat:dirt"],
+	["Red Glass", 2, Color(0.95, 0.25, 0.25, 0.42), true, false, "mat:dirt"],
+	["Orange Glass", 2, Color(1.00, 0.60, 0.20, 0.42), true, false, "mat:dirt"],
+	["Yellow Glass", 2, Color(1.00, 0.92, 0.30, 0.40), true, false, "mat:dirt"],
+	["Green Glass", 2, Color(0.30, 0.85, 0.40, 0.40), true, false, "mat:dirt"],
+	["Cyan Glass", 2, Color(0.30, 0.90, 0.95, 0.40), true, false, "mat:dirt"],
+	["Blue Glass", 2, Color(0.30, 0.45, 1.00, 0.42), true, false, "mat:dirt"],
+	["Purple Glass", 2, Color(0.65, 0.40, 0.95, 0.42), true, false, "mat:dirt"],
+	["Pink Glass", 2, Color(1.00, 0.55, 0.80, 0.40), true, false, "mat:dirt"],
 ]
 
 const PALETTE_SIZE := 36
@@ -231,14 +231,3 @@ static func rotate180(id: int) -> int:
 		TEAM_BLUE: return TEAM_RED
 	return id
 
-
-static func mirror(id: int) -> int:
-	## Block swap used when mirroring the blue half of the map onto the red half.
-	match id:
-		BASE_BLUE: return BASE_RED
-		BASE_RED: return BASE_BLUE
-		CONV_XP: return CONV_XN
-		CONV_XN: return CONV_XP
-		TRAP_BLUE: return TRAP_RED
-		GATE_BLUE: return GATE_RED
-	return id

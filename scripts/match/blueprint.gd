@@ -129,8 +129,14 @@ func cost() -> Dictionary:
 	var need := {}
 	for e in cells:
 		var mat := Blocks.mat_of(int(e["id"]))
-		var n := Blocks.MICRO_COUNT if e["mask"] == null else (Blocks.MICRO_COUNT - (e["mask"] as PackedByteArray).count(0))
-		need[mat] = int(need.get(mat, 0)) + n
+		if e["mask"] == null:
+			need[mat] = int(need.get(mat, 0)) + Blocks.MICRO_COUNT
+			continue
+		var mk: PackedByteArray = e["mask"]
+		var dabs := mk.size() - mk.count(0) - mk.count(1)   # paint dabs are made of dirt
+		need[mat] = int(need.get(mat, 0)) + mk.count(1)
+		if dabs > 0:
+			need["dirt"] = int(need.get("dirt", 0)) + dabs
 	return need
 
 
@@ -161,7 +167,9 @@ func validate() -> String:
 		seen[o] = true
 		if not Blocks.COPYABLE.has(int(e["id"])):
 			return "Blueprint contains something that cannot be copied"
-		var mask: Variant = e.get("mask")
+		if not e.has("mask"):
+			return "Blueprint is malformed"
+		var mask: Variant = e["mask"]
 		if mask != null and (not (mask is PackedByteArray) or (mask as PackedByteArray).size() != Blocks.MICRO_COUNT \
 				or (mask as PackedByteArray).count(0) == Blocks.MICRO_COUNT):
 			return "Blueprint is malformed"

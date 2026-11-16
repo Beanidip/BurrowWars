@@ -323,9 +323,8 @@ func _relocate(mc: Machine, dest: Vector3i, time: float) -> bool:
 	var onto := w.get_cell(dest)
 	if not VoxelWorld.in_bounds(dest) or dest.y < 1 or (onto != Blocks.AIR and onto != Blocks.HIGHWAY):
 		return false
-	for t in 2:
-		if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(dest) + Vector3(0.5, 0.5, 0.5)):
-			return false
+	if MapGenerator.in_any_base(dest, 0.5):
+		return false
 	var rider: Rat = m.rat_by_id(mc.operator) if mc.operator != -1 else null
 	for r in m.rats:
 		if r.overlaps_cell(dest):

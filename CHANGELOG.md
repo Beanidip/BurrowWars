@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased - code review fixes
+
+| Change | Files |
+|---|---|
+| Fix: an online player on an enemy sticky trap was corrected by the server every tick and frozen in place. The sticky slowdown is now part of the shared rat simulation | `actors/rat.gd`, `match/match.gd` |
+| Fix: springs made no sound or BOING for online players; their game reports the bounce and the server plays it for everyone (rate-limited) | `match/match.gd`, `net/net_client.gd`, `net/net_server.gd` |
+| Painted blocks are dyed dirt: 2 hits. Left-click paint works on dirt and painted blocks only, so it can never weaken a stone wall | `world/blocks.gd`, `match/match.gd` |
+| Fix: a forged blueprint without a mask key errored on the server; it is now refused as malformed | `match/blueprint.gd` |
+| Online players no longer generate a map that the server's snapshot replaces (about 0.7 s saved per join and per round) | `match/match.gd` |
+| Fix: carving, dabbing paint and breaking a block turned dirt into stone; dabs now refund (and cost in the pantograph) as dirt | `match/match.gd`, `match/blueprint.gd` |
+| Server encodes each snapshot and event batch once for all players and reads the peer list once per tick (net protocol 6) | `net/net_server.gd`, `net/net.gd` |
+| Cleanup: removed the unused Team Block ability code, `Blocks.mirror`, `LiquidFlow.wake_all`; one `MapGenerator.in_any_base` rule and one `Match.wire_aim` helper replace copied code | several |
+
 ## 1.8.0 - Team Block gadget, cheese dash, team-coloured menus (2026-11-16)
 
 | Change | Files |

@@ -18,6 +18,7 @@ var _frame := 0
 var _fire_t := 0
 var _aim_t := 0
 var _sent_action_t := 0.0
+var _spring := false
 
 
 func _init(p_match: Match, info: Dictionary) -> void:
@@ -65,6 +66,12 @@ func act(method: String, args: Array) -> String:
 	return ""
 
 
+func note_spring() -> void:
+	## Our rat bounced off a spring or wall spring; tell the server with the
+	## next movement report so everyone hears it.
+	_spring = true
+
+
 func aim_machine(yaw: float, pitch: float) -> void:
 	var now := Time.get_ticks_msec()
 	if now - _aim_t < 50 or Net.role != Net.Role.CLIENT:
@@ -84,6 +91,9 @@ func _physics_process(_delta: float) -> void:
 	if r.anim_action_t > _sent_action_t + 0.01:
 		pkt["a"] = r.anim_action
 	_sent_action_t = r.anim_action_t
+	if _spring:
+		pkt["sp"] = true
+		_spring = false
 	Net._c_input.rpc_id(1, pkt)
 
 

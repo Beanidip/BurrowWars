@@ -164,6 +164,12 @@ func step_timers(dt: float) -> void:
 	anim_action_t = maxf(0.0, anim_action_t - dt)
 	ability_cd[0] = maxf(0.0, ability_cd[0] - dt)
 	ability_cd[1] = maxf(0.0, ability_cd[1] - dt)
+	# An enemy sticky trap underfoot keeps you slowed. This lives here, not in
+	# Match's hazards, because both the server and a remote player's own game
+	# run it: they then agree on `slow`, and the server has nothing to correct.
+	var under := _world.block_at(position + Vector3(0, 0.2, 0))
+	if Blocks.is_sticky(under) and (0 if under == Blocks.STICKY_BLUE else 1) != team and not flying:
+		slow = maxf(slow, 1.2)
 
 
 func _step_motion(dt: float) -> void:

@@ -16,7 +16,7 @@ BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a chee
 
 SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Conveyors and highways are laid into the floor you aim at; a conveyor runs toward the bright edge of your target square. Aim at a ladder and press Q to extend it up or down. Q places the equipped gadget, R changes it, I opens your pack.
 
-COLOUR  Press C to pick one of 36 colours, including greys and see-through glass. With slot 5, left click dyes a dirt, stone or painted block (anything else is dug as usual) and right mouse places painted blocks (each costs one dirt, or stone when you have no dirt; digging one gives a dirt back); with the chisel (9) right mouse adds painted microvoxels (glass is full blocks only).
+COLOUR  Press C to pick one of 36 colours, including greys and see-through glass. With slot 5, left click dyes a dirt or painted block (anything else is dug as usual) and right mouse places painted blocks (each costs one dirt, or stone when you have no dirt; digging one gives a dirt back); with the chisel (9) right mouse adds painted microvoxels (glass is full blocks only).
 
 RAIDS  Stand inside the ENEMY base for 3 seconds to steal a cheese they already banked. Everyone hears the alarm, and any defender standing in their own base locks the vault - so guard it, gate it, trap it.
 

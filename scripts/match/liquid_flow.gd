@@ -47,14 +47,6 @@ func _init(p_match: Match, p_liquid: int, p_tick: float, p_reach: int, p_cap: in
 	cap = p_cap
 
 
-func wake_all() -> void:
-	## Marks every cell of this liquid for one look (settles pools that open onto a cave).
-	var i := m.world.data.find(liquid)
-	while i >= 0:
-		active[Vector3i(i % VoxelWorld.SX, i / (VoxelWorld.SX * VoxelWorld.SZ), (i / VoxelWorld.SX) % VoxelWorld.SZ)] = true
-		i = m.world.data.find(liquid, i + 1)
-
-
 func on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 	if new_id == liquid:
 		active[cell] = true
@@ -115,9 +107,8 @@ func _quench(c: Vector3i) -> bool:
 func _pour(cell: Vector3i, lv: int) -> void:
 	if flowed >= cap or not VoxelWorld.in_bounds(cell):
 		return
-	for t in 2:
-		if MapGenerator.base_zone(t).grow(1.0).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
-			return
+	if MapGenerator.in_any_base(cell, 1.0):
+		return
 	flowed += 1
 	level[cell] = lv
 	m.world.set_block(cell, liquid)

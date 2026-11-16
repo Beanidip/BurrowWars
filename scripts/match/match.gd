@@ -87,7 +87,9 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 		imported = world.load_from(map_file)
 		if not imported:
 			Log.warn("could not load map %s; generating one instead" % map_file)
-	if imported:
+	if replica:
+		pass   # an online player's world arrives whole from the server (NetClient)
+	elif imported:
 		if not free_mode:
 			MapGenerator.prepare_imported(world, map_seed, need)
 		siege.from_save(world.loaded_extra.get("machines", []))
@@ -213,6 +215,8 @@ func step(dt: float) -> void:
 					r.jump_pressed = false
 					r.dash_pressed = false
 				r.step(dt)
+				if r.landed_on_spring and remote != null:
+					remote.note_spring()   # the server plays it for everyone
 		return
 	for r in rats:
 		if r.net_peer != 0:
@@ -249,6 +253,15 @@ static func net_state(r: Rat) -> Array:
 	## The parts of a rat that its player's game simulates. When the authority
 	## changes any of them (bonk, blast, respawn, trap...) the player is told.
 	return [r.position, r.vel, r.stun, r.knock, r.slow, r.stamina, r.flying]
+
+
+static func wire_aim(aim: Dictionary) -> Dictionary:
+	## The parts of an aim a server needs (and NetServer._aim checks).
+	var out := {}
+	for k: String in ["cell", "normal", "point"]:
+		if aim.has(k):
+			out[k] = aim[k]
+	return out
 
 
 func cd_slack(r: Rat) -> float:
@@ -317,8 +330,6 @@ func _check_rat_hazards(r: Rat, dt: float) -> void:
 				_drop(r, 1, Config.BONK_PICKUP_LOCK)
 			fx.emit("trap", r.position, null)
 			toast.emit("SNAP! %s stepped on a mouse trap." % r.display_name, -1)
-	if Blocks.is_sticky(here) and (0 if here == Blocks.STICKY_BLUE else 1) != r.team and not r.flying:
-		r.slow = maxf(r.slow, 1.2)
 	if r.carried > 0 and not free_mode and in_base(r):
 		_deposit(r)
 
@@ -456,8 +467,13 @@ func _damage(rat: Rat, cell: Vector3i, power: int, quiet := false) -> bool:
 
 
 func _break(rat: Rat, cell: Vector3i, id: int, quiet := false) -> void:
-	# A carved block is only worth the microvoxels still in it.
+	# A carved block is only worth the microvoxels still in it; paint dabs in
+	# it were paid in dirt and come back as dirt.
 	var carved := world.micro_count(cell) if world.has_micro(cell) else -1
+	var dabs := 0
+	if carved >= 0:
+		var mk: PackedByteArray = world.micro[cell]
+		dabs = mk.size() - mk.count(0) - mk.count(1)
 	world.set_block(cell, Blocks.AIR)
 	tnt.erase(cell)
 	if not quiet:
@@ -474,7 +490,9 @@ func _break(rat: Rat, cell: Vector3i, id: int, quiet := false) -> void:
 	elif drop.begins_with("mat:"):
 		var m := drop.substr(4)
 		if carved >= 0:
-			_refund_micro(rat, m, carved)
+			_refund_micro(rat, m, carved - dabs)
+			if dabs > 0:
+				_refund_micro(rat, "dirt", dabs)
 		else:
 			rat.mats[m] = mini(int(rat.mats[m]) + 1, 99)
 	elif drop.begins_with("item:"):
@@ -501,9 +519,8 @@ func can_place_at(rat: Rat, cell: Vector3i, block: int, reach := -1.0, replace :
 	var cur := world.get_cell(cell)
 	if not replace and cur != Blocks.AIR and cur != Blocks.WATER and cur != Blocks.LAVA:
 		return "Space is occupied"
-	for t in 2:
-		if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
-			return "Bases are protected"
+	if MapGenerator.in_any_base(cell, 0.5):
+		return "Bases are protected"
 	if replace:
 		return ""
 	for r in rats:
@@ -555,10 +572,9 @@ func try_place_paint(rat: Rat, cell: Vector3i, color: int) -> String:
 
 
 func try_paint_block(rat: Rat, cell: Vector3i, color: int) -> String:
-	## Left click with the Paint slot: dye the block you hit. Dirt, grass and
-	## stone become a painted block (digging it later gives a dirt, like any
-	## painted block); painted blocks and glass just change colour. Free, at
-	## dig speed.
+	## Left click with the Paint slot: dye the block you hit. Dirt and grass
+	## become a painted block (same toughness, still gives a dirt back);
+	## painted blocks and glass just change colour. Free, at dig speed.
 	if over or rat.stun > 0.0 or rat.dig_cd > cd_slack(rat):
 		return "wait"
 	if remote != null:
@@ -571,10 +587,9 @@ func try_paint_block(rat: Rat, cell: Vector3i, color: int) -> String:
 		return "Too far"
 	var id := world.get_cell(cell)
 	if not paintable(cell):
-		return "Only dirt, stone and painted blocks take paint" if not world.has_micro(cell) else "Carved blocks keep their own colours - use the chisel to add paint"
-	for t in 2:
-		if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
-			return "Bases are protected"
+		return "Only dirt and painted blocks take paint" if not world.has_micro(cell) else "Carved blocks keep their own colours - use the chisel to add paint"
+	if MapGenerator.in_any_base(cell, 0.5):
+		return "Bases are protected"
 	if world.layered_gate(cell) >= 0:
 		return "That is inside a gate"
 	rat.dig_cd = 1.0 / Config.DIG_RATE
@@ -588,8 +603,10 @@ func try_paint_block(rat: Rat, cell: Vector3i, color: int) -> String:
 
 
 func paintable(cell: Vector3i) -> bool:
+	## Left-click paint only recolours dirt-strength blocks (dirt, grass and
+	## painted blocks), so it can never make a block weaker or stronger.
 	var id := world.get_cell(cell)
-	return (id == Blocks.DIRT or id == Blocks.GRASS or id == Blocks.STONE or Blocks.is_paint(id)) and not world.has_micro(cell)
+	return (id == Blocks.DIRT or id == Blocks.GRASS or Blocks.is_paint(id)) and not world.has_micro(cell)
 
 
 func paint_material(rat: Rat, micro := 0) -> String:
@@ -664,11 +681,7 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, dir := Vector3.ZERO) -> String:
 	## The Q key: throw Mobile TNT, or place the equipped gadget at the aim.
 	if remote != null:
-		var clean := {}
-		for k: String in ["cell", "normal", "point"]:
-			if aim.has(k):
-				clean[k] = aim[k]
-		return remote.act("try_use_equipped", [clean, look, gentle, dir])
+		return remote.act("try_use_equipped", [wire_aim(aim), look, gentle, dir])
 	if rat.equipped == "dynamite":
 		return dynamite.try_throw(rat, look, gentle)
 	if aim.is_empty():
@@ -803,9 +816,8 @@ func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String, color :
 			return "Pick a material (1-5) first"
 		else:
 			block = ClassDefs.MAT_BLOCK[mat]
-		for t in 2:
-			if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
-				return "Bases are protected"
+		if MapGenerator.in_any_base(cell, 0.5):
+			return "Bases are protected"
 	elif not Blocks.CHISELABLE.has(id):
 		return "Can't add to %s" % Blocks.block_name(id)
 	elif world.micro_at(cell, mv):
@@ -863,9 +875,8 @@ func paste_check(rat: Rat, bp: Blueprint, origin: Vector3i) -> String:
 			return "Blueprint would leave the map"
 		if world.get_cell(c) != Blocks.AIR:
 			return "Something is in the way"
-		for t in 2:
-			if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(c) + Vector3(0.5, 0.5, 0.5)):
-				return "Bases are protected"
+		if MapGenerator.in_any_base(c, 0.5):
+			return "Bases are protected"
 		for r in rats:
 			if r.overlaps_cell(c):
 				return "A rat is in the way"
@@ -935,11 +946,7 @@ func drop_cheese(rat: Rat, aim: Dictionary = {}, look := Vector3.ZERO) -> bool:
 	if rat.carried <= 0:
 		return false
 	if remote != null:
-		var clean := {}
-		for k: String in ["cell", "normal", "point"]:
-			if aim.has(k):
-				clean[k] = aim[k]
-		remote.act("drop_cheese", [clean, look])
+		remote.act("drop_cheese", [wire_aim(aim), look])
 		return true
 	rat.carried -= 1
 	var spot := Vector3.INF
@@ -1170,11 +1177,7 @@ func use_ability(rat: Rat, slot: int, aim: Dictionary = {}) -> String:
 	if over or rat.stun > 0.0:
 		return "Can't do that right now"
 	if remote != null:
-		var clean := {}
-		for k: String in ["cell", "normal", "point"]:
-			if aim.has(k):
-				clean[k] = aim[k]
-		return remote.act("use_ability", [slot, clean])
+		return remote.act("use_ability", [slot, wire_aim(aim)])
 	var list: Array = rat.cls["abilities"]
 	if slot < 0 or slot >= list.size():
 		return ""
@@ -1187,7 +1190,6 @@ func use_ability(rat: Rat, slot: int, aim: Dictionary = {}) -> String:
 	var err := ""
 	match String(ab[0]):
 		"superdig": err = _ab_superdig(rat, aim)
-		"teamblock": err = _ab_teamblock(rat, aim)
 		"sniff": err = _ab_marker(rat, _nearest_cheese(rat.position, 30.0), "Cheese", "No cheese scent within 30 blocks")
 		"beacon":
 			add_marker(rat.position + Vector3(0, 1, 0), "Beacon", rat.team, 120.0)
@@ -1282,21 +1284,6 @@ func _ab_superdig(rat: Rat, aim: Dictionary) -> String:
 	rat.play_action("dig", 0.35)
 	_damage(rat, cell, 99 if free_mode else 2)
 	_brush(rat, cell, 1, 99 if free_mode else 1)
-	return ""
-
-
-func _ab_teamblock(rat: Rat, aim: Dictionary) -> String:
-	## Builder: a block in team colours that only teammates can stand on or
-	## remove. Enemies (and loose objects) pass straight through it.
-	if aim.is_empty():
-		return "Aim at a surface to place a Team Block"
-	var cell := Vector3i(aim["cell"]) + Vector3i(aim["normal"])
-	var block := Blocks.TEAM_BLUE if rat.team == 0 else Blocks.TEAM_RED
-	var why := can_place_at(rat, cell, block)
-	if why != "":
-		return why
-	world.set_block(cell, block)
-	fx.emit("place", Vector3(cell), block)
 	return ""
 
 
