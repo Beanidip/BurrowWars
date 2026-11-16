@@ -28,6 +28,7 @@ const DEFAULTS := {
 	"camera_distance": 4.0,
 	"goal": 8,
 	"team_size": 2,
+	"bot_skill": 1,
 	"last_class": "digger",
 	"last_team": 0,
 }

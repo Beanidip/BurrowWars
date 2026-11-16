@@ -23,6 +23,9 @@ var stuck_t := 0.0
 var stuck_pos := Vector3.ZERO
 var stuck_count := 0
 var jitter := 0.0
+var final_run := false
+var rest_t := 0.0
+var last_carried := 0
 
 
 func _init(p_match: Match, p_rat: Rat, p_seed: int) -> void:
@@ -41,6 +44,13 @@ func think(dt: float) -> void:
 		return
 	rat.mats["dirt"] = maxi(int(rat.mats["dirt"]), 12)  # bots always have stair dirt
 	_try_bonk()
+	# skill knob: lower-skill bots pause to celebrate every pickup and deposit
+	if rat.carried != last_carried:
+		last_carried = rat.carried
+		rest_t = float(m.settings.get("bot_rest", 0.0))
+	if rest_t > 0.0:
+		rest_t -= dt
+		return
 	retarget_t -= dt
 	if retarget_t <= 0.0:
 		retarget_t = 0.8 + rng.randf() * 0.4
@@ -63,11 +73,17 @@ func _retarget() -> void:
 	if rat.carried > 0 and (full or far):
 		mode = "home"
 		var zone := MapGenerator.base_zone(rat.team)
-		var home := zone.position + Vector3(zone.size.x * 0.5, 0.0, zone.size.z * 0.5)
 		var gate := MapGenerator.approach_point(rat.team)
-		var past_gate := absf(rat.position.x - home.x) < absf(gate.x - home.x) + 1.0 and rat.position.y > MapGenerator.GROUND - 0.6
-		target = home if past_gate else gate
+		# front edge of the platform: the first spot that counts as "home"
+		var door := Vector3(zone.position.x + (zone.size.x - 0.5 if rat.team == 0 else 0.5), zone.position.y, gate.z)
+		var flat := Vector2(rat.position.x - gate.x, rat.position.z - gate.z).length()
+		if not final_run and flat < 1.5 and rat.position.y > MapGenerator.GROUND - 0.5:
+			final_run = true
+		elif final_run and rat.position.y < MapGenerator.GROUND - 1.5:
+			final_run = false   # fell into a hole: regroup at the gate
+		target = door if final_run else gate
 		return
+	final_run = false
 	mode = "seek"
 	if cheese != null:
 		target = cheese
@@ -126,7 +142,8 @@ func _navigate() -> void:
 			return
 	var ax := absf(d.x)
 	var az := absf(d.z)
-	if ax < 0.45 and az < 0.45:
+	# close underneath (or on top of) the goal: go straight up or down
+	if (ax < 0.45 and az < 0.45) or (d.y > 0.6 and ax < 2.5 and az < 2.5 and mode == "home"):
 		_vertical(c, d.y)
 		return
 	# stay on one axis until it is used up: keeps tunnels straight

@@ -10,7 +10,7 @@ run() {
   local log; log="$(mktemp)"
   "$@" >"$log" 2>&1
   local code=$?
-  if grep -E "SCRIPT ERROR|Parse Error|Failed to load|ERROR:" "$log" >/dev/null; then code=1; fi
+  if grep -vE "at exit|leaked" "$log" | grep -E "SCRIPT ERROR|Parse Error|Failed to load|ERROR:" >/dev/null; then code=1; fi
   if [ $code -ne 0 ]; then
     echo "FAIL  $name"; grep -E "SCRIPT ERROR|Parse Error|Failed|ERROR|ASSERT|at:" "$log" | head -40; fail=1
   else

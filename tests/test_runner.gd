@@ -253,6 +253,14 @@ func test_dig_durability_and_rate() -> void:
 				if m.world.get_cell(ARENA + Vector3i(dx, dy, dz)) == Blocks.AIR:
 					gone += 1
 	check(gone == 27, "digger brush clears a 3x3x3 of dirt in two swings (%d)" % gone)
+	for dx in range(-1, 3):
+		for dz in range(-1, 2):
+			m.world.set_block(ARENA + Vector3i(dx, -1, dz), Blocks.DIRT)
+	m.world.set_block(ARENA + Vector3i(1, 0, 0), Blocks.DIRT)
+	for i in 2:
+		run(m, 0.4)
+		m.try_dig(d, ARENA + Vector3i(1, 0, 0))
+	check(m.world.get_cell(ARENA + Vector3i(0, -1, 0)) == Blocks.DIRT, "digger brush does not undermine its own footing when digging level")
 	end(m)
 
 
@@ -669,12 +677,12 @@ func test_free_build() -> void:
 
 
 func test_bots_complete_a_match() -> void:
-	var m := new_match({"goal": 3, "seed": 7})
+	var m := new_match({"goal": 6, "seed": 7})
 	var before := total_cheese(m)
 	for team in 2:
 		m.spawn_rat(team, "digger", true)
 		m.spawn_rat(team, "scout", true)
-	var limit := 12.0 * 60.0
+	var limit := 8.0 * 60.0
 	var dt := 1.0 / 30.0
 	var first_score := -1.0
 	while not m.over and m.time < limit:
@@ -683,7 +691,7 @@ func test_bots_complete_a_match() -> void:
 			first_score = m.time
 	print("    bots: over=%s winner=%d score=%d-%d sim_time=%.0fs first_score=%.0fs" % [m.over, m.winner, m.scores[0], m.scores[1], m.time, first_score])
 	check(m.scores[0] + m.scores[1] > 0, "bots find, carry and deposit cheese")
-	check(m.over, "a bots-only match reaches the goal within 12 simulated minutes")
+	check(m.over, "a bots-only match reaches the goal within 8 simulated minutes")
 	check(total_cheese(m) == before, "cheese is conserved over a full match (%d vs %d)" % [total_cheese(m), before])
 	for r in m.rats:
 		check(not r.blocked(), "bot %d is not embedded in terrain" % r.id)

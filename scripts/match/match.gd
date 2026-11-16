@@ -212,6 +212,7 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 	var power := 99 if free_mode else 1
 	_damage(rat, cell, power)
 	var brush := int(rat.cls["brush"])
+	var feet_y := rat.feet_cell().y
 	if brush > 0:
 		for dx in range(-brush, brush + 1):
 			for dy in range(-brush, brush + 1):
@@ -219,6 +220,9 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 					if dx == 0 and dy == 0 and dz == 0:
 						continue
 					var c := cell + Vector3i(dx, dy, dz)
+					# Never undermine the digger's own footing unless they aim downward.
+					if c.y < feet_y and cell.y >= feet_y:
+						continue
 					# The wide brush only chews natural terrain, never gadgets or cheese.
 					var nid := world.get_cell(c)
 					if nid == Blocks.DIRT or nid == Blocks.GRASS or nid == Blocks.STONE or nid == Blocks.LEAVES:
