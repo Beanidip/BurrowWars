@@ -18,7 +18,7 @@ func _ready() -> void:
 		"carry_slowdown", "dig_durability_and_rate", "placement_rules", "cheese_loop_and_capacity",
 		"bonk_rules", "respawn_conserves_cheese", "economy_multiplier", "workshop_rules",
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
-		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "ladder_stack_and_floor_gadgets",
+		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
 		"painted_blocks", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
@@ -872,6 +872,74 @@ func test_lava_flows() -> void:
 	check(per_half[0] > 20 and per_half[0] == per_half[1], "underground lava pools are generated and mirrored (%d per side)" % per_half[0])
 	end(fresh)
 	end(m)
+
+
+func test_water_flows() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 9)
+	for i in 60:
+		m.step(0.5)
+	var tank := ARENA + Vector3i(0, 2, 0)
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			m.world.set_block(tank + Vector3i(dx, -1, dz), Blocks.STONE)
+			if dx != 0 or dz != 0:
+				m.world.set_block(tank + Vector3i(dx, 0, dz), Blocks.STONE)
+	m.world.set_block(tank, Blocks.WATER)
+	run(m, 2.0)
+	var count := func() -> int:
+		var n := 0
+		for dx in range(-9, 10):
+			for dz in range(-9, 10):
+				for dy in range(0, 4):
+					if m.world.get_cell(ARENA + Vector3i(dx, dy, dz)) == Blocks.WATER:
+						n += 1
+		return n
+	check(count.call() == 1, "contained water stays put")
+	m.world.set_block(tank + Vector3i(1, 0, 0), Blocks.AIR)
+	run(m, 0.6)
+	check(m.world.get_cell(tank + Vector3i(1, 0, 0)) == Blocks.WATER, "water flows into the gap")
+	run(m, 5.0)
+	check(m.world.get_cell(ARENA + Vector3i(2, 0, 0)) == Blocks.WATER, "then pours down over the edge")
+	check(m.world.get_cell(ARENA + Vector3i(6, 0, 0)) == Blocks.WATER, "water runs further than lava (reach %d vs %d)" % [LiquidFlow.WATER_REACH, LiquidFlow.LAVA_REACH])
+	var n1: int = count.call()
+	run(m, 8.0)
+	check(count.call() == n1 and n1 < 140, "the flood comes to rest (%d blocks)" % n1)
+	check(m.world.get_cell(ARENA + Vector3i(9, 0, 0)) != Blocks.WATER, "spread is limited")
+	# a rat can wade through it and plug it like any liquid
+	var r := arena_rat(m, 0, "scout", Vector3(4, 0, 0))
+	r.mats["dirt"] = 5
+	run(m, 0.3)
+	check(r.in_water or m.world.block_at(r.position + Vector3(0, 0.1, 0)) == Blocks.WATER, "flowed water is real water to a rat")
+	check(m.try_place_mat(r, ARENA + Vector3i(5, 0, 1), "dirt") == "" or m.world.get_cell(ARENA + Vector3i(5, 0, 1)) != Blocks.WATER, "water can be plugged with a block")
+	end(m)
+	# lava meets water -> stone, from either side
+	var q := new_match()
+	flat_arena(q, ARENA, 6)
+	for i in 60:
+		q.step(0.5)
+	var lava_cell := ARENA + Vector3i(-4, 0, -4)
+	q.world.set_block(lava_cell, Blocks.LAVA)
+	run(q, 3.0)
+	var lava_n := 0
+	for dx in range(-6, 7):
+		for dz in range(-6, 7):
+			if q.world.get_cell(ARENA + Vector3i(dx, 0, dz)) == Blocks.LAVA:
+				lava_n += 1
+	q.world.set_block(ARENA + Vector3i(-1, 2, -1), Blocks.WATER)    # a waterfall beside the lava
+	run(q, 6.0)
+	var lava_left := 0
+	var stone := 0
+	for dx in range(-6, 7):
+		for dz in range(-6, 7):
+			var id := q.world.get_cell(ARENA + Vector3i(dx, 0, dz))
+			if id == Blocks.LAVA:
+				lava_left += 1
+			elif id == Blocks.STONE:
+				stone += 1
+	check(lava_n > 1, "the lava spread first (%d cells)" % lava_n)
+	check(stone > 0 and lava_left < lava_n, "where water meets lava it hardens to stone (%d stone, lava %d -> %d)" % [stone, lava_n, lava_left])
+	end(q)
 
 
 func test_ladder_stack_and_floor_gadgets() -> void:

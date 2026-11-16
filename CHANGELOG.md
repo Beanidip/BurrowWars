@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+| Change | Files |
+|---|---|
+| Water flows like lava, faster and further (reach 5); lava touching water turns to stone with a hiss of steam | `match/liquid_flow.gd` (was `lava_flow.gd`), `match/match.gd`, `match/match_view.gd` |
+| Windows export preset (single-file exe) | `export_presets.cfg` |
+
 ## 1.3.0 - Colours, highway layer, wrecking-ball table (2026-11-16)
 
 | Change | Files |

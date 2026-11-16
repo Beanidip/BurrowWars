@@ -125,6 +125,9 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"trap":
 			_sound("bonk", pos, 1.5, 2.0)
 			_float_text(pos + Vector3(0, 1.4, 0), "SNAP!", Color(1, 0.6, 0.5))
+		"quench":
+			_sound("break_stone", c, 0.7, 1.4)
+			_burst(c, Color(0.92, 0.94, 0.96), 8, 3.0)
 		"spring":
 			_sound("block_place", pos, 1.8, 2.0)
 			_float_text(pos + Vector3(0, 0.6, 0), "BOING!", Color(0.7, 1.0, 0.6))

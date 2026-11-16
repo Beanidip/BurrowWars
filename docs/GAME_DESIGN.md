@@ -96,7 +96,8 @@ wall spring (flings back whatever runs into it).
 ## v1.2 changes
 
 - **Water:** hold or tap Space at the surface to leap out. Water is drawn see-through.
-- **Lava flows.** Three molten basins per side sit in their own caverns. Open one and lava pours down any gap and creeps up to 3 blocks sideways from where it lands, then rests. Plug it with any block. `LavaFlow` constants: tick 0.45 s, reach 3, cap 1200 blocks per match.
+- **Lava flows.** Three molten basins per side sit in their own caverns. Open one and lava pours down any gap and creeps up to 3 blocks sideways from where it lands, then rests. Plug it with any block. 
+- **Water flows** the same way, faster and further: dig into the pond or the sewer channel and it pours into your tunnels (tick 0.25 s, reach 5, cap 2500 blocks). Lava that touches water hardens into stone, so a bucket-less player can still cap a lava basin by flooding it. Liquids never flow into a base. Constants live in `LiquidFlow` (lava: tick 0.45 s, reach 3, cap 1200).
 - **Ladders:** Q while aiming at a ladder extends that stack - upward from its top half, downward from its bottom half - even when the end of the stack is out of normal reach.
 - **Highways and conveyors** are laid into the floor block you aim at (dirt, grass, stone, wood, brick, ice); the block you swap out goes to your stash. Aimed at a wall they go beside it as before.
 - **Target square:** a see-through team-colour outline on the aimed face. The edge nearest the crosshair is solid, and a conveyor runs toward it.

@@ -37,7 +37,8 @@ var pickups: Array[Pickup] = []
 var markers: Array[Dictionary] = []
 var tnt: Dictionary = {}        # Vector3i -> {"owner": rat id, "fuse": seconds or -1}
 var gate_damage: Dictionary = {}
-var lava: LavaFlow
+var lava: LiquidFlow
+var water: LiquidFlow
 var over := false
 var winner := -1
 var time := 0.0
@@ -64,9 +65,10 @@ func setup(match_settings: Dictionary, with_visuals := true) -> void:
 	add_child(world)
 	dynamite = DynamiteSystem.new(self)
 	siege = SiegeSystem.new(self)
-	lava = LavaFlow.new(self)
+	lava = LiquidFlow.lava(self)
+	water = LiquidFlow.water(self)
 	world.block_changed.connect(lava.on_block_changed)
-	lava.wake_all()
+	world.block_changed.connect(water.on_block_changed)
 	world.block_changed.connect(_on_block_changed)
 	world.block_changed.connect(siege.on_block_changed)
 	MapGenerator.generate(world, map_seed)
@@ -159,6 +161,7 @@ func step(dt: float) -> void:
 	dynamite.step(dt)
 	siege.step(dt)
 	lava.step(dt)
+	water.step(dt)
 	for i in range(markers.size() - 1, -1, -1):
 		markers[i]["ttl"] = float(markers[i]["ttl"]) - dt
 		if float(markers[i]["ttl"]) <= 0.0:

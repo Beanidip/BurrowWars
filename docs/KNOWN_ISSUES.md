@@ -11,7 +11,6 @@ None of these block finishing a match.
 | Bots never use abilities, gadgets or the workshop | Any match | On the cut list. They only dig, carry, bonk and bridge. |
 | A badly stuck bot respawns | Rare; after about 24 s without moving | It leaves its cheese where it stood. |
 | Loose cheese sinks in water | Drop cheese in the pond | It rests on the bottom; you can still swim down for it. |
-| Water and lava do not flow | Dig next to a pond | Static liquids (cut list). |
 | Loaded Free Build maps forget who owned TNT | F9 after placing TNT | Hitting it still lights it; remote detonate works for any charge in Free Build. |
 | First editor open takes a moment | Open the project | Godot imports about 250 sprites and sounds once. |
 | Machines are one block big | Place a crane | They read as toys rather than "heavy". Footprints larger than one cell would need multi-cell transport. |
