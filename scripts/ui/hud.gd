@@ -8,7 +8,8 @@ extends CanvasLayer
 signal exit_requested
 signal rematch_requested
 
-const MAT_ICON_COLORS := [Color(0.47, 0.31, 0.20), Color(0.50, 0.50, 0.54), Color(0.62, 0.44, 0.24), Color(0.70, 0.88, 0.96)]
+const MAT_ICON_COLORS := [Color(0.47, 0.31, 0.20), Color(0.50, 0.50, 0.54), Color(0.62, 0.44, 0.24), Color(0.70, 0.88, 0.96), Color(0.30, 0.20, 0.42)]
+const MAT_SHORT := ["Dirt", "Stone", "Wood", "Ice", "Obsid."]
 
 var m: Match
 var rat: Rat
@@ -22,6 +23,7 @@ var _stamina: ProgressBar
 var _stamina_text: Label
 var _slots: Array[PanelContainer] = []
 var _slot_counts: Array[Label] = []
+var _tool_slots: Array[PanelContainer] = []
 var _q_name: Label
 var _q_count: Label
 var _status: Label
@@ -35,6 +37,7 @@ var _dialog: Control
 var _dialog_kind := ""
 var _dialog_notice: Label
 var _dialog_scrap: Label
+var _owned_labels: Array[Label] = []
 var _crosshair: Control
 var _style_slot: StyleBoxFlat
 var _style_slot_on: StyleBoxFlat
@@ -152,9 +155,9 @@ func _build_bottom() -> void:
 	qv.add_child(_q_name)
 	qv.add_child(_q_count)
 	bar.add_child(q)
-	for i in 4:
+	for i in ClassDefs.MATS.size():
 		var slot := PanelContainer.new()
-		slot.custom_minimum_size = Vector2(78, 62)
+		slot.custom_minimum_size = Vector2(70, 62)
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 0)
 		slot.add_child(v)
@@ -165,12 +168,24 @@ func _build_bottom() -> void:
 		chip.custom_minimum_size = Vector2(16, 16)
 		head.add_child(chip)
 		v.add_child(head)
-		v.add_child(UiKit.label(String(ClassDefs.MATS[i]).capitalize(), 14))
+		v.add_child(UiKit.label(MAT_SHORT[i], 14))
 		var count := UiKit.label("0", 13, UiKit.PAPER.darkened(0.15))
 		v.add_child(count)
 		_slots.append(slot)
 		_slot_counts.append(count)
 		bar.add_child(slot)
+	# tool slots: 9 chisel, 0 pantograph
+	for info: Array in [["chisel", "Chisel", "carve"], ["pantograph", "Pantograph", "copy"]]:
+		var ts := PanelContainer.new()
+		ts.custom_minimum_size = Vector2(88, 62)
+		var tv := VBoxContainer.new()
+		tv.add_theme_constant_override("separation", 0)
+		ts.add_child(tv)
+		tv.add_child(UiKit.label(Inputs.key_name(info[0]), 12, UiKit.BRASS))
+		tv.add_child(UiKit.label(info[1], 14))
+		tv.add_child(UiKit.label(info[2], 13, UiKit.PAPER.darkened(0.15)))
+		_tool_slots.append(ts)
+		bar.add_child(ts)
 	# left: identity, scrap, cheese
 	var left := UiKit.panel()
 	left.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.TEAM[rat.team], 10, 2, 10))
@@ -232,8 +247,10 @@ func _process(_delta: float) -> void:
 	_stamina.max_value = rat.max_stamina()
 	_stamina.value = rat.stamina
 	_stamina_text.text = "Stamina %d / %d" % [int(rat.stamina), int(rat.max_stamina())]
-	for i in 4:
-		_slots[i].add_theme_stylebox_override("panel", _style_slot_on if i == ctl.selected_mat else _style_slot)
+	for i in _tool_slots.size():
+		_tool_slots[i].add_theme_stylebox_override("panel", _style_slot_on if int(ctl.tool) == i + 1 else _style_slot)
+	for i in _slots.size():
+		_slots[i].add_theme_stylebox_override("panel", _style_slot_on if (i == ctl.selected_mat and ctl.tool != PlayerController.Tool.PANTOGRAPH) else _style_slot)
 		_slot_counts[i].text = "inf" if m.free_mode else "x%d" % int(rat.mats[ClassDefs.MATS[i]])
 	if rat.equipped != "":
 		_q_name.text = ClassDefs.GADGET_NAME[rat.equipped]
@@ -253,15 +270,19 @@ func _process(_delta: float) -> void:
 	var shop := "[%s] Workshop" % Inputs.key_name("workshop")
 	if not m.can_shop(rat):
 		shop += " (at base)"
-	_hint.text = "%s   [%s] Pack   [%s] Drop cheese\n[%s] Camera   [Esc] Menu" % [shop, Inputs.key_name("inventory"),
-		Inputs.key_name("drop_cheese"), Inputs.key_name("camera_toggle")]
+	_hint.text = "%s   [%s] Pack   [%s] Drop cheese\n[%s] Use machine   [%s] Camera   [Esc] Menu" % [shop, Inputs.key_name("inventory"),
+		Inputs.key_name("drop_cheese"), Inputs.key_name("interact"), Inputs.key_name("camera_toggle")]
 	_target.text = ""
-	if not ctl.aim.is_empty() and _dialog == null:
+	if ctl.tool_text != "" and _dialog == null:
+		_target.text = ctl.tool_text
+	elif not ctl.aim.is_empty() and _dialog == null:
 		var id := int(ctl.aim["id"])
 		var hits := int(Blocks.HITS[id])
 		var extra := ""
 		if id == Blocks.TNT:
 			extra = "  -  hit to light the fuse"
+		elif Blocks.is_machine(id):
+			extra = "  -  [%s] operate   (dig it to pack it up)" % Inputs.key_name("interact")
 		elif hits == 0:
 			extra = "  -  indestructible"
 		elif not m.free_mode:
@@ -271,6 +292,10 @@ func _process(_delta: float) -> void:
 		_target.text += "   |   Carrying cheese: get to your base!"
 	_crosshair.visible = _dialog == null
 	_update_markers()
+	for ol in _owned_labels:
+		var it: Dictionary = ol.get_meta("item")
+		var have := int(rat.gadgets.get(it["id"], 0)) if it["kind"] == "gadget" else int(rat.mats.get(it["id"], 0))
+		ol.text = "%s      owned: %s" % [it["name"], "unlimited" if m.free_mode else str(have)]
 	if _dialog_scrap != null:
 		_dialog_scrap.text = "Your scrap: %d      Scrap value x%.2f" % [rat.scrap, m.multiplier()]
 
@@ -364,11 +389,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("inventory"):
 		_toggle("inventory")
 	elif m.free_mode and event.is_action_pressed("save_map"):
-		var ok := m.world.save_to("user://maps/free_build.bwmap")
+		var ok := m.world.save_to("user://maps/free_build.bwmap", {"machines": m.siege.to_save()})
 		_push_toast("Map saved to %s" % ProjectSettings.globalize_path("user://maps/free_build.bwmap") if ok else "Map save failed - see log", UiKit.BRASS)
 	elif m.free_mode and event.is_action_pressed("load_map"):
 		if m.world.load_from("user://maps/free_build.bwmap"):
 			m.tnt.clear()
+			m.siege.from_save(m.world.loaded_extra.get("machines", []))
 			rat.unstick()
 			_push_toast("Map loaded", UiKit.BRASS)
 		else:
@@ -391,6 +417,7 @@ func close_dialog() -> void:
 	_dialog_kind = ""
 	_dialog_notice = null
 	_dialog_scrap = null
+	_owned_labels.clear()
 	ctl.ui_open = false
 	get_tree().paused = false
 	if not m.over:
@@ -445,7 +472,11 @@ func _fill_workshop(v: VBoxContainer) -> void:
 			list.add_child(UiKit.label(last_cat, 18, UiKit.BRASS))
 		var text := VBoxContainer.new()
 		text.add_theme_constant_override("separation", 0)
-		text.add_child(UiKit.label(item["name"], 17))
+		var own := int(rat.gadgets.get(item["id"], 0)) if item["kind"] == "gadget" else int(rat.mats.get(item["id"], 0))
+		var own_label := UiKit.label("%s      owned: %d" % [item["name"], own], 17)
+		own_label.set_meta("item", item)
+		_owned_labels.append(own_label)
+		text.add_child(own_label)
 		text.add_child(UiKit.wrapped(item["desc"], 13, UiKit.PAPER.darkened(0.2)))
 		var price := "free" if m.free_mode else "%d scrap" % int(item["cost"])
 		list.add_child(UiKit.row(text, UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))))

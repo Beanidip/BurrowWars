@@ -22,6 +22,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 	var y0 := k.y * VoxelWorld.CHUNK
 	var z0 := k.z * VoxelWorld.CHUNK
 	var opaque := Blocks.OPAQUE
+	var mf := world.micro_flag
 	for y in range(y0, y0 + VoxelWorld.CHUNK):
 		var depth := clampf(0.58 + 0.42 * float(y) / 28.0, 0.58, 1.0)
 		for z in range(z0, z0 + VoxelWorld.CHUNK):
@@ -32,6 +33,9 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 				var mn := Vector3(x, y, z)
 				var col: Color = Blocks.COLOR[id]
 				var tint: float = 0.93 + 0.14 * float((x * 73856093 ^ y * 19349663 ^ z * 83492791) & 255) / 255.0
+				if opaque[id] == 1 and mf[x + sx * (z + sz * y)] == 1:
+					_micro_block(world, ov, oc, Vector3i(x, y, z), id, tint * depth)
+					continue
 				if opaque[id] == 1:
 					var glow := id == Blocks.CHEESE or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED
 					var base := col * (tint if glow else tint * depth)
@@ -46,12 +50,19 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 							nid = d[ax + sx * (az + sz * ay)]
 						elif ay < sy:
 							continue  # world edge walls are never visible
-						if opaque[nid] == 1:
+						if opaque[nid] == 1 and mf[ax + sx * (az + sz * ay)] == 0:
 							continue
 						var c := base
 						if id == Blocks.GRASS and f != 2:
 							c = Blocks.COLOR[Blocks.DIRT] * tint * depth
-						_face(ov, oc, mn, mn + Vector3.ONE, f, _shade(c, SHADE[f]))
+						if id == Blocks.STONE or id == Blocks.OBSIDIAN or id == Blocks.BRICK:
+							_rocky_face(ov, oc, mn, f, _shade(c, SHADE[f]), id, x * 7 + y * 13 + z * 29 + f)
+						else:
+							_face(ov, oc, mn, mn + Vector3.ONE, f, _shade(c, SHADE[f]))
+					if id == Blocks.WALL_SPRING:
+						for wf in [0, 1, 4, 5]:
+							var o: Vector3 = Vector3(NX[wf], 0, NZ[wf]) * 0.045
+							_box(ov, oc, mn + Vector3(0.2, 0.2, 0.2) + o * 6.0, mn + Vector3(0.8, 0.8, 0.8) + o * 6.0, Color(0.8, 0.8, 0.85))
 					if Blocks.is_conveyor(id):
 						_conveyor_arrow(ov, oc, mn, Blocks.conveyor_dir(id))
 					elif id == Blocks.TNT:
@@ -95,6 +106,15 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 						_box(ov, oc, mn + Vector3(0.1, 0, 0.1), mn + Vector3(0.9, 0.2, 0.9), Color(0.35, 0.3, 0.28))
 						_box(ov, oc, mn + Vector3(0.35, 0.2, 0.35), mn + Vector3(0.65, 0.78, 0.65), Color(0.75, 0.75, 0.8))
 						_box(ov, oc, mn + Vector3(0.04, 0.78, 0.04), mn + Vector3(0.96, 1.0, 0.96), col)
+					Blocks.STICKY_BLUE, Blocks.STICKY_RED:
+						_box(ov, oc, mn + Vector3(0.05, 0, 0.05), mn + Vector3(0.95, 0.05, 0.95), Color(0.62, 0.72, 0.2))
+						_box(ov, oc, mn + Vector3(0.25, 0.05, 0.3), mn + Vector3(0.6, 0.1, 0.7), Color(0.75, 0.85, 0.3))
+						_box(ov, oc, mn + Vector3(0.42, 0.05, 0.42), mn + Vector3(0.58, 0.14, 0.58), col)
+					Blocks.PIT_BLUE, Blocks.PIT_RED:
+						# looks like turf from above; a small team pip warns its owners
+						_box(ov, oc, mn + Vector3(0, 0.9, 0), mn + Vector3(1, 1, 1), Blocks.COLOR[Blocks.GRASS] * tint * 0.97)
+						var pip: Color = Blocks.COLOR[Blocks.BASE_BLUE if id == Blocks.PIT_BLUE else Blocks.BASE_RED]
+						_box(ov, oc, mn + Vector3(0.44, 1.0, 0.44), mn + Vector3(0.56, 1.02, 0.56), pip)
 					Blocks.TRAP_BLUE, Blocks.TRAP_RED:
 						_box(ov, oc, mn + Vector3(0.12, 0, 0.12), mn + Vector3(0.88, 0.08, 0.88), Color(0.78, 0.62, 0.38))
 						_box(ov, oc, mn + Vector3(0.2, 0.08, 0.42), mn + Vector3(0.8, 0.16, 0.58), col)
@@ -162,3 +182,53 @@ static func _face(v: PackedVector3Array, c: PackedColorArray, mn: Vector3, mx: V
 	v.append(a); v.append(dd); v.append(cc)
 	for i in 6:
 		c.append(col)
+
+
+static func _rocky_face(v: PackedVector3Array, c: PackedColorArray, mn: Vector3, f: int, col: Color, id: int, seed_i: int) -> void:
+	## Stone, brick and obsidian get a chunky 2x2 mottled face so they read as
+	## rock; obsidian picks up the occasional purple glint.
+	var u := Vector3(0, 0, 0.5) if f < 2 else Vector3(0.5, 0, 0)
+	var w := Vector3(0, 0.5, 0) if f != 2 and f != 3 else Vector3(0, 0, 0.5)
+	var flat := Vector3(NX[f], NY[f], NZ[f]).abs()
+	for i in 4:
+		var h := float(((seed_i + i * 37) * 2654435761) >> 8 & 255) / 255.0
+		var k := 0.86 + 0.26 * h
+		var tile := Color(col.r * k, col.g * k, col.b * k)
+		if id == Blocks.OBSIDIAN and h > 0.72:
+			tile = Color(col.r * 1.9 + 0.08, col.g * 1.1, col.b * 2.1 + 0.1)
+		var a := mn + u * float(i % 2) + w * float(i / 2)
+		_face(v, c, a, a + u + w + flat, f, tile)
+
+
+static func _micro_block(world: VoxelWorld, v: PackedVector3Array, c: PackedColorArray, cell: Vector3i, id: int, shade: float) -> void:
+	## A carved block: one small quad per exposed microvoxel face. Interior
+	## faces are culled; faces against an uncarved opaque neighbour are too.
+	var mask: PackedByteArray = world.micro[cell]
+	var m := Blocks.MICRO
+	var s := 1.0 / float(m)
+	var base := Vector3(cell)
+	var col: Color = Blocks.COLOR[id] * shade
+	var side: Color = (Blocks.COLOR[Blocks.DIRT] * shade) if id == Blocks.GRASS else col
+	var open_side := PackedByteArray()
+	for f in 6:
+		var n := cell + Vector3i(NX[f], NY[f], NZ[f])
+		var nid := world.get_cell(n)
+		open_side.append(0 if (Blocks.OPAQUE[nid] == 1 and not world.has_micro(n) and VoxelWorld.in_bounds(n)) else 1)
+	for my in m:
+		for mz in m:
+			for mx in m:
+				if mask[mx + m * (mz + m * my)] == 0:
+					continue
+				var mn := base + Vector3(mx, my, mz) * s
+				var k := 0.94 + 0.12 * float((mx * 7 + my * 3 + mz * 5) % 4) / 3.0
+				for f in 6:
+					var ax: int = mx + NX[f]
+					var ay: int = my + NY[f]
+					var az: int = mz + NZ[f]
+					if ax < 0 or ay < 0 or az < 0 or ax >= m or ay >= m or az >= m:
+						if open_side[f] == 0:
+							continue
+					elif mask[ax + m * (az + m * ay)] == 1:
+						continue
+					var fc := col if (f == 2 or id != Blocks.GRASS) else side
+					_face(v, c, mn, mn + Vector3(s, s, s), f, _shade(fc, SHADE[f] * k))

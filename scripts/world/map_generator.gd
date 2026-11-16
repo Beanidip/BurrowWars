@@ -128,6 +128,12 @@ static func generate(world: VoxelWorld, map_seed: int) -> void:
 					world.set_raw(c.x + dx, c.y + dy, c.z + dz, Blocks.OBSIDIAN)
 		world.set_raw(c.x, c.y, c.z, Blocks.CHEESE)
 		world.points_of_interest.append(Vector3(c) + Vector3(0.5, 0.5, 0.5))
+	# obsidian dikes: tall dark ribs that force a detour, a long dig, or explosives
+	for i in 3:
+		var oc := Vector3i(rng.randi_range(16, 44), rng.randi_range(4, 11), rng.randi_range(3, 44))
+		var tall := rng.randi_range(3, 5)
+		for dy in tall:
+			_blob(world, oc + Vector3i(0, dy, 0), 2, Blocks.OBSIDIAN)
 	for i in 4:
 		var lc := Vector3i(rng.randi_range(14, 45), rng.randi_range(5, 16), rng.randi_range(3, 44))
 		if absi(lc.z - MID_Z) < 7:
@@ -154,6 +160,20 @@ static func generate(world: VoxelWorld, map_seed: int) -> void:
 			_mushroom(world, rng, tx, tz)
 		else:
 			_tree(world, rng, tx, tz)
+	# stone boulders scattered on the surface: early stone without digging deep
+	for i in 3:
+		var bx := rng.randi_range(14, 45)
+		var bz := rng.randi_range(3, 44)
+		if absi(bz - MID_Z) < 5 or (absi(bx - 19) < 5 and absi(bz - hz) < 5):
+			continue
+		var by := world.surface_y(bx, bz)
+		if world.get_block(bx, by - 1, bz) != Blocks.GRASS:
+			continue
+		for dx in range(-1, 2):
+			for dy in range(0, 2):
+				for dz in range(-1, 2):
+					if absi(dx) + dy + absi(dz) <= 2 and world.get_block(bx + dx, by + dy, bz + dz) == Blocks.AIR:
+						world.set_raw(bx + dx, by + dy, bz + dz, Blocks.STONE)
 	# pond
 	var px := rng.randi_range(27, 38)
 	var pz := 46 - hz

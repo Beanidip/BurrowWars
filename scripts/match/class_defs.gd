@@ -32,7 +32,7 @@ const CLASSES := {
 		"remote_shop": false, "fly": false,
 		"blurb": "Plants TNT and mouse traps, then sets the whole chain off remotely.",
 		"abilities": [["detonate", "Detonate", 1.0, 0.0], ["plant", "Plant TNT", 0.5, 0.0]],
-		"kit": {"tnt": 3, "trap": 2},
+		"kit": {"tnt": 3, "trap": 2, "dynamite": 2},
 	},
 	# Free Build only: handed out by the host/authority, never selectable by a client.
 	"maestro": {
@@ -60,18 +60,34 @@ const SHOP := [
 		"desc": "Hit it to light a 2 s fuse. Saboteurs detonate remotely. Chains."},
 	{"id": "gate", "name": "Team Gate", "kind": "gadget", "qty": 1, "cost": 7, "cat": "Construction",
 		"desc": "Your team walks through. Enemies need two TNT blasts."},
+	{"id": "dynamite", "name": "Mobile TNT x2", "kind": "gadget", "qty": 2, "cost": 7, "cat": "Traps",
+		"desc": "Bouncy dynamite stick, 3 s fuse. Q throws it, Ctrl+Q sets it down gently. Springs launch it, conveyors carry it, ice lets it slide."},
+	{"id": "sticky", "name": "Sticky Trap x2", "kind": "gadget", "qty": 2, "cost": 4, "cat": "Traps",
+		"desc": "Glue pad. Enemy rats wade through at half speed; rolling dynamite stops dead."},
+	{"id": "pitfall", "name": "Pitfall x2", "kind": "gadget", "qty": 2, "cost": 5, "cat": "Traps",
+		"desc": "Fake turf. Solid for your team, a hole for everyone and everything else."},
+	{"id": "wallspring", "name": "Wall Spring", "kind": "gadget", "qty": 1, "cost": 6, "cat": "Traps",
+		"desc": "Sideways bumper block. Flings back any rat or dynamite that runs into it."},
+	{"id": "cannon", "name": "Scrap Cannon", "kind": "gadget", "qty": 1, "cost": 26, "max": 2, "cat": "Siege",
+		"desc": "R to man it, mouse to aim, left mouse to fire. Hits one block for 3 dig hits and chips the four around it."},
+	{"id": "crane", "name": "Wrecking Crane", "kind": "gadget", "qty": 1, "cost": 30, "max": 2, "cat": "Siege",
+		"desc": "R to man it, mouse to turn, left mouse to pump the swing. The faster the ball, the harder it hits."},
+	{"id": "dozer", "name": "Bulldozer", "kind": "gadget", "qty": 1, "cost": 28, "max": 2, "cat": "Siege",
+		"desc": "R to man it, left mouse to ram the blade: 3 wide, 2 high. Has no engine - feed it conveyors."},
 	{"id": "ice", "name": "Ice x4", "kind": "mat", "qty": 4, "cost": 3, "cat": "Construction",
 		"desc": "Slippery block. Slot 4, place with right mouse."},
 	{"id": "wood", "name": "Wood x6", "kind": "mat", "qty": 6, "cost": 3, "cat": "Construction",
 		"desc": "Sturdy building block. Slot 3."},
 ]
 
-const MATS := ["dirt", "stone", "wood", "ice"]
-const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "wood": Blocks.WOOD, "ice": Blocks.ICE}
-const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "gate"]
+const MATS := ["dirt", "stone", "wood", "ice", "obsidian"]
+const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "wood": Blocks.WOOD, "ice": Blocks.ICE, "obsidian": Blocks.OBSIDIAN}
+const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "gate", "cannon", "crane", "dozer"]
 const GADGET_NAME := {
 	"ladder": "Ladder", "spring": "Spring", "highway": "Highway", "conveyor": "Conveyor",
 	"trap": "Mouse Trap", "tnt": "TNT", "gate": "Team Gate",
+	"dynamite": "Mobile TNT", "sticky": "Sticky Trap", "pitfall": "Pitfall", "wallspring": "Wall Spring",
+	"cannon": "Scrap Cannon", "crane": "Wrecking Crane", "dozer": "Bulldozer",
 }
 
 
@@ -90,6 +106,12 @@ static func gadget_block(id: String, team: int, facing: Vector3) -> int:
 		"tnt": return Blocks.TNT
 		"trap": return Blocks.TRAP_BLUE if team == 0 else Blocks.TRAP_RED
 		"gate": return Blocks.GATE_BLUE if team == 0 else Blocks.GATE_RED
+		"sticky": return Blocks.STICKY_BLUE if team == 0 else Blocks.STICKY_RED
+		"pitfall": return Blocks.PIT_BLUE if team == 0 else Blocks.PIT_RED
+		"wallspring": return Blocks.WALL_SPRING
+		"cannon": return Blocks.CANNON
+		"crane": return Blocks.CRANE
+		"dozer": return Blocks.DOZER
 		"conveyor":
 			if absf(facing.x) >= absf(facing.z):
 				return Blocks.CONV_XP if facing.x >= 0.0 else Blocks.CONV_XN

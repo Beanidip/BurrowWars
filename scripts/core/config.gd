@@ -18,6 +18,22 @@ const STAMINA_REGEN := 14.0
 const BASE_SCRAP_PER_BLOCK := 2
 const GROWTH_BONUS := 1.5
 const STACK_MAX := 10
+const CHISEL_RATE := 9.0          # microvoxel edits per second
+const TNT_RADIUS := 2.9           # stationary TNT: blocks
+const TNT_POWER := 10.0           # dig hits at the centre, falling to 0 at the radius
+const DYNAMITE_RADIUS := 2.4
+const DYNAMITE_POWER := 6.5
+const DYNAMITE_FUSE := 3.0
+const DYNAMITE_THROW_SPEED := 12.0
+const DYNAMITE_MAX_ACTIVE := 16
+const CANNON_COOLDOWN := 2.2
+const CANNON_SPEED := 24.0
+const CANNON_HIT := 3             # dig hits on the struck block (neighbours take 1)
+const CRANE_MAX_HIT := 4
+const DOZER_COOLDOWN := 1.0
+const DOZER_HIT := 2
+const MACHINE_MOVE_TIME := 0.45   # seconds per block on a conveyor
+const PANTOGRAPH_MAX := 9         # blueprint edge limit, blocks
 
 const DEFAULTS := {
 	"mouse_sensitivity": 0.0025,

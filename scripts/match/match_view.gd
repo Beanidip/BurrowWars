@@ -149,10 +149,61 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sound("siege_impact", pos, 1.0, 3.0)
 			_burst(pos, Color(1.0, 0.6, 0.15), 40, 9.0)
 			_burst(pos, Color(0.3, 0.28, 0.28), 30, 6.0)
+			_smoke(pos, float(data))
+		"chip":
+			_sound("mine_" + _material_sound(int(data)), pos, 1.7, -8.0)
+			_burst(pos + Vector3.ONE * 0.07, Blocks.COLOR[int(data)], 2, 1.5)
+		"throw":
+			_sound("block_place", pos, 1.5)
+		"tick":
+			_sound("mine_wood", pos, 1.9, -6.0)
+		"cannon":
+			_sound("siege_cannon", pos, 1.0, 4.0)
+			_burst(pos, Color(0.9, 0.9, 0.85), 14, 5.0)
+			_smoke(pos, 1.0)
+		"impact":
+			_sound("siege_impact", pos, 1.1, 3.0)
+			_burst(pos, Blocks.COLOR[int(data)], 22, 6.0)
+			_smoke(pos, 1.2)
+		"thud":
+			_sound("siege_impact", pos, 0.7, 0.0)
+			_burst(pos, Color(0.6, 0.55, 0.5), 10, 3.5)
+		"crane", "dozer":
+			_sound("siege_grind", pos, 0.9 if kind == "dozer" else 1.2, -2.0)
 		"ability", "buy":
 			_sound("discovery_chime", pos, 1.0, -3.0)
 		"respawn":
 			_sound("block_place", pos, 0.7)
+
+
+func _smoke(pos: Vector3, size: float) -> void:
+	## A few slow grey puffs that drift up and fade.
+	if listener != null and listener.position.distance_to(pos) > 45.0:
+		return
+	var p := CPUParticles3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3.ONE * 0.4 * clampf(size * 0.5, 0.6, 1.6)
+	mesh.material = _particle_mat
+	p.mesh = mesh
+	p.amount = 12
+	p.one_shot = true
+	p.explosiveness = 0.9
+	p.lifetime = 1.4
+	p.direction = Vector3.UP
+	p.spread = 70.0
+	p.initial_velocity_min = 0.6
+	p.initial_velocity_max = 2.2
+	p.gravity = Vector3(0, 1.2, 0)
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.3
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(0.35, 0.33, 0.32, 1.0))
+	ramp.set_color(1, Color(0.6, 0.6, 0.6, 0.0))
+	p.color_ramp = ramp
+	p.position = pos
+	add_child(p)
+	p.emitting = true
+	get_tree().create_timer(2.0).timeout.connect(p.queue_free)
 
 
 func _burst(pos: Vector3, color: Color, amount: int, speed: float) -> void:

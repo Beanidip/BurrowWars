@@ -43,6 +43,9 @@ var time := 0.0
 var auto_step := true
 var visual := true
 
+var dynamite: DynamiteSystem
+var siege: SiegeSystem
+
 var _next_uid := 1
 var _rng := RandomNumberGenerator.new()
 
@@ -58,6 +61,9 @@ func setup(match_settings: Dictionary, with_visuals := true) -> void:
 	world.visual = with_visuals
 	world.name = "World"
 	add_child(world)
+	dynamite = DynamiteSystem.new(self)
+	siege = SiegeSystem.new(self)
+	world.block_changed.connect(siege.on_block_changed)
 	MapGenerator.generate(world, map_seed)
 	for cell: Vector3i in _find_blocks(Blocks.TNT):
 		tnt[cell] = {"owner": -1, "fuse": -1.0}
@@ -136,6 +142,8 @@ func step(dt: float) -> void:
 		_check_rat_hazards(r)
 	_step_pickups(dt)
 	_step_tnt(dt)
+	dynamite.step(dt)
+	siege.step(dt)
 	for i in range(markers.size() - 1, -1, -1):
 		markers[i]["ttl"] = float(markers[i]["ttl"]) - dt
 		if float(markers[i]["ttl"]) <= 0.0:
@@ -163,6 +171,8 @@ func _check_rat_hazards(r: Rat) -> void:
 				_drop(r, 1, Config.BONK_PICKUP_LOCK)
 			fx.emit("trap", r.position, null)
 			toast.emit("SNAP! %s stepped on a mouse trap." % r.display_name, -1)
+	if Blocks.is_sticky(here) and (0 if here == Blocks.STICKY_BLUE else 1) != r.team and not r.flying:
+		r.slow = maxf(r.slow, 1.2)
 	if r.carried > 0 and not free_mode and in_base(r):
 		_deposit(r)
 
@@ -206,6 +216,13 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 			return true
 		fx.emit("clang", Vector3(cell), id)
 		return false
+	if Blocks.is_machine(id):
+		var why := siege.try_pickup(rat, cell)
+		if why != "":
+			toast.emit(why, rat.team)
+			fx.emit("clang", Vector3(cell), id)
+			return false
+		return true
 	if Blocks.HITS[id] == 0:
 		fx.emit("clang", Vector3(cell), id)
 		return false
@@ -230,23 +247,30 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 	return true
 
 
-func _damage(rat: Rat, cell: Vector3i, power: int) -> void:
+func _damage(rat: Rat, cell: Vector3i, power: int, quiet := false) -> bool:
+	## Shared excavation rule for paws, blasts, cannonballs, cranes and blades.
+	## Returns true when the block broke.
 	var id := world.get_cell(cell)
 	var hits := int(Blocks.HITS[id])
-	if hits <= 0 or not VoxelWorld.in_bounds(cell):
-		return
+	if hits <= 0 or power <= 0 or not VoxelWorld.in_bounds(cell):
+		return false
 	var total := int(world.damage.get(cell, 0)) + power
 	if total < hits:
 		world.damage[cell] = total
-		fx.emit("hit", Vector3(cell), {"id": id, "ratio": float(total) / float(hits)})
-		return
-	_break(rat, cell, id)
+		if not quiet:
+			fx.emit("hit", Vector3(cell), {"id": id, "ratio": float(total) / float(hits)})
+		return false
+	_break(rat, cell, id, quiet)
+	return true
 
 
-func _break(rat: Rat, cell: Vector3i, id: int) -> void:
+func _break(rat: Rat, cell: Vector3i, id: int, quiet := false) -> void:
+	# A carved block is only worth the microvoxels still in it.
+	var carved := world.micro_count(cell) if world.has_micro(cell) else -1
 	world.set_block(cell, Blocks.AIR)
 	tnt.erase(cell)
-	fx.emit("break", Vector3(cell), id)
+	if not quiet:
+		fx.emit("break", Vector3(cell), id)
 	var drop := Blocks.drop(id)
 	if drop == "cheese":
 		spawn_pickup("cheese", Vector3(cell) + Vector3(0.5, 0.3, 0.5), Vector3(0, 2.5, 0))
@@ -258,7 +282,10 @@ func _break(rat: Rat, cell: Vector3i, id: int) -> void:
 		fx.emit("scrap", Vector3(cell), gain)
 	elif drop.begins_with("mat:"):
 		var m := drop.substr(4)
-		rat.mats[m] = mini(int(rat.mats[m]) + 1, 99)
+		if carved >= 0:
+			_refund_micro(rat, m, carved)
+		else:
+			rat.mats[m] = mini(int(rat.mats[m]) + 1, 99)
 	elif drop.begins_with("item:"):
 		_give_gadget(rat, drop.substr(5), 1)
 
@@ -313,6 +340,8 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "") -> String:
 	var g := gadget if gadget != "" else rat.equipped
 	if g == "" or not ClassDefs.GADGET_NAME.has(g):
 		return "Nothing equipped - buy gadgets at the workshop (B)"
+	if g == "dynamite":
+		return "Mobile TNT is thrown, not placed"
 	if not free_mode and int(rat.gadgets.get(g, 0)) <= 0:
 		return "Out of %s" % ClassDefs.GADGET_NAME[g]
 	var facing := Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
@@ -325,8 +354,181 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "") -> String:
 	world.set_block(cell, block)
 	if block == Blocks.TNT:
 		tnt[cell] = {"owner": rat.id, "fuse": -1.0}
+	elif Blocks.is_machine(block):
+		siege.register(cell, block, rat)
 	rat.play_action("build", 0.3)
 	fx.emit("place", Vector3(cell), block)
+	return ""
+
+
+func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool) -> String:
+	## The Q key: throw Mobile TNT, or place the equipped gadget at the aim.
+	if rat.equipped == "dynamite":
+		return dynamite.try_throw(rat, look, gentle)
+	if aim.is_empty():
+		return "Aim at a surface to place a gadget"
+	return try_place_gadget(rat, Vector3i(aim["cell"]) + Vector3i(aim["normal"]))
+
+
+# ---------------------------------------------------------------- chisel
+
+func _micro_available(rat: Rat, mat: String) -> int:
+	return int(rat.micro_bank.get(mat, 0)) + int(rat.mats.get(mat, 0)) * Blocks.MICRO_COUNT
+
+
+func _pay_micro(rat: Rat, mat: String, n: int) -> bool:
+	## Spend n microvoxels of a material, breaking whole blocks into the
+	## rat's spare-change bank as needed. All or nothing.
+	if free_mode:
+		return true
+	if _micro_available(rat, mat) < n:
+		return false
+	var bank := int(rat.micro_bank.get(mat, 0)) - n
+	while bank < 0:
+		bank += Blocks.MICRO_COUNT
+		rat.mats[mat] = int(rat.mats[mat]) - 1
+	rat.micro_bank[mat] = bank
+	return true
+
+
+func _refund_micro(rat: Rat, mat: String, n: int) -> void:
+	## Exactly reverses _pay_micro, so carve / refill / re-dig loops are
+	## zero-sum: 343 spare microvoxels become one block again.
+	if free_mode:
+		return
+	var bank := int(rat.micro_bank.get(mat, 0)) + n
+	while bank >= Blocks.MICRO_COUNT and int(rat.mats[mat]) < 99:
+		bank -= Blocks.MICRO_COUNT
+		rat.mats[mat] = int(rat.mats[mat]) + 1
+	rat.micro_bank[mat] = mini(bank, Blocks.MICRO_COUNT * 2)
+
+
+func _chisel_gate(rat: Rat, cell: Vector3i, mv: Vector3i) -> String:
+	if over or rat.stun > 0.0:
+		return "Can't chisel right now"
+	if rat.chisel_cd > 0.0:
+		return "wait"
+	if not VoxelWorld.in_bounds(cell) or mv.x < 0 or mv.y < 0 or mv.z < 0 or mv.x >= Blocks.MICRO or mv.y >= Blocks.MICRO or mv.z >= Blocks.MICRO:
+		return "Out of bounds"
+	var p := Vector3(cell) + (Vector3(mv) + Vector3(0.5, 0.5, 0.5)) / float(Blocks.MICRO)
+	if p.distance_to(rat.eye()) > Config.DIG_REACH + 0.6:
+		return "Too far"
+	return ""
+
+
+func try_chisel_remove(rat: Rat, cell: Vector3i, mv: Vector3i) -> String:
+	var why := _chisel_gate(rat, cell, mv)
+	if why != "":
+		return why
+	var id := world.get_cell(cell)
+	if not Blocks.CHISELABLE.has(id):
+		return "%s can't be chiseled" % Blocks.block_name(id)
+	if not world.micro_at(cell, mv):
+		return "Nothing there to carve"
+	rat.chisel_cd = 1.0 / Config.CHISEL_RATE
+	world.set_micro(cell, mv, false)
+	_refund_micro(rat, Blocks.mat_of(id), 1)
+	rat.play_action("build", 0.2)
+	fx.emit("chip", Vector3(cell) + Vector3(mv) / float(Blocks.MICRO), id)
+	return ""
+
+
+func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String) -> String:
+	var why := _chisel_gate(rat, cell, mv)
+	if why != "":
+		return why
+	var id := world.get_cell(cell)
+	var block := id
+	if id == Blocks.AIR:
+		if not ClassDefs.MAT_BLOCK.has(mat):
+			return "Pick a material (1-5) first"
+		block = ClassDefs.MAT_BLOCK[mat]
+		for t in 2:
+			if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
+				return "Bases are protected"
+	elif not Blocks.CHISELABLE.has(id):
+		return "Can't add to %s" % Blocks.block_name(id)
+	elif world.micro_at(cell, mv):
+		return "That spot is already filled"
+	var s := 1.0 / float(Blocks.MICRO)
+	var mn := Vector3(cell) + Vector3(mv) * s
+	for r in rats:
+		if mn.x + s > r.position.x - Rat.RADIUS and mn.x < r.position.x + Rat.RADIUS \
+				and mn.z + s > r.position.z - Rat.RADIUS and mn.z < r.position.z + Rat.RADIUS \
+				and mn.y + s > r.position.y + 0.001 and mn.y < r.position.y + Rat.HEIGHT:
+			return "A rat is in the way"
+	var use_mat := Blocks.mat_of(block)
+	if not _pay_micro(rat, use_mat, 1):
+		return "No %s left to chisel with" % use_mat
+	rat.chisel_cd = 1.0 / Config.CHISEL_RATE
+	world.set_micro(cell, mv, true, block)
+	rat.play_action("build", 0.2)
+	fx.emit("chip", mn, block)
+	return ""
+
+
+# ---------------------------------------------------------------- pantograph
+
+func copy_region(rat: Rat, a: Vector3i, b: Vector3i) -> Dictionary:
+	## Returns {"error": String} or {"blueprint": Blueprint}.
+	var limit := Config.PANTOGRAPH_MAX
+	var span := (a - b).abs() + Vector3i.ONE
+	if span.x > limit or span.y > limit or span.z > limit:
+		return {"error": "Selection is %dx%dx%d - the limit is %d on a side" % [span.x, span.y, span.z, limit]}
+	if not VoxelWorld.in_bounds(a) or not VoxelWorld.in_bounds(b):
+		return {"error": "Selection leaves the map"}
+	if Vector3(a).distance_to(rat.position) > 24.0 or Vector3(b).distance_to(rat.position) > 24.0:
+		return {"error": "Selection is too far away"}
+	var bp := Blueprint.capture(world, a, b)
+	if bp.cells.is_empty():
+		return {"error": "Nothing copyable in that box (only building materials can be copied)"}
+	return {"blueprint": bp}
+
+
+func paste_check(rat: Rat, bp: Blueprint, origin: Vector3i) -> String:
+	var bad := bp.validate()
+	if bad != "":
+		return bad
+	if over:
+		return "Match is over"
+	if (Vector3(origin) + Vector3(bp.size) * 0.5).distance_to(rat.position) > 16.0:
+		return "Too far away to build that"
+	for e in bp.cells:
+		var c := origin + Vector3i(e["o"])
+		if not VoxelWorld.in_bounds(c) or c.y < 1:
+			return "Blueprint would leave the map"
+		if world.get_cell(c) != Blocks.AIR:
+			return "Something is in the way"
+		for t in 2:
+			if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(c) + Vector3(0.5, 0.5, 0.5)):
+				return "Bases are protected"
+		for r in rats:
+			if r.overlaps_cell(c):
+				return "A rat is in the way"
+	if not free_mode:
+		var need := bp.cost()
+		for mat: String in need:
+			if _micro_available(rat, mat) < int(need[mat]):
+				return "Not enough %s: need %.1f blocks, have %.1f" % [mat, float(need[mat]) / 343.0, float(_micro_available(rat, mat)) / 343.0]
+	return ""
+
+
+func try_paste(rat: Rat, bp: Blueprint, origin: Vector3i) -> String:
+	## All or nothing: validated in full, paid in full, then built in full.
+	var why := paste_check(rat, bp, origin)
+	if why != "":
+		return why
+	var need := bp.cost()
+	for mat: String in need:
+		_pay_micro(rat, mat, int(need[mat]))
+	for e in bp.cells:
+		var c := origin + Vector3i(e["o"])
+		if e["mask"] == null:
+			world.set_block(c, int(e["id"]))
+		else:
+			world.set_mask(c, int(e["id"]), e["mask"])
+	rat.play_action("build", 0.4)
+	fx.emit("place", Vector3(origin), int(bp.cells[0]["id"]))
 	return ""
 
 
@@ -341,6 +543,11 @@ func spawn_pickup(kind: String, pos: Vector3, vel: Vector3) -> Pickup:
 	p.vel = vel
 	pickups.append(p)
 	return p
+
+
+func take_uid() -> int:
+	_next_uid += 1
+	return _next_uid - 1
 
 
 func _drop(rat: Rat, count: int, lock_seconds: float) -> void:
@@ -387,6 +594,7 @@ func try_bonk(rat: Rat, target: Rat) -> bool:
 func respawn(rat: Rat) -> void:
 	## Ctrl+K / hazards. Carried cheese and the material stash stay behind as
 	## pickups (moved, not copied), then the rat returns to base empty-pawed.
+	siege.release(rat)
 	if rat.carried > 0:
 		_drop(rat, rat.carried, 1.0)
 	var any := false
@@ -415,15 +623,16 @@ func _step_pickups(dt: float) -> void:
 		p.lock_t = maxf(0.0, p.lock_t - dt)
 		# tiny point-physics: fall, rest on solids, ride conveyors, float out of lava
 		var here := world.block_at(p.pos)
-		if here == Blocks.LAVA or Blocks.SOLID[here] == 1:
+		if here == Blocks.LAVA or world.solid_point(p.pos):
 			p.pos.y = floorf(p.pos.y) + 1.15
 			p.vel = Vector3.ZERO
 		else:
 			p.vel.y = maxf(p.vel.y - 20.0 * dt, -20.0)
 			var np := p.pos + p.vel * dt
 			var below := world.block_at(Vector3(p.pos.x, np.y - 0.15, p.pos.z))
-			if Blocks.SOLID[below] == 1 and p.vel.y <= 0.0:
-				np.y = floorf(np.y - 0.15) + 1.15
+			if world.solid_point(Vector3(p.pos.x, np.y - 0.15, p.pos.z)) and p.vel.y <= 0.0:
+				var under := Vector3i(floori(p.pos.x), floori(np.y - 0.15), floori(p.pos.z))
+				np.y = p.pos.y if world.has_micro(under) else floorf(np.y - 0.15) + 1.15
 				p.vel.y = 0.0
 				p.vel.x = move_toward(p.vel.x, 0.0, 12.0 * dt)
 				p.vel.z = move_toward(p.vel.z, 0.0, 12.0 * dt)
@@ -431,10 +640,10 @@ func _step_pickups(dt: float) -> void:
 					var push := Blocks.conveyor_dir(below) * 3.0 * dt
 					np.x += push.x
 					np.z += push.z
-			if Blocks.SOLID[world.block_at(Vector3(np.x, np.y, p.pos.z))] == 1:
+			if world.solid_point(Vector3(np.x, np.y, p.pos.z)):
 				np.x = p.pos.x
 				p.vel.x = 0.0
-			if Blocks.SOLID[world.block_at(Vector3(np.x, np.y, np.z))] == 1:
+			if world.solid_point(Vector3(np.x, np.y, np.z)):
 				np.z = p.pos.z
 				p.vel.z = 0.0
 			p.pos = np
@@ -483,15 +692,29 @@ func _step_tnt(dt: float) -> void:
 func _explode(cell: Vector3i) -> void:
 	tnt.erase(cell)
 	world.set_block(cell, Blocks.AIR)
-	var origin := Vector3(cell) + Vector3(0.5, 0.5, 0.5)
-	fx.emit("boom", origin, null)
-	for dx in range(-3, 4):
-		for dy in range(-3, 4):
-			for dz in range(-3, 4):
-				var c := cell + Vector3i(dx, dy, dz)
-				if Vector3(dx, dy, dz).length() > 2.6 or not VoxelWorld.in_bounds(c):
+	blast(Vector3(cell) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)
+
+
+func blast(origin: Vector3, radius: float, power: float) -> void:
+	## The one explosion rule, shared by stationary TNT and Mobile TNT.
+	## Damage is `power` dig hits at the centre, fading to zero at `radius`,
+	## and is applied through the normal durability table: dirt vanishes,
+	## stone cracks at the edges, obsidian only chips. Never hurts a rat.
+	fx.emit("boom", origin, radius)
+	var c0 := Vector3i(floori(origin.x), floori(origin.y), floori(origin.z))
+	var ir := ceili(radius)
+	for dx in range(-ir, ir + 1):
+		for dy in range(-ir, ir + 1):
+			for dz in range(-ir, ir + 1):
+				var c := c0 + Vector3i(dx, dy, dz)
+				if not VoxelWorld.in_bounds(c):
+					continue
+				var d := (Vector3(c) + Vector3(0.5, 0.5, 0.5)).distance_to(origin)
+				if d > radius:
 					continue
 				var id := world.get_cell(c)
+				if id == Blocks.AIR or id == Blocks.WATER or id == Blocks.LAVA:
+					continue
 				if id == Blocks.TNT:
 					light_tnt(c, 0.25)   # chain reaction
 				elif Blocks.is_gate(id):
@@ -499,26 +722,24 @@ func _explode(cell: Vector3i) -> void:
 					if int(gate_damage[c]) >= 2:
 						gate_damage.erase(c)
 						world.set_block(c, Blocks.AIR)
-				elif id == Blocks.CHEESE:
-					_break(null, c, id)
-				elif id == Blocks.WATER or id == Blocks.LAVA or id == Blocks.OBSIDIAN or id == Blocks.AIR:
-					continue
-				elif Blocks.HITS[id] > 0:
-					# TNT removes the block and all of its damage state completely.
-					world.set_block(c, Blocks.AIR)
+				else:
+					# breaking goes through set_block, which also discards any carving
+					_damage(null, c, int(power * (1.0 - d / radius)), true)
 	for r in rats:
-		var d := r.center() - origin
-		if d.length() < 4.5:
-			var push := d.normalized() if d.length() > 0.05 else Vector3.UP
+		var rd := r.center() - origin
+		if rd.length() < radius + 1.6:
+			var push := rd.normalized() if rd.length() > 0.05 else Vector3.UP
 			r.vel = push * 9.0 + Vector3(0, 6.5, 0)
 			r.knock = 0.5
 			r.on_floor = false
+			siege.release(r)
 			if r.carried > 0:
 				_drop(r, 1, 1.0)
 	for p in pickups:
 		var pd := p.pos - origin
-		if pd.length() < 4.0:
+		if pd.length() < radius + 1.0:
 			p.vel = pd.normalized() * 5.0 + Vector3(0, 5.0, 0)
+	dynamite.on_blast(origin, radius)
 
 
 # ---------------------------------------------------------------- abilities
@@ -685,10 +906,13 @@ func try_buy(rat: Rat, item_id: String) -> String:
 	var qty := int(item["qty"])
 	if item["kind"] == "gadget":
 		var have := int(rat.gadgets.get(item_id, 0))
-		if have >= Config.STACK_MAX:
-			return "Pack is full of %s (max %d)" % [ClassDefs.GADGET_NAME[item_id], Config.STACK_MAX]
+		var cap := int(item.get("max", Config.STACK_MAX))
+		if have >= cap:
+			return "Pack is full of %s (max %d)" % [ClassDefs.GADGET_NAME[item_id], cap]
 		rat.scrap -= cost
-		_give_gadget(rat, item_id, qty)
+		rat.gadgets[item_id] = mini(have + qty, cap)
+		if rat.equipped == "":
+			rat.equipped = item_id
 	else:
 		if int(rat.mats.get(item_id, 0)) >= 99:
 			return "Can't carry more %s" % item_id

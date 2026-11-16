@@ -16,6 +16,14 @@ SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new 
 
 CLASSES  Digger: huge brush, carries 3. Scout: fast, sniffs out cheese. Builder: patches walls, lays highways, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.
 
+CHISEL (9)  Every block is 7x7x7 microvoxels. Left mouse carves one, right mouse adds one from the selected material. You climb ledges up to 4 microvoxels automatically, so you can carve stairs. Carving and refilling is zero-sum: 343 microvoxels is one block.
+
+PANTOGRAPH (0)  Left-click two corners to copy a build (up to 9 blocks a side, carvings included), aim, X to rotate, right-click to paste. It costs the materials. Only building materials copy - never cheese, scrap, traps or TNT.
+
+MOBILE TNT  Q throws a bouncing dynamite stick (Ctrl+Q sets it down). Springs launch it, conveyors carry it, ice lets it slide, wall springs bat it back, glue stops it, pitfalls swallow it.
+
+SIEGE  Buy a Scrap Cannon, Wrecking Crane or Bulldozer, place it with Q, look at it and press R. Mouse aims, left mouse works it, R leaves. Machines have no engines: put conveyors under or beside them. Stone shrugs off light hits; obsidian (12 hits) laughs at most things.
+
 ALSO  V toggles first/third person. Ctrl+K respawns at base (you leave your cheese and materials behind). Lava sends you home. Esc pauses."""
 
 var _page: VBoxContainer

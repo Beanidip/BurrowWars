@@ -62,6 +62,11 @@ func _ready() -> void:
 	view.listener = player
 	add_child(view)
 
+	var toys := ContraptionView.new()
+	toys.m = m
+	toys.ctl = ctl
+	add_child(toys)
+
 	hud = Hud.new()
 	hud.m = m
 	hud.rat = player

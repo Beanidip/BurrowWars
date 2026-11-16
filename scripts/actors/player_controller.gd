@@ -1,10 +1,13 @@
 class_name PlayerController
 extends Node3D
 ## Human input -> rat intent + requests to the Match authority.
-## Owns the camera (first / third person with terrain collision) and the
-## thin team-coloured highlight on the targeted block face.
+## Owns the camera (first / third person with terrain collision), the tool
+## mode (dig / chisel / pantograph), the siege-machine control mode, and the
+## team-coloured highlight on whatever the crosshair targets.
 
 signal notice(text: String)
+
+enum Tool { DIG, CHISEL, PANTOGRAPH }
 
 var m: Match
 var rat: Rat
@@ -14,11 +17,24 @@ var pitch := -0.25
 var first_person := false
 var cam_dist := 4.0
 var selected_mat := 0
+var tool := Tool.DIG
 var ui_open := false
 var aim: Dictionary = {}
+var tool_text := ""            # one-line status for the HUD
+
+# pantograph state (the clipboard is local; pasting is validated by Match)
+var corner_set := false
+var corner := Vector3i.ZERO
+var blueprint: Blueprint
+var paste_error := ""
 
 var _highlight: MeshInstance3D
-var _notice_cd := 0.0
+var _highlight_mat: StandardMaterial3D
+var _select_box: MeshInstance3D
+var _ghost: MeshInstance3D
+var _ghost_mat: StandardMaterial3D
+var _ghost_for: Blueprint
+var _shake := 0.0
 
 
 func _ready() -> void:
@@ -30,19 +46,43 @@ func _ready() -> void:
 	cam.make_current()
 	apply_settings()
 	yaw = rat.yaw
+	var tc: Color = UiKit.TEAM[rat.team]
 	_highlight = MeshInstance3D.new()
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.98, 0.98)
+	quad.size = Vector2.ONE
 	_highlight.mesh = quad
+	_highlight_mat = _clear_mat(Color(tc.r, tc.g, tc.b, 0.4))
+	_highlight.material_override = _highlight_mat
+	_highlight.visible = false
+	add_child(_highlight)
+	_select_box = MeshInstance3D.new()
+	_select_box.mesh = BoxMesh.new()
+	_select_box.material_override = _clear_mat(Color(tc.r, tc.g, tc.b, 0.22))
+	_select_box.visible = false
+	add_child(_select_box)
+	_ghost = MeshInstance3D.new()
+	_ghost_mat = _clear_mat(Color(0.5, 1.0, 0.5, 0.35))
+	_ghost.material_override = _ghost_mat
+	_ghost.visible = false
+	add_child(_ghost)
+	m.fx.connect(_on_fx)
+
+
+static func _clear_mat(color: Color) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var tc: Color = UiKit.TEAM[rat.team]
-	mat.albedo_color = Color(tc.r, tc.g, tc.b, 0.38)
-	_highlight.material_override = mat
-	_highlight.visible = false
-	add_child(_highlight)
+	mat.albedo_color = color
+	return mat
+
+
+func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
+	if kind == "boom":
+		var d := pos.distance_to(rat.position)
+		_shake = maxf(_shake, clampf(1.0 - d / (float(data) * 6.0), 0.0, 1.0) * 0.5)
+	elif kind == "impact" or kind == "thud":
+		_shake = maxf(_shake, clampf(1.0 - pos.distance_to(rat.position) / 10.0, 0.0, 1.0) * 0.15)
 
 
 func apply_settings() -> void:
@@ -52,6 +92,10 @@ func apply_settings() -> void:
 
 func forward() -> Vector3:
 	return Vector3(-sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
+
+
+func machine() -> SiegeSystem.Machine:
+	return m.siege.by_uid(rat.operating) if rat.operating != -1 else null
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -70,20 +114,24 @@ func _unhandled_input(event: InputEvent) -> void:
 			cam_dist = maxf(1.5, cam_dist - 0.4)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			cam_dist = minf(8.0, cam_dist + 0.4)
+	if event.is_action_pressed("interact"):
+		_interact()
+		return
+	if rat.operating != -1:
+		return   # at the controls: only aim, fire (polled) and leave
 	if event.is_action_pressed("jump"):
 		rat.jump_pressed = true
 	elif event.is_action_pressed("dash"):
 		rat.dash_pressed = true
 	elif event.is_action_pressed("camera_toggle"):
 		first_person = not first_person
+	elif event.is_action_pressed("dig"):
+		if tool == Tool.PANTOGRAPH:
+			_pantograph_click()
 	elif event.is_action_pressed("place"):
-		if not aim.is_empty():
-			_say(m.try_place_mat(rat, _place_cell(), ClassDefs.MATS[selected_mat]))
+		_secondary()
 	elif event.is_action_pressed("gadget"):
-		if aim.is_empty():
-			_say("Aim at a surface to place a gadget")
-		else:
-			_say(m.try_place_gadget(rat, _place_cell()))
+		_say(m.try_use_equipped(rat, aim, forward(), Input.is_action_pressed("descend")))
 	elif event.is_action_pressed("cycle_gadget"):
 		cycle_gadget()
 	elif event.is_action_pressed("ability_1"):
@@ -101,10 +149,99 @@ func _unhandled_input(event: InputEvent) -> void:
 		if bool(rat.cls["fly"]):
 			rat.flying = not rat.flying
 			_say("Flight ON - Space up, Ctrl down" if rat.flying else "Flight off")
+	elif event.is_action_pressed("chisel"):
+		tool = Tool.DIG if tool == Tool.CHISEL else Tool.CHISEL
+		if tool == Tool.CHISEL:
+			_say("Chisel: left mouse carves one microvoxel, right mouse adds one (uses the selected material)")
+	elif event.is_action_pressed("pantograph"):
+		if tool == Tool.PANTOGRAPH:
+			tool = Tool.DIG
+			corner_set = false
+		else:
+			tool = Tool.PANTOGRAPH
+			_say("Pantograph: left-click two corners to copy, right-click to paste, %s rotates" % Inputs.key_name("rotate_blueprint"))
+	elif event.is_action_pressed("rotate_blueprint"):
+		if tool == Tool.PANTOGRAPH and blueprint != null:
+			blueprint = blueprint.rotated()
 	else:
-		for i in 4:
+		for i in ClassDefs.MATS.size():
 			if event.is_action_pressed("slot_%d" % (i + 1)):
 				selected_mat = i
+				if tool == Tool.PANTOGRAPH:
+					tool = Tool.DIG
+
+
+func _interact() -> void:
+	if rat.operating != -1:
+		m.siege.release(rat)
+		_say("You step away from the controls")
+		return
+	if not aim.is_empty() and Blocks.is_machine(int(aim["id"])):
+		var why := m.siege.try_operate(rat, aim["cell"])
+		if why == "":
+			var mc := machine()
+			yaw = mc.yaw
+			pitch = mc.pitch
+			_say("At the controls: mouse aims, left mouse works it, %s leaves" % Inputs.key_name("interact"))
+		else:
+			_say(why)
+	else:
+		_say("Look at one of your siege machines and press %s to operate it" % Inputs.key_name("interact"))
+
+
+func _secondary() -> void:
+	match tool:
+		Tool.DIG:
+			if not aim.is_empty():
+				_say(m.try_place_mat(rat, _place_cell(), ClassDefs.MATS[selected_mat]))
+		Tool.CHISEL:
+			if not aim.is_empty():
+				var t := _micro_neighbor()
+				_say(m.try_chisel_add(rat, t[0], t[1], ClassDefs.MATS[selected_mat]))
+		Tool.PANTOGRAPH:
+			if blueprint == null:
+				_say("Copy something first: left-click two corners")
+			elif not aim.is_empty():
+				var why := m.try_paste(rat, blueprint, paste_origin())
+				_say(why if why != "" else "Structure built")
+
+
+func _pantograph_click() -> void:
+	if aim.is_empty():
+		_say("Aim at a block to mark a corner")
+		return
+	if not corner_set:
+		corner = aim["cell"]
+		corner_set = true
+		_say("First corner set. Click the opposite corner.")
+		return
+	corner_set = false
+	var res := m.copy_region(rat, corner, aim["cell"])
+	if res.has("error"):
+		_say(res["error"])
+		return
+	blueprint = res["blueprint"]
+	var note := "  (%d non-material blocks left out)" % blueprint.skipped if blueprint.skipped > 0 else ""
+	_say("Copied %dx%dx%d: needs %s%s" % [blueprint.size.x, blueprint.size.y, blueprint.size.z, blueprint.cost_text(), note])
+
+
+func paste_origin() -> Vector3i:
+	## The blueprint sits on/against the aimed face, centred on the crosshair.
+	var n := Vector3i(aim["normal"])
+	var o := Vector3i(aim["cell"]) + n
+	var s := blueprint.size
+	o.x -= s.x / 2 if n.x == 0 else (s.x - 1 if n.x < 0 else 0)
+	o.z -= s.z / 2 if n.z == 0 else (s.z - 1 if n.z < 0 else 0)
+	if n.y < 0:
+		o.y -= s.y - 1
+	return o
+
+
+func _micro_neighbor() -> Array:
+	## [cell, micro] of the empty microvoxel touching the aimed face.
+	var g := Vector3i(aim["cell"]) * Blocks.MICRO + Vector3i(aim["micro"]) + Vector3i(aim["normal"])
+	var c := Vector3i(floori(g.x / float(Blocks.MICRO)), floori(g.y / float(Blocks.MICRO)), floori(g.z / float(Blocks.MICRO)))
+	return [c, g - c * Blocks.MICRO]
 
 
 func cycle_gadget() -> void:
@@ -124,16 +261,24 @@ func _place_cell() -> Vector3i:
 
 
 func _say(text: String) -> void:
-	if text != "":
+	if text != "" and text != "wait":
 		notice.emit(text)
 
 
-func _physics_process(delta: float) -> void:
-	_notice_cd = maxf(0.0, _notice_cd - delta)
+func _physics_process(_delta: float) -> void:
 	if ui_open or m.over:
 		rat.wish = Vector3.ZERO
 		rat.jump_held = false
 		rat.down_held = false
+		return
+	var firing := Input.is_action_pressed("dig") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	if rat.operating != -1:
+		rat.wish = Vector3.ZERO
+		rat.jump_held = false
+		rat.down_held = false
+		m.siege.aim(rat, yaw, pitch)
+		if firing:
+			m.siege.fire(rat)
 		return
 	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var f := Vector3(-sin(yaw), 0, -cos(yaw))
@@ -142,8 +287,12 @@ func _physics_process(delta: float) -> void:
 	rat.yaw = yaw
 	rat.jump_held = Input.is_action_pressed("jump")
 	rat.down_held = Input.is_action_pressed("descend")
-	if Input.is_action_pressed("dig") and rat.dig_cd <= 0.0 and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if not firing:
+		return
+	if tool == Tool.DIG and rat.dig_cd <= 0.0:
 		_swing()
+	elif tool == Tool.CHISEL and rat.chisel_cd <= 0.0 and not aim.is_empty():
+		_say(m.try_chisel_remove(rat, aim["cell"], aim["micro"]))
 
 
 func _swing() -> void:
@@ -169,14 +318,25 @@ func _swing() -> void:
 		rat.play_action("dig", 0.25)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if rat == null:
 		return
-	var pivot := rat.position + Vector3(0, 0.72, 0)
 	var fwd := forward()
-	cam.rotation = Vector3(pitch, yaw, 0)
+	var pivot := rat.position + Vector3(0, 0.72, 0)
 	var dist := 0.0
-	if not first_person:
+	var mc := machine()
+	cam.rotation = Vector3(pitch, yaw, 0)
+	if mc != null:
+		# siege control: always third person, orbiting the machine
+		pivot = Vector3(mc.cell) + Vector3(0.5, 1.9, 0.5)
+		dist = 5.5
+		var mback := (-fwd + Vector3(0, 0.3, 0)).normalized()
+		var mhit := m.world.raycast(pivot, mback, dist + 0.3, true)
+		if not mhit.is_empty():
+			dist = maxf(0.6, float(mhit["dist"]) - 0.3)
+		cam.position = pivot + mback * dist
+		cam.look_at(pivot + fwd * 6.0)
+	elif not first_person:
 		dist = cam_dist
 		var back := (-fwd + Vector3(0, 0.18, 0)).normalized()
 		var hit := m.world.raycast(pivot, back, dist + 0.3, true)
@@ -185,35 +345,123 @@ func _process(_delta: float) -> void:
 		cam.position = pivot + back * dist
 	else:
 		cam.position = pivot
-	# hide our own sprite when the camera is (nearly) inside it
+	if _shake > 0.0:
+		_shake = maxf(0.0, _shake - delta * 1.6)
+		cam.position += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * 0.25
 	var sprite := rat.get_node_or_null("Sprite") as Node3D
 	if sprite != null:
 		sprite.visible = dist > 0.9
-	_update_aim(pivot, fwd)
+	_update_aim(rat.position + Vector3(0, 0.72, 0), fwd, mc != null)
+	_update_tool_visuals()
 
 
-func _update_aim(eye: Vector3, fwd: Vector3) -> void:
+func _update_aim(eye: Vector3, fwd: Vector3, operating: bool) -> void:
 	# Find what the crosshair is over from the camera, then re-cast from the
 	# rat's eye so reach is measured from the rat, not from the camera.
 	aim = {}
-	var look := m.world.raycast(cam.position, fwd, 60.0)
+	if operating:
+		return
+	var look := m.world.raycast_micro(cam.position, fwd, 60.0)
 	var point := cam.position + fwd * 30.0
 	if not look.is_empty():
 		point = cam.position + fwd * (float(look["dist"]) + 0.02)
 	var dir := point - eye
 	if dir.length() > 0.05:
-		var hit := m.world.raycast(eye, dir, Config.DIG_REACH)
+		var hit := m.world.raycast_micro(eye, dir, Config.DIG_REACH)
 		if not hit.is_empty():
 			aim = hit
-	if aim.is_empty() or ui_open:
-		_highlight.visible = false
+
+
+func _update_tool_visuals() -> void:
+	tool_text = ""
+	_highlight.visible = false
+	_select_box.visible = false
+	_ghost.visible = false
+	var mc := machine()
+	if mc != null:
+		var names := {Blocks.CANNON: "Scrap Cannon", Blocks.CRANE: "Wrecking Crane", Blocks.DOZER: "Bulldozer"}
+		tool_text = "%s  -  left mouse: %s   [%s] leave%s" % [names[mc.kind],
+			{Blocks.CANNON: "fire", Blocks.CRANE: "pump the swing", Blocks.DOZER: "ram the blade"}[mc.kind],
+			Inputs.key_name("interact"), "   (reloading %.1fs)" % mc.cd if mc.cd > 0.3 else ""]
 		return
+	if ui_open:
+		return
+	if tool == Tool.PANTOGRAPH:
+		_update_pantograph()
+	elif tool == Tool.CHISEL:
+		var mat := String(ClassDefs.MATS[selected_mat])
+		tool_text = "Chisel  -  LMB carve, RMB add %s  (%.2f blocks of it spare)" % [mat, float(m._micro_available(rat, mat)) / 343.0]
+	if aim.is_empty():
+		return
+	# thin team-coloured square on the targeted face (microvoxel-sized for the chisel)
 	var n := Vector3(Vector3i(aim["normal"]))
-	_highlight.visible = true
-	_highlight.position = Vector3(Vector3i(aim["cell"])) + Vector3(0.5, 0.5, 0.5) + n * 0.505
+	var s := 1.0
+	var center := Vector3(Vector3i(aim["cell"])) + Vector3(0.5, 0.5, 0.5)
+	if tool == Tool.CHISEL:
+		s = 1.0 / float(Blocks.MICRO)
+		center = Vector3(Vector3i(aim["cell"])) + (Vector3(Vector3i(aim["micro"])) + Vector3(0.5, 0.5, 0.5)) * s
+	_highlight.visible = tool != Tool.PANTOGRAPH or blueprint == null
+	_highlight.scale = Vector3.ONE * s * 0.98
+	_highlight.position = center + n * (s * 0.5 + 0.006)
 	if n.x != 0.0:
 		_highlight.rotation = Vector3(0, PI / 2.0, 0)
 	elif n.y != 0.0:
 		_highlight.rotation = Vector3(PI / 2.0, 0, 0)
 	else:
 		_highlight.rotation = Vector3.ZERO
+
+
+func _update_pantograph() -> void:
+	if corner_set:
+		var other: Vector3i = aim["cell"] if not aim.is_empty() else corner
+		var lo := Vector3(mini(corner.x, other.x), mini(corner.y, other.y), mini(corner.z, other.z))
+		var span := (corner - other).abs() + Vector3i.ONE
+		_select_box.visible = true
+		_select_box.position = lo + Vector3(span) * 0.5
+		_select_box.scale = Vector3(span) + Vector3.ONE * 0.04
+		tool_text = "Pantograph  -  selecting %dx%dx%d  (max %d). Click the opposite corner." % [span.x, span.y, span.z, Config.PANTOGRAPH_MAX]
+		return
+	if blueprint == null:
+		tool_text = "Pantograph  -  left-click the first corner of what you want to copy"
+		return
+	tool_text = "Blueprint %dx%dx%d  needs %s  -  RMB paste, %s rotate, LMB new copy" % [
+		blueprint.size.x, blueprint.size.y, blueprint.size.z, blueprint.cost_text(), Inputs.key_name("rotate_blueprint")]
+	if aim.is_empty():
+		return
+	if _ghost_for != blueprint:
+		_ghost_for = blueprint
+		_ghost.mesh = _ghost_mesh(blueprint)
+	var origin := paste_origin()
+	paste_error = m.paste_check(rat, blueprint, origin)
+	_ghost.visible = true
+	_ghost.position = Vector3(origin)
+	_ghost_mat.albedo_color = Color(0.45, 1.0, 0.5, 0.35) if paste_error == "" else Color(1.0, 0.3, 0.25, 0.4)
+	if paste_error != "":
+		tool_text = "Can't build here: " + paste_error
+
+
+static func _ghost_mesh(bp: Blueprint) -> ArrayMesh:
+	## Transparent preview: a box per block, or the carved shape itself.
+	var v := PackedVector3Array()
+	var c := PackedColorArray()
+	var s := 1.0 / float(Blocks.MICRO)
+	var carved := 0
+	for e in bp.cells:
+		var o := Vector3(Vector3i(e["o"]))
+		carved += 0 if e["mask"] == null else 1
+		if e["mask"] == null or carved > 20:   # cap preview detail for huge carved blueprints
+			ChunkMesher._box(v, c, o + Vector3.ONE * 0.02, o + Vector3.ONE * 0.98, Color.WHITE)
+			continue
+		var mask: PackedByteArray = e["mask"]
+		for my in Blocks.MICRO:
+			for mz in Blocks.MICRO:
+				for mx in Blocks.MICRO:
+					if mask[mx + Blocks.MICRO * (mz + Blocks.MICRO * my)] == 1:
+						var mn := o + Vector3(mx, my, mz) * s
+						ChunkMesher._box(v, c, mn, mn + Vector3.ONE * s, Color.WHITE)
+	var mesh := ArrayMesh.new()
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = v
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh

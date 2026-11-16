@@ -33,11 +33,15 @@ var flying := false
 var stamina := 100.0
 var carried := 0
 var scrap := 0
-var mats := {"dirt": 0, "stone": 0, "wood": 0, "ice": 0}
+var mats := {"dirt": 0, "stone": 0, "wood": 0, "ice": 0, "obsidian": 0}
 var gadgets: Dictionary = {}
 var equipped := ""
 var kits_claimed: Dictionary = {}
 var class_cd := 0.0
+var micro_bank: Dictionary = {}   # material -> spare microvoxels (343 = one block)
+var chisel_cd := 0.0
+var throw_cd := 0.0
+var operating := -1               # uid of the siege machine this rat controls
 var jumps_left := 1
 
 # timers (seconds remaining)
@@ -135,6 +139,8 @@ func step(dt: float) -> void:
 	dash_t = maxf(0.0, dash_t - dt)
 	dash_cd = maxf(0.0, dash_cd - dt)
 	class_cd = maxf(0.0, class_cd - dt)
+	chisel_cd = maxf(0.0, chisel_cd - dt)
+	throw_cd = maxf(0.0, throw_cd - dt)
 	anim_action_t = maxf(0.0, anim_action_t - dt)
 	ability_cd[0] = maxf(0.0, ability_cd[0] - dt)
 	ability_cd[1] = maxf(0.0, ability_cd[1] - dt)
@@ -229,16 +235,21 @@ func _clear_edges() -> void:
 
 
 func _move(motion: Vector3) -> void:
-	var steps := maxi(1, ceili(motion.length() / 0.35))
+	if blocked():
+		unstick()
+	var steps := maxi(1, ceili(motion.length() / 0.3))
 	var part := motion / float(steps)
+	var grounded := on_floor
 	on_floor = false
 	for i in steps:
 		# Y
+		var old := position.y
 		position.y += part.y
 		if blocked():
+			position.y = _settle(1, old, position.y)
 			if part.y <= 0.0:
-				position.y = floorf(position.y) + 1.0
 				on_floor = true
+				grounded = true
 				if _world.block_at(position - Vector3(0, 0.1, 0)) == Blocks.SPRING:
 					vel.y = SPRING_SPEED
 					landed_on_spring = true
@@ -248,27 +259,53 @@ func _move(motion: Vector3) -> void:
 					vel.y = 0.0
 					jumps_left = 1
 			else:
-				position.y = floorf(position.y + HEIGHT) - HEIGHT - 0.001
 				vel.y = 0.0
 			part.y = 0.0
-		# X
-		position.x += part.x
-		if blocked():
-			if part.x > 0.0:
-				position.x = floorf(position.x + RADIUS) - RADIUS - 0.001
+		# X then Z, each with a small-step climb of up to four microvoxels
+		for axis: int in [0, 2]:
+			if part[axis] == 0.0:
+				continue
+			old = position[axis]
+			position[axis] += part[axis]
+			if not blocked():
+				continue
+			if grounded and vel.y <= 0.5 and _step_up():
+				continue
+			var dir := signf(part[axis])
+			position[axis] = _settle(axis, old, position[axis])
+			var probe := position
+			probe[axis] += dir * (RADIUS + 0.12)
+			if _world.block_at(probe + Vector3(0, 0.25, 0)) == Blocks.WALL_SPRING or _world.block_at(probe + Vector3(0, 0.75, 0)) == Blocks.WALL_SPRING:
+				vel[axis] = -dir * 13.0
+				vel.y = 5.5
+				knock = 0.35
+				landed_on_spring = true
 			else:
-				position.x = floorf(position.x - RADIUS) + 1.0 + RADIUS + 0.001
-			vel.x = 0.0
-			part.x = 0.0
-		# Z
-		position.z += part.z
+				vel[axis] = 0.0
+			part[axis] = 0.0
+
+
+func _settle(axis: int, good: float, bad: float) -> float:
+	## Bisect between the last free position and the blocked one, so the body
+	## comes to rest flush against full blocks and carved microvoxels alike.
+	for i in 8:
+		var mid := (good + bad) * 0.5
+		position[axis] = mid
 		if blocked():
-			if part.z > 0.0:
-				position.z = floorf(position.z + RADIUS) - RADIUS - 0.001
-			else:
-				position.z = floorf(position.z - RADIUS) + 1.0 + RADIUS + 0.001
-			vel.z = 0.0
-			part.z = 0.0
+			bad = mid
+		else:
+			good = mid
+	return good
+
+
+func _step_up() -> bool:
+	## Automatic climb over ledges up to four microvoxels (4/7 of a block).
+	for k in range(1, 5):
+		var lift := float(k) / float(Blocks.MICRO) + 0.01
+		if not blocked_at(position + Vector3(0, lift, 0)):
+			position.y += lift
+			return true
+	return false
 
 
 func blocked() -> bool:
@@ -276,16 +313,15 @@ func blocked() -> bool:
 
 
 func blocked_at(p: Vector3) -> bool:
-	var x0 := floori(p.x - RADIUS)
-	var x1 := floori(p.x + RADIUS)
-	var y0 := floori(p.y + 0.001)
-	var y1 := floori(p.y + HEIGHT - 0.001)
-	var z0 := floori(p.z - RADIUS)
-	var z1 := floori(p.z + RADIUS)
-	for y in range(y0, y1 + 1):
-		for z in range(z0, z1 + 1):
-			for x in range(x0, x1 + 1):
-				if Blocks.solid_for(_world.get_block(x, y, z), team):
+	var mn := Vector3(p.x - RADIUS, p.y + 0.001, p.z - RADIUS)
+	var mx := Vector3(p.x + RADIUS, p.y + HEIGHT - 0.001, p.z + RADIUS)
+	for y in range(floori(mn.y), floori(mx.y) + 1):
+		for z in range(floori(mn.z), floori(mx.z) + 1):
+			for x in range(floori(mn.x), floori(mx.x) + 1):
+				if not Blocks.solid_for(_world.get_block(x, y, z), team):
+					continue
+				var c := Vector3i(x, y, z)
+				if not _world.has_micro(c) or _world.micro_box_hit(c, mn, mx):
 					return true
 	return false
 

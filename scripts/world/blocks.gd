@@ -6,8 +6,13 @@ enum {
 	AIR, DIRT, GRASS, STONE, SCRAP, OBSIDIAN, WOOD, ICE, WATER, LAVA, CHEESE,
 	BEDROCK, BASE_BLUE, BASE_RED, BRICK, LEAVES, SHROOM_CAP, SHROOM_STEM, GLOW,
 	HIGHWAY, LADDER, SPRING, TNT, TRAP_BLUE, TRAP_RED,
-	CONV_XP, CONV_XN, CONV_ZP, CONV_ZN, GATE_BLUE, GATE_RED, COUNT
+	CONV_XP, CONV_XN, CONV_ZP, CONV_ZN, GATE_BLUE, GATE_RED,
+	STICKY_BLUE, STICKY_RED, PIT_BLUE, PIT_RED, WALL_SPRING, CANNON, CRANE, DOZER, COUNT
 }
+
+const OBSIDIAN_HITS := 12   # balance knob: ordinary dig hits to break obsidian
+const MICRO := 7            # microvoxels per block edge (7 x 7 x 7 = 343)
+const MICRO_COUNT := 343
 
 # name, hits to break (0 = indestructible / not diggable), colour, solid, opaque cube,
 # drop: "" | "mat:<name>" | "scrap" | "cheese" | "item:<gadget id>"
@@ -17,7 +22,7 @@ const DEFS := [
 	["Grass", 2, Color(0.38, 0.62, 0.27), true, true, "mat:dirt"],
 	["Stone", 4, Color(0.50, 0.50, 0.54), true, true, "mat:stone"],
 	["Scrap", 5, Color(0.72, 0.46, 0.22), true, true, "scrap"],
-	["Obsidian", 14, Color(0.17, 0.12, 0.24), true, true, ""],
+	["Obsidian", OBSIDIAN_HITS, Color(0.17, 0.12, 0.24), true, true, "mat:obsidian"],
 	["Wood", 3, Color(0.62, 0.44, 0.24), true, true, "mat:wood"],
 	["Ice", 2, Color(0.70, 0.88, 0.96), true, true, "mat:ice"],
 	["Water", 0, Color(0.25, 0.52, 0.85, 0.55), false, false, ""],
@@ -43,7 +48,17 @@ const DEFS := [
 	["Conveyor", 2, Color(0.33, 0.34, 0.38), true, true, "item:conveyor"],
 	["Team Gate", 0, Color(0.30, 0.52, 0.95, 0.5), true, false, "item:gate"],
 	["Team Gate", 0, Color(0.95, 0.34, 0.30, 0.5), true, false, "item:gate"],
+	["Sticky Trap", 1, Color(0.35, 0.55, 0.85), false, false, "item:sticky"],
+	["Sticky Trap", 1, Color(0.85, 0.42, 0.38), false, false, "item:sticky"],
+	["Pitfall", 1, Color(0.36, 0.58, 0.30), false, false, "item:pitfall"],
+	["Pitfall", 1, Color(0.42, 0.58, 0.26), false, false, "item:pitfall"],
+	["Wall Spring", 2, Color(0.50, 0.74, 0.40), true, true, "item:wallspring"],
+	["Scrap Cannon", 0, Color(0.55, 0.45, 0.30), true, false, ""],
+	["Wrecking Crane", 0, Color(0.75, 0.60, 0.25), true, false, ""],
+	["Bulldozer", 0, Color(0.85, 0.65, 0.20), true, false, ""],
 ]
+
+const CHISELABLE := [DIRT, GRASS, STONE, OBSIDIAN, WOOD, ICE, BRICK]
 
 static var SOLID := PackedByteArray()
 static var OPAQUE := PackedByteArray()
@@ -95,10 +110,31 @@ static func conveyor_dir(id: int) -> Vector3:
 	return Vector3.ZERO
 
 
+static func is_sticky(id: int) -> bool:
+	return id == STICKY_BLUE or id == STICKY_RED
+
+
+static func is_pit(id: int) -> bool:
+	return id == PIT_BLUE or id == PIT_RED
+
+
+static func is_machine(id: int) -> bool:
+	return id == CANNON or id == CRANE or id == DOZER
+
+
+static func mat_of(id: int) -> String:
+	## Building material a block is made of ("" if it is not a material block).
+	var d: String = DEFS[id][5]
+	return d.substr(4) if d.begins_with("mat:") else ""
+
+
 static func solid_for(id: int, team: int) -> bool:
-	## Collision rule: team gates let their own team through.
+	## Collision rule: team gates let their own team through; a pitfall is
+	## solid ground for its owners and thin air for everyone else.
 	if is_gate(id):
 		return gate_team(id) != team
+	if is_pit(id):
+		return (0 if id == PIT_BLUE else 1) == team
 	return SOLID[id] == 1
 
 
