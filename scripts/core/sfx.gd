@@ -1,0 +1,63 @@
+extends Node
+## Audio feedback autoload: a small pool of players plus looping music.
+## Missing files are reported once and then skipped, never fatal.
+
+const POOL := 10
+const DIR := "res://assets/sfx/"
+
+var _players: Array[AudioStreamPlayer] = []
+var _cache: Dictionary = {}
+var _missing: Dictionary = {}
+var _next := 0
+var _music: AudioStreamPlayer
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	for i in POOL:
+		var p := AudioStreamPlayer.new()
+		add_child(p)
+		_players.append(p)
+	_music = AudioStreamPlayer.new()
+	add_child(_music)
+	_music.finished.connect(_music.play)
+
+
+func play(sound: String, volume_db := 0.0, pitch := 1.0, jitter := 0.08) -> void:
+	var stream := _load(DIR + sound + ".wav")
+	if stream == null:
+		return
+	var p := _players[_next]
+	_next = (_next + 1) % POOL
+	p.stream = stream
+	p.volume_db = volume_db
+	p.pitch_scale = maxf(0.2, pitch + randf_range(-jitter, jitter))
+	p.play()
+
+
+func play_music(path: String) -> void:
+	var stream := _load(path)
+	if stream == null:
+		return
+	_music.stream = stream
+	_music.volume_db = linear_to_db(maxf(float(Config.get_value("music_volume")), 0.0001))
+	_music.play()
+
+
+func set_music_volume(v: float) -> void:
+	_music.volume_db = linear_to_db(maxf(v, 0.0001))
+	_music.stream_paused = v <= 0.001
+
+
+func _load(path: String) -> AudioStream:
+	if _cache.has(path):
+		return _cache[path]
+	if _missing.has(path):
+		return null
+	if not ResourceLoader.exists(path):
+		_missing[path] = true
+		Log.warn("missing audio asset: " + path)
+		return null
+	var s: AudioStream = load(path)
+	_cache[path] = s
+	return s
