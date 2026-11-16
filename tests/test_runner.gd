@@ -18,7 +18,7 @@ func _ready() -> void:
 		"carry_slowdown", "dig_durability_and_rate", "placement_rules", "cheese_loop_and_capacity",
 		"bonk_rules", "respawn_conserves_cheese", "economy_multiplier", "workshop_rules",
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
-		"class_permissions", "win_condition", "save_load", "free_build",
+		"class_permissions", "win_condition", "vault_raid", "digger_power", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -190,19 +190,23 @@ func test_movement_and_walls() -> void:
 func test_carry_slowdown() -> void:
 	var m := new_match()
 	flat_arena(m, ARENA, 10)
-	var r := arena_rat(m, 0, "scout", Vector3(-8, 0, 0))
+	var r := arena_rat(m, 0, "digger", Vector3(-8, 0, 0))
 	run(m, 0.3)
 	r.wish = Vector3(1, 0, 0)
-	var x0 := r.position.x
-	run(m, 1.0)
-	var free_speed := r.position.x - x0
-	r.position.x = ARENA.x - 8.0
-	r.vel = Vector3.ZERO
-	r.carried = 1
-	x0 = r.position.x
-	run(m, 1.0)
-	var carry_speed := r.position.x - x0
-	check(absf(carry_speed / free_speed - Config.CARRY_SPEED_MULT) < 0.06, "carrying cheese = ~25%% speed (%.2f)" % (carry_speed / free_speed))
+	var speeds: Array[float] = []
+	for load in 4:
+		r.position.x = ARENA.x - 8.0
+		r.vel = Vector3.ZERO
+		r.carried = load
+		run(m, 0.3)
+		var x0 := r.position.x
+		run(m, 1.0)
+		speeds.append(r.position.x - x0)
+	for load in range(1, 4):
+		var ratio := speeds[load] / speeds[0]
+		check(absf(ratio - float(Config.CARRY_SPEED[load])) < 0.04, "carrying %d cheese = %d%% speed (%.2f)" % [load, int(float(Config.CARRY_SPEED[load]) * 100.0), ratio])
+	check(speeds[1] > speeds[2] and speeds[2] > speeds[3], "every extra cheese slows the carrier further")
+	check(is_equal_approx(float(Config.CARRY_SPEED[3]), 0.25), "a full Digger load is the classic 25% crawl")
 	end(m)
 
 
@@ -248,6 +252,12 @@ func test_dig_durability_and_rate() -> void:
 				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.DIRT)
 	run(m, 0.4)
 	m.try_dig(d, ARENA + Vector3i(2, 1, 0))
+	var chipped := 0
+	for cell: Vector3i in m.world.damage:
+		if (cell - (ARENA + Vector3i(2, 1, 0))).abs() <= Vector3i.ONE and int(m.world.damage[cell]) == 1:
+			chipped += 1
+	check(m.world.get_cell(ARENA + Vector3i(2, 1, 0)) == Blocks.AIR and chipped == 26, "digger: aimed dirt goes in one swing, the 26 around it are chipped (%d)" % chipped)
+	m.world.set_block(ARENA + Vector3i(2, 1, 0), Blocks.DIRT)
 	run(m, 0.4)
 	m.try_dig(d, ARENA + Vector3i(2, 1, 0))
 	var gone := 0
@@ -677,6 +687,78 @@ func test_free_build() -> void:
 	r.position = MapGenerator.spawn_point(0)
 	run(m, 0.2)
 	check(m.scores[0] == 0 and not m.over, "Free Build has no scoring")
+	end(m)
+
+
+func test_vault_raid() -> void:
+	var m := new_match({"goal": 10})
+	var thief := m.spawn_rat(1, "scout", false)
+	var guard := m.spawn_rat(0, "scout", false)
+	guard.position = Vector3(30, 40, 10)
+	flat_arena(m, ARENA)
+	guard.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	var toasts: Array[String] = []
+	m.toast.connect(func(text: String, _team: int) -> void: toasts.append(text))
+	thief.position = MapGenerator.spawn_point(0)
+	run(m, 4.0)
+	check(thief.carried == 0 and m.scores[0] == 0, "an empty vault cannot be raided")
+	m.scores[0] = 3
+	var before := total_cheese(m)
+	run(m, 1.0)
+	check(thief.raid_t > 0.5 and thief.carried == 0, "raid is a channel, not instant")
+	check(toasts.size() == 1 and toasts[0].contains("ALARM"), "everyone is warned once when a raid starts")
+	var marked := false
+	for mk in m.markers:
+		marked = marked or (int(mk["team"]) == 0 and String(mk["text"]) == "RAID!")
+	check(marked, "defenders get a marker on their vault")
+	run(m, Config.RAID_TIME - 0.9)
+	check(thief.carried == 1 and m.scores[0] == 2, "after %.0f s one banked cheese is lifted" % Config.RAID_TIME)
+	check(total_cheese(m) == before, "the stolen cheese is moved, not created")
+	# a defender at home freezes the raid
+	guard.position = MapGenerator.spawn_point(0, 2)
+	var t := thief.raid_t
+	run(m, 4.0)
+	check(thief.carried == 1 and thief.raid_t <= t + 0.05, "a defender standing in the base locks the vault")
+	# a bonk interrupts and the thief drops loot inside the base; capacity limits the haul
+	guard.position = thief.position + Vector3(0.8, 0, 0)
+	check(m.try_bonk(guard, thief), "defender bonks the thief")
+	m.step(DT)
+	check(thief.carried == 0 and thief.raid_t == 0.0, "bonk interrupts the raid and shakes the cheese loose")
+	check(total_cheese(m) == before, "still conserved after the scuffle")
+	guard.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	m.pickups.clear()
+	m.scores[0] = 3
+	before = total_cheese(m)
+	thief.position = MapGenerator.spawn_point(0)
+	thief.knock = 0.0
+	thief.vel = Vector3.ZERO
+	run(m, Config.RAID_TIME * 4.0)
+	check(thief.carried == thief.capacity() and m.scores[0] == 3 - thief.capacity(), "a thief can only take what it can carry (%d)" % thief.carried)
+	check(total_cheese(m) == before, "conserved")
+	# the thief still has to get home with it
+	thief.position = MapGenerator.spawn_point(1)
+	run(m, 0.2)
+	check(m.scores[1] == thief.capacity() and thief.carried == 0, "stolen cheese scores when banked at home")
+	# own base is never "raided"
+	m.scores[1] = 5
+	run(m, 4.0)
+	check(m.scores[1] == 5 and thief.carried == 0, "standing in your own base does nothing")
+	end(m)
+
+
+func test_digger_power() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var d := arena_rat(m, 0, "digger")
+	var cell := ARENA + Vector3i(1, 0, 0)
+	for pair: Array in [[Blocks.STONE, 2], [Blocks.SCRAP, 3], [Blocks.OBSIDIAN, 6], [Blocks.CHEESE, 2]]:
+		m.world.set_block(cell, int(pair[0]))
+		var n := 0
+		while m.world.get_cell(cell) == int(pair[0]) and n < 40:
+			d.dig_cd = 0.0
+			m.try_dig(d, cell)
+			n += 1
+		check(n == int(pair[1]), "digger breaks %s in %d swings (%d)" % [Blocks.block_name(int(pair[0])), int(pair[1]), n])
 	end(m)
 
 

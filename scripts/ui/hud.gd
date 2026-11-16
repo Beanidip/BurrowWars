@@ -290,6 +290,10 @@ func _process(_delta: float) -> void:
 		_target.text = Blocks.block_name(id) + extra
 	if rat.carried > 0 and not m.free_mode:
 		_target.text += "   |   Carrying cheese: get to your base!"
+	if rat.raid_t > 0.0:
+		_target.text = "Raiding the vault...  %d%%" % int(100.0 * rat.raid_t / Config.RAID_TIME)
+	elif not m.free_mode and m.in_base(rat, 1 - rat.team) and m.scores[1 - rat.team] > 0 and rat.carried < rat.capacity():
+		_target.text = "A defender is home - the vault is locked while they stand in it"
 	_crosshair.visible = _dialog == null
 	_update_markers()
 	for ol in _owned_labels:

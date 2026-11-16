@@ -38,17 +38,18 @@ Feature freeze was at the 40-hour mark: nothing new after that, only fixes.
 - Menus, HUD, settings, key rebinding, toasts, world markers, sound, particles
 - Automated tests: 179 gameplay assertions plus an end-to-end smoke test
 
-## Cut (and why)
+## Added after the jam (v1.1)
+
+Chisel, pantograph, Mobile TNT, cannon, crane, bulldozer, sticky trap, pitfall, wall spring,
+4-microvoxel step-up, vault raids. See `CHANGELOG.md`.
+
+## Still cut (and why)
 
 | Cut | Why it was cut | Cost to add later |
 |---|---|---|
 | LAN multiplayer (host/join) | Biggest risk on the board; a broken netcode demo is worse than none. All rules already run through one authority (`Match.try_*`), which is the seam for it. | Large |
-| Microvoxel 7x7x7 chisel and pantograph | A second voxel engine inside the first; not needed for the race loop | Large |
-| Scrap cannon, crane, bulldozer | Fun, but the loop works without siege machines | Medium each |
 | Flowing water / lava | Static liquids give the hazard and the swim without a fluid sim | Medium |
-| Sticky trap, pitfall, wall spring | Mouse trap + spring + TNT already cover "trap" | Small each |
 | Bots using class abilities and construction | Bots already complete matches | Medium |
-| 4-microvoxel auto step-up | No partial blocks exist without the chisel | Comes with microvoxels |
 | Controller navigation | Keyboard/mouse first | Medium |
 | Windows/Linux export builds | Export templates not set up in the build environment | Small |
 

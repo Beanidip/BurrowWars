@@ -13,10 +13,17 @@
    `try_*` / `use_ability` requests by RPC; host broadcasts `block_changed`, `fx`, scores
    and rat state. World sync for joiners = seed + list of changed cells. Start with
    `tests/dev` running host and client as two headless processes.
-3. **Scrap cannon** as the first siege machine (projectile + `Match._damage` at triple power on impact and four neighbours).
+3. Bots that use siege machines and Mobile TNT against gates.
 4. Bots: use springs/ladders they own, Saboteur bots plant TNT at enemy gates.
 5. Textures or a small atlas for blocks; export presets for Windows and Linux.
-6. Microvoxel chisel only after all of the above; it is the largest single item.
+6. Chisel brush sizes and pantograph support for gadgets (ladders, conveyors with orientation).
+
+## Balance questions to answer by playing
+
+- Is a 3 s vault raid too fast when you are alone on defence? (`Config.RAID_TIME`)
+- Is the Digger now simply the best class? Its double hit also mines scrap faster.
+- Cannon at 26 scrap: worth it, or do players just buy TNT? (`ClassDefs.SHOP`)
+- Mobile TNT fuse 3 s / radius 2.4 / power 6.5 (`Config.DYNAMITE_*`)
 
 ## Things that will bite you
 

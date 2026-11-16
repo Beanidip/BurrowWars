@@ -14,4 +14,10 @@ None of these block finishing a match.
 | Water and lava do not flow | Dig next to a pond | Static liquids (cut list). |
 | Loaded Free Build maps forget who owned TNT | F9 after placing TNT | Hitting it still lights it; remote detonate works for any charge in Free Build. |
 | First editor open takes a moment | Open the project | Godot imports about 250 sprites and sounds once. |
+| Machines are one block big | Place a crane | They read as toys rather than "heavy". Footprints larger than one cell would need multi-cell transport. |
+| Pantograph skips gadgets | Copy a room with ladders | Only dirt, grass, stone, brick, wood, ice and obsidian are copied; the message says how many blocks were left out. |
+| Chisel edits one microvoxel at a time | Carve a doorway | No brush sizes yet; big carvings are slow. |
+| Bots ignore the new toys | Any match | They never use machines, Mobile TNT, chisel or pantograph. They do raid and defend vaults. |
+| Bots treat carved blocks as solid | Carve a low tunnel | They dig through rather than use it. |
+| Crane ball is hard to read from some angles | Man a crane | Hits show cracks and thuds, but the ball itself is small. |
 | Unverified by a person | - | See "Not executed" in TEST_RESULTS.md: feel, audio levels, real-GPU frame rate. |

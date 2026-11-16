@@ -67,10 +67,26 @@ func think(dt: float) -> void:
 
 func _retarget() -> void:
 	target_cell = Vector3i(-1, -1, -1)
+	var enemy := 1 - rat.team
+	if not m.free_mode and rat.carried == 0:
+		# defend: someone is in our vault and we are close enough to matter
+		for other in m.rats:
+			if other.team == enemy and m.in_base(other, rat.team) and other.position.distance_to(rat.position) < 30.0 and m.scores[rat.team] > 0:
+				mode = "defend"
+				target = other.position
+				return
+	# raid: when clearly behind, half the team goes for the enemy vault instead of digging
+	var behind := m.scores[enemy] - m.scores[rat.team]
+	if not m.free_mode and m.scores[enemy] > 0 and rat.carried < rat.capacity() \
+			and ((mode == "raid" and behind >= 0) or (behind >= 2 and rat.id % 2 == 0 and rat.carried == 0)):
+		mode = "raid"
+		var ez := MapGenerator.base_zone(enemy)
+		target = ez.position + Vector3(ez.size.x * 0.5, 0.0, ez.size.z * 0.5)
+		return
 	var cheese: Variant = _pick_cheese()
 	var full := rat.carried >= rat.capacity()
 	var far := cheese == null or (cheese as Vector3).distance_to(rat.position) > 12.0
-	if rat.carried > 0 and (full or far):
+	if rat.carried > 0 and (full or far or mode == "raid"):
 		mode = "home"
 		var zone := MapGenerator.base_zone(rat.team)
 		var gate := MapGenerator.approach_point(rat.team)

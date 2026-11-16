@@ -1,6 +1,6 @@
 # Test results
 
-Only tests that were actually executed are listed. Date: 2026-11-15.
+Only tests that were actually executed are listed. Last full run: 2026-11-16 (v1.1).
 Engine: Godot 4.7.2.stable.official.ed1daf0bf, Linux x86_64.
 
 ## Executed and passing
@@ -9,10 +9,10 @@ Engine: Godot 4.7.2.stable.official.ed1daf0bf, Linux x86_64.
 |---|---|---|
 | Import + editor validation | `godot --headless --path . --editor --quit` | Pass, no script or resource errors |
 | Boot main scene | `godot --headless --path . --quit-after 120` | Pass |
-| App-flow smoke test (headless) | `godot --headless --path . res://tests/smoke_runner.tscn` | 34 checks pass, 3 skipped (mouse capture needs a display) |
-| Gameplay regression suite | `godot --headless --path . res://tests/test_runner.tscn` | 21 tests, 179 assertions, 0 failed |
-| App-flow smoke test on a virtual display (Xvfb, Mesa llvmpipe, OpenGL Compatibility) | same scene with `--rendering-driver opengl3` | 37 checks pass, 0 skipped, at 1280x720 |
-| UI fit at each target resolution | smoke test at 1280x720, 1920x1080, 2560x1440, 3440x1440, 5120x1440 | Pass at all five: every menu and dialog inside the viewport |
+| App-flow smoke test (headless) | `godot --headless --path . res://tests/smoke_runner.tscn` | 64 checks pass, 3 skipped (mouse capture needs a display) |
+| Gameplay regression suite | `godot --headless --path . res://tests/test_runner.tscn` | 37 tests, 411 assertions, 0 failed |
+| App-flow smoke test on a virtual display (Xvfb, Mesa llvmpipe, OpenGL Compatibility) | same scene with `--rendering-driver opengl3` | 67 checks pass, 0 skipped, at 1280x720, 1920x1080 and 5120x1440 (v1.1) |
+| UI fit at each target resolution | smoke test at 1280x720, 1920x1080, 2560x1440, 3440x1440, 5120x1440 | Pass at all five for v1.0; v1.1 re-run at 1280x720, 1920x1080 and 5120x1440 only |
 | Gate self-test | made a bonk drop 2 cheese; added a parse error | `tools/check.sh` exited non-zero both times |
 
 All of the above run from one command: `tools/check.sh /path/to/godot` (headless parts).
@@ -39,6 +39,33 @@ purchase, inventory, pause/resume, winning, results, rematch, quit to menu, Free
 Screenshots were captured from the real renderer on a virtual display and looked at:
 menu, setup, settings, base, first person, surface, sewer, chapel, workshop, inventory,
 pause, gadgets, results, Free Build, plus ultrawide. Samples are in `docs/screenshots/`.
+
+## v1.1 acceptance tests (goal document, section 9)
+
+| # | Test | How it was checked | Result |
+|---|---|---|---|
+| 1 | New match starts without errors | boot + smoke | Pass |
+| 2 | Stone takes four dig hits | `stone_and_obsidian` | Pass |
+| 3 | Obsidian outlasts stone | `stone_and_obsidian` (12 hits), `dynamite_blast`, `cannon` | Pass |
+| 4 | Chiseled geometry survives save and reload | `chisel_persists` | Pass |
+| 5 | Microvoxel collision and 4-microvoxel steps | `chisel_collision_and_steps` | Pass |
+| 6 | Pantograph copies, rotates, previews, pastes a carved structure | `pantograph` + smoke (ghost preview screenshot) | Pass |
+| 7 | Pantograph rejects insufficient resources and protected placement | `pantograph` | Pass |
+| 8 | Mobile TNT bounces and detonates on its fuse | `dynamite_physics` | Pass |
+| 9 | Spring launches Mobile TNT, physics stays sane | `dynamite_traps` | Pass |
+| 10 | Conveyors move TNT and equipment the right way | `dynamite_traps`, `machine_transport` | Pass |
+| 11 | Chain reactions leave no stray geometry | `tnt_chain_and_gate`, `dynamite_blast` | Pass |
+| 12 | Cannon damages the struck block and four around it | `cannon` | Pass |
+| 13 | Crane and bulldozer excavate without corrupting terrain | `crane_and_dozer` + smoke | Pass |
+| 14 | Explosion knockback never kills | `dynamite_blast`, smoke | Pass (there is no health or death in the game) |
+| 15 | Two connected players see identical terrain and machines | - | **Not met: the project has no multiplayer** |
+| 16 | Existing modes, classes, cheese rules, controls still work | the original 21 tests + smoke | Pass |
+
+The smoke test also plays these through the real controller in a running game: 9 and 0
+switch tools, the crosshair picks a single microvoxel, right mouse adds one, X rotates,
+right mouse pastes, Q throws, R mans and leaves each machine, the mouse aims it, and each
+machine visibly chews a stone wall. Screenshots: `docs/screenshots/chisel.jpg`,
+`pantograph.jpg`, `cannon.jpg`, `crane.jpg`, `bulldozer.jpg`, `siege_yard.jpg`.
 
 ## Not executed
 

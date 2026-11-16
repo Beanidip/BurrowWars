@@ -172,6 +172,8 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sound("siege_grind", pos, 0.9 if kind == "dozer" else 1.2, -2.0)
 		"ability", "buy":
 			_sound("discovery_chime", pos, 1.0, -3.0)
+		"alarm":
+			Sfx.play("siege_grind", -2.0, 1.9, 0.0)
 		"respawn":
 			_sound("block_place", pos, 0.7)
 

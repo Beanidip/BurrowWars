@@ -8,13 +8,15 @@ const HELP := """GOAL  Dig up golden cheese and carry it home. First team to the
 
 DIG  Hold left mouse. Dirt takes 2 hits, stone 4, scrap 5. Mined dirt, stone and wood go into your stash; place them with right mouse (1-4 picks the material).
 
-CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying cheese slows you to a crawl - dash (Shift), build highways or get an escort. Walk into your base to bank it. G drops one.
+CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying cheese slows you down, more for every extra piece (45% / 34% / 25% speed) - dash (Shift), build highways or get an escort. Walk into your base to bank it. G drops one.
 
 BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a cheese and can't grab it back for 2 seconds.
 
 SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Q places the equipped gadget, T cycles, I opens your pack.
 
-CLASSES  Digger: huge brush, carries 3. Scout: fast, sniffs out cheese. Builder: patches walls, lays highways, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.
+RAIDS  Stand inside the ENEMY base for 3 seconds to steal a cheese they already banked. Everyone hears the alarm, and any defender standing in their own base locks the vault - so guard it, gate it, trap it.
+
+CLASSES  Digger: hits twice as hard, huge brush, carries 3. Scout: fast, sniffs out cheese. Builder: patches walls, lays highways, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.
 
 CHISEL (9)  Every block is 7x7x7 microvoxels. Left mouse carves one, right mouse adds one from the selected material. You climb ledges up to 4 microvoxels automatically, so you can carve stairs. Carving and refilling is zero-sum: 343 microvoxels is one block.
 

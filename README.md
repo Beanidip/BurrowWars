@@ -21,6 +21,8 @@ From a terminal: `godot --path .`
 - Mine orange **scrap**, spend it at the **workshop** (B, at your base) on ladders,
   springs, highways, conveyors, mouse traps, TNT and team gates.
 - Every cheese banked by either team raises the value of newly mined scrap.
+- **Raid** the enemy base: stand in it for 3 seconds to steal a banked cheese. A defender at home locks the vault.
+- Build siege machines (cannon, crane, bulldozer), move them on conveyors, throw bouncing Mobile TNT.
 - First team to the cheese goal wins. **Free Build** is a creative sandbox with flight.
 
 | Input | Action | Input | Action |
@@ -34,6 +36,9 @@ From a terminal: `godot --path .`
 | V | First / third person | Ctrl+K | Respawn at base |
 | Ctrl | Climb down / fly down | Esc | Pause, settings, key rebinding |
 | N, F5, F9 | Free Build: fly, save map, load map | Mouse wheel | Camera distance |
+| 9 | Chisel: LMB carve, RMB add a microvoxel | 0 | Pantograph: click 2 corners, RMB paste, X rotate |
+| R | Man / leave a siege machine | Ctrl+Q | Set Mobile TNT down gently |
+| 5 | Obsidian | | |
 
 ## Verify
 

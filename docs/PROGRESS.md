@@ -1,6 +1,6 @@
 # Progress
 
-Status: **jam build complete** - a finished, replayable solo Cheese Race plus Free Build.
+Status: **v1.1 - siege, chisel, pantograph and Mobile TNT added on top of the jam build**; originally **jam build complete** - a finished, replayable solo Cheese Race plus Free Build.
 Not the full directive: see the cut list in JAM_SCOPE.md.
 
 ## Against the directive's milestones
@@ -12,8 +12,8 @@ Not the full directive: see the cut list in JAM_SCOPE.md.
 | 2 First playable | Done: bases, mirrored map, cheese, carry slowdown, deposit, scores, victory, rematch |
 | 3 Multiplayer | **Cut** for the jam. Authority seam in place (`Match.try_*`). |
 | 4 Classes and economy | Done: four classes, class switching, stamina, scrap, multiplier, workshop |
-| 5 Construction sandbox | Partial: ladders, gates, highways, mouse trap, TNT, conveyors, ice, springs, inventory. **Cut:** chisel, pantograph, sticky trap, pitfall, wall spring |
-| 6 Siege engineering | **Cut** |
+| 5 Construction sandbox | Done (v1.1): ladders, gates, highways, traps (mouse, sticky, pitfall, wall spring), TNT, Mobile TNT, conveyors, ice, springs, inventory, chisel, pantograph |
+| 6 Siege engineering | Done (v1.1): cannon, crane, bulldozer, operation, conveyor transport |
 | 7 World personality | Partial: sewer, ruins, lab, chapel, vaults, houses, trees, mushrooms, pond, lava caverns, sprites, sounds, particles. Blocks are flat-coloured, no textures |
 | 8 Bots and Free Build | Done: bot navigation/objectives/count/skill, Free Build, Chisel Maestro, map save/load |
 | 9 Polish and balance | Started: UI verified at five resolutions, rebinding, regression suite. Needs human playtesting |
@@ -24,7 +24,7 @@ Met: launches reliably, terrain dig/build, cheese and scoring, all standard clas
 economy, inventory and workshop, major construction tools, bots, readable interface, no
 known progression blockers, tests pass, reproducible instructions, both modes function.
 
-Not met: host/join multiplayer, siege equipment. This is a jam entry, not the
+Not met: host/join multiplayer. This is a jam entry, not the
 "initial complete playable release" the directive defines.
 
 ## Commits

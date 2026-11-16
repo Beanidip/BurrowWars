@@ -36,6 +36,7 @@ var scrap := 0
 var mats := {"dirt": 0, "stone": 0, "wood": 0, "ice": 0, "obsidian": 0}
 var gadgets: Dictionary = {}
 var equipped := ""
+var raid_t := 0.0
 var kits_claimed: Dictionary = {}
 var class_cd := 0.0
 var micro_bank: Dictionary = {}   # material -> spare microvoxels (343 = one block)
@@ -118,7 +119,7 @@ func play_action(action: String, time := 0.3) -> void:
 func move_speed() -> float:
 	var s := Config.BASE_SPEED * float(cls["speed"])
 	if carried > 0:
-		s *= Config.CARRY_SPEED_MULT
+		s *= float(Config.CARRY_SPEED[mini(carried, Config.CARRY_SPEED.size() - 1)])
 	if slow > 0.0:
 		s *= 0.5
 	if in_water:

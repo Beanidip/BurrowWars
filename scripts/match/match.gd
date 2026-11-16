@@ -140,6 +140,7 @@ func step(dt: float) -> void:
 		if r.landed_on_spring:
 			fx.emit("spring", r.position, null)
 		_check_rat_hazards(r)
+		_check_raid(r, dt)
 	_step_pickups(dt)
 	_step_tnt(dt)
 	dynamite.step(dt)
@@ -175,6 +176,34 @@ func _check_rat_hazards(r: Rat) -> void:
 		r.slow = maxf(r.slow, 1.2)
 	if r.carried > 0 and not free_mode and in_base(r):
 		_deposit(r)
+
+
+func _check_raid(r: Rat, dt: float) -> void:
+	## Vault raid: stand in the ENEMY base for RAID_TIME to lift one banked
+	## cheese (their score drops, you carry it). Any defender standing in
+	## their own base freezes the raid, and everyone is warned when it starts.
+	## The cheese is moved, never created.
+	var enemy := 1 - r.team
+	if over or free_mode or scores[enemy] <= 0 or r.carried >= r.capacity() or r.stun > 0.0 or r.knock > 0.0 \
+			or r.flying or not in_base(r, enemy):
+		r.raid_t = 0.0
+		return
+	for d in rats:
+		if d.team == enemy and d.stun <= 0.0 and in_base(d, enemy):
+			return   # contested: progress is frozen while a defender is home
+	if r.raid_t == 0.0:
+		toast.emit("ALARM! %s is raiding the %s vault!" % [r.display_name, TEAM_NAMES[enemy]], -1)
+		var zone := MapGenerator.base_zone(enemy)
+		add_marker(zone.position + Vector3(zone.size.x * 0.5, 2.0, zone.size.z * 0.5), "RAID!", enemy, 8.0)
+		fx.emit("alarm", r.position, enemy)
+	r.raid_t += dt
+	if r.raid_t >= Config.RAID_TIME:
+		r.raid_t = 0.0
+		scores[enemy] -= 1
+		r.carried += 1
+		score_changed.emit()
+		fx.emit("pickup", r.position, r.team)
+		toast.emit("%s stole a cheese from the %s vault!" % [r.display_name, TEAM_NAMES[enemy]], -1)
 
 
 func _deposit(r: Rat) -> void:
@@ -227,7 +256,7 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 		fx.emit("clang", Vector3(cell), id)
 		return false
 	var power := 99 if free_mode else 1
-	_damage(rat, cell, power)
+	_damage(rat, cell, power if free_mode else int(rat.cls.get("power", 1)))
 	var brush := int(rat.cls["brush"])
 	var feet_y := rat.feet_cell().y
 	if brush > 0:

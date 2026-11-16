@@ -40,6 +40,22 @@ func needs_display(cond: bool, what: String) -> void:
 		check(cond, what)
 
 
+func look_at(s: GameSession, point: Vector3) -> void:
+	var d := point - (s.player.position + Vector3(0, 0.72, 0))
+	s.ctl.yaw = atan2(-d.x, -d.z)
+	s.ctl.pitch = asin(clampf(d.normalized().y, -1.0, 1.0))
+
+
+func count_block(w: VoxelWorld, from: Vector3i, size: Vector3i, id: int) -> int:
+	var n := 0
+	for dx in size.x:
+		for dy in size.y:
+			for dz in size.z:
+				if w.get_cell(from + Vector3i(dx, dy, dz)) == id:
+					n += 1
+	return n
+
+
 func frames(n: int) -> void:
 	for i in n:
 		await get_tree().process_frame
@@ -251,6 +267,131 @@ func _run() -> void:
 	await shot("15_free_build_overview")
 	await press("save_map")
 	check(FileAccess.file_exists("user://maps/free_build.bwmap"), "F5 saves the map")
+	# --- chisel, pantograph, Mobile TNT and siege machines, in the real game ----
+	s.player.flying = false
+	var w := s.m.world
+	var pad := Vector3i(30, w.surface_y(30, 12) + 1, 12)
+	for dx in range(-6, 13):
+		for dz in range(-7, 8):
+			w.set_block(pad + Vector3i(dx, -1, dz), Blocks.STONE)
+			for dy in 9:
+				w.set_block(pad + Vector3i(dx, dy, dz), Blocks.AIR)
+	s.player.position = Vector3(pad) + Vector3(0.5, 0, 0.5)
+	s.player.vel = Vector3.ZERO
+	var block := pad + Vector3i(2, 0, 0)
+	w.set_block(block, Blocks.STONE)
+	w.set_block(block + Vector3i(0, 1, 0), Blocks.WOOD)
+	s.ctl.first_person = true
+	look_at(s, Vector3(block) + Vector3(0.0, 0.6, 0.5))
+	await frames(8)
+	await press("chisel")
+	check(s.ctl.tool == PlayerController.Tool.CHISEL, "9 equips the chisel")
+	check(s.ctl.aim.has("micro") and Vector3i(s.ctl.aim["cell"]) == block, "chisel targets a single microvoxel of the aimed block")
+	for my in range(2, 7):
+		for mz in range(2, 5):
+			for mx in range(0, 7):
+				s.player.chisel_cd = 0.0
+				s.m.try_chisel_remove(s.player, block, Vector3i(mx, my, mz))
+	check(w.has_micro(block) and w.micro_count(block) == 343 - 105, "carving removes exactly the chosen microvoxels (%d left)" % w.micro_count(block))
+	await frames(6)
+	check(s.ctl.aim.is_empty() or Vector3i(s.ctl.aim["cell"]) != block, "the crosshair now sees straight through the carved tunnel")
+	look_at(s, Vector3(block) + Vector3(0.0, 0.15, 0.5))
+	await frames(6)
+	await wait(0.2)   # chisel cooldown
+	var before_add := w.micro_count(block)
+	await press("place")
+	check(w.micro_count(block) + w.micro_count(block + Vector3i(-1, 0, 0)) == before_add + 1 or w.micro_count(block) == before_add + 1, "right mouse adds one microvoxel")
+	await frames(6)
+	await shot("16_chisel")
+	# pantograph: copy the carved block and the wood on top of it, rotate, preview, paste
+	await press("pantograph")
+	check(s.ctl.tool == PlayerController.Tool.PANTOGRAPH, "0 equips the pantograph")
+	s.ctl.corner = block
+	s.ctl.corner_set = true
+	look_at(s, Vector3(block) + Vector3(0.0, 1.5, 0.5))   # second corner: the wood block on top
+	await frames(6)
+	s.ctl._pantograph_click()
+	check(s.ctl.blueprint != null and s.ctl.blueprint.size == Vector3i(1, 2, 1), "two corners copy the region")
+	var bp_before: Blueprint = s.ctl.blueprint
+	await press("rotate_blueprint")
+	check(s.ctl.blueprint != bp_before, "X rotates the blueprint")
+	look_at(s, Vector3(pad) + Vector3(2.5, -0.01, 2.5))
+	await frames(8)
+	await shot("17_pantograph_preview")
+	var origin: Vector3i = s.ctl.paste_origin() if not s.ctl.aim.is_empty() else Vector3i.ZERO
+	await press("place")
+	check(w.has_micro(origin) and w.get_cell(origin + Vector3i(0, 1, 0)) == Blocks.WOOD, "paste rebuilds the carved block and the block above it")
+	check(w.micro_count(origin) == w.micro_count(block), "pasted copy has the same microvoxel count")
+	await press("slot_1")
+	check(s.ctl.tool == PlayerController.Tool.DIG, "1 goes back to the dig tool")
+	# Mobile TNT thrown with Q
+	s.ctl.first_person = false
+	s.player.equipped = "dynamite"
+	look_at(s, Vector3(pad) + Vector3(8.5, 3.0, -3.5))
+	await frames(4)
+	await press("gadget")
+	check(s.m.dynamite.sticks.size() == 1, "Q throws a stick of Mobile TNT")
+	await wait(0.5)
+	await shot("18_dynamite_in_flight")
+	await wait(Config.DYNAMITE_FUSE)
+	check(s.m.dynamite.sticks.is_empty(), "it explodes when the fuse runs out")
+	check(s.player.position.y > -4.0 and not s.m.over, "the blast hurts nobody")
+	# siege machines: place, man with R, aim, work, leave
+	for dz in range(-5, 6):
+		for dy in 4:
+			w.set_block(pad + Vector3i(10, dy, dz), Blocks.STONE)
+	s.player.position = Vector3(pad) + Vector3(0.5, 0, 0.5)
+	s.player.vel = Vector3.ZERO
+	var spots := {"cannon": pad + Vector3i(2, 0, 3), "crane": pad + Vector3i(6, 0, -2), "dozer": pad + Vector3i(9, 0, 3)}
+	for kind: String in spots:
+		s.player.position = Vector3(spots[kind]) + Vector3(-1.5, 0, 0.5)
+		check(s.m.try_place_gadget(s.player, spots[kind], kind) == "", "%s placed" % kind)
+	await frames(10)
+	for kind: String in ["cannon", "crane", "dozer"]:
+		var cell: Vector3i = spots[kind]
+		s.player.position = Vector3(cell) + Vector3(-1.6, 0, 0.5)
+		s.player.vel = Vector3.ZERO
+		look_at(s, Vector3(cell) + Vector3(0.5, 0.5, 0.5))
+		await frames(6)
+		await press("interact")
+		check(s.player.operating != -1, "R mans the %s" % kind)
+		var mc: SiegeSystem.Machine = s.m.siege.machines.get(cell)
+		s.ctl.yaw = -PI / 2.0
+		s.ctl.pitch = 0.12
+		await wait(0.3)
+		check(mc != null and absf(mc.yaw - s.ctl.yaw) < 0.01, "the mouse aims the %s" % kind)
+		var broken_before := count_block(w, pad + Vector3i(10, 0, -5), Vector3i(1, 4, 11), Blocks.STONE)
+		for i in (1 if kind == "cannon" else 14):
+			s.m.siege.fire(s.player)
+			await wait(0.5 if kind == "crane" else 0.25)
+		if kind == "cannon":
+			await frames(2)
+			await shot("19_cannon_shot_and_arc")
+			await wait(1.2)
+		elif kind == "crane":
+			await shot("20_crane_swing")
+		else:
+			await shot("21_bulldozer")
+		var broken_after := count_block(w, pad + Vector3i(10, 0, -5), Vector3i(1, 4, 11), Blocks.STONE)
+		var damaged := 0
+		for dc: Vector3i in w.damage:
+			if dc.x == pad.x + 10:
+				damaged += 1
+		check(broken_after < broken_before or damaged > 0, "the %s chews the stone wall (%d -> %d blocks, %d cracked)" % [kind, broken_before, broken_after, damaged])
+		await press("interact")
+		check(s.player.operating == -1, "R leaves the %s" % kind)
+	var x1 := s.player.position.x
+	s.ctl.yaw = PI / 2.0
+	Input.action_press("move_forward")
+	await wait(0.4)
+	Input.action_release("move_forward")
+	check(s.player.position.x < x1 - 0.5, "normal movement works again after leaving a machine")
+	s.player.position = Vector3(pad) + Vector3(-3.5, 2.0, 6.5)
+	s.ctl.yaw = -PI / 2.0 + 0.55
+	s.ctl.pitch = -0.2
+	s.ctl.cam_dist = 6.0
+	await frames(10)
+	await shot("22_siege_yard")
 	main.queue_free()
 	await frames(3)
 	print("---- smoke: %d failed ----" % _fails)

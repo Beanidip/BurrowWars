@@ -4,12 +4,13 @@ class_name ClassDefs
 const ORDER := ["digger", "scout", "builder", "saboteur"]
 
 # speed: multiplier on Config.BASE_SPEED. brush: dig radius in blocks (0 = single block).
+# power: dig hits per swing on the aimed block (default 1; brush neighbours always take 1).
 # abilities: [id, label, cooldown seconds, stamina cost]
 const CLASSES := {
 	"digger": {
-		"name": "Digger", "speed": 0.85, "stamina": 150.0, "carry": 3, "brush": 1, "water": 0.5,
+		"name": "Digger", "speed": 0.85, "stamina": 150.0, "carry": 3, "brush": 1, "power": 2, "water": 0.5,
 		"remote_shop": false, "fly": false,
-		"blurb": "Slow but unstoppable. Digs a 3x3x3 chunk per swing and hauls 3 cheese.",
+		"blurb": "Slow but unstoppable. Hits twice as hard, chews a 3x3x3 chunk per swing and hauls 3 cheese.",
 		"abilities": [["sense", "Burrow Sense", 8.0, 20.0]],
 		"kit": {},
 	},

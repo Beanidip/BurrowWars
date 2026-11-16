@@ -59,3 +59,36 @@ Bases cannot be dug or built in.
 - The 25% carry speed is brutal on purpose; highways, springs, conveyors and dashing are the answer, and it makes escorting and bonking matter.
 - Bots are honest: same dig rate, same rules. Skill only changes how long they pause after a pickup or deposit.
 - Open question for playtesting: is goal 8 the right default length? Bots at Fierce bank about 6 cheese in 2.5-4 minutes.
+
+## v1.1 additions
+
+**Vault raids.** An enemy rat inside your base for 3 s (`Config.RAID_TIME`) takes one banked
+cheese: your score drops by one and they carry it. An alarm toast and a RAID marker go out
+when it starts. While any defender stands in the base the timer is frozen. A bonk, stun or
+stepping out resets it. A thief can only take what it can carry and still has to walk home.
+
+**Carry speed by load.** 1 cheese 45%, 2 cheese 34%, 3 cheese 25% (`Config.CARRY_SPEED`).
+
+**Digger power.** Aimed block takes 2 hits per swing; the 26 blocks around it take 1.
+
+**Chisel.** Works on dirt, grass, stone, brick, wood, ice and obsidian. 9 edits per second.
+Carving returns microvoxels to a per-material spare-change bank; adding spends them; 343
+make a block. Digging a carved block returns only what is left of it. A fully carved block disappears.
+
+**Pantograph.** Copies the same materials including their carved shapes, up to 9 blocks per
+side. Paste is all-or-nothing: every cell must be free, outside both bases, clear of rats
+and machines, and paid for. Chisel Maestro pastes free in Free Build.
+
+**Mobile TNT.** Fuse 3 s, radius 2.4, power 6.5 at the centre (stationary TNT: radius 2.9,
+power 10). Damage = power x (1 - distance / radius), in dig hits, so dirt goes at the edge,
+stone near the middle, and obsidian only after repeated blasts. Rats are knocked back and
+drop one cheese; nobody is hurt. Up to 16 live sticks.
+
+**Siege.** One machine per cell, 2 of each in the pack, only your team can man or pack up
+yours. Cannon: 2.2 s reload, 3 hits on impact + 1 on the four blocks around it, knocks rats.
+Crane: left mouse pumps a pendulum; hit strength grows with ball speed, capped at 4 hits.
+Bulldozer: 3 wide x 2 high directly ahead, 2 hits, 1 s. Machines move one block per 0.45 s
+on a conveyor under or beside them, keep sliding on ice, and stop at anything solid.
+
+**New traps.** Sticky trap (enemies at half speed), pitfall (solid for your team only),
+wall spring (flings back whatever runs into it).
