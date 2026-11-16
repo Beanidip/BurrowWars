@@ -27,6 +27,19 @@ func check(cond: bool, what: String) -> void:
 		_fails += 1
 
 
+func wait(seconds: float) -> void:
+	await get_tree().create_timer(seconds, true, true).timeout
+
+
+func needs_display(cond: bool, what: String) -> void:
+	## Mouse capture does not exist on the headless display server, so these
+	## checks only run under a real or virtual display (see docs/TEST_RESULTS.md).
+	if DisplayServer.get_name() == "headless":
+		print("skip  %s  (needs a display)" % what)
+	else:
+		check(cond, what)
+
+
 func frames(n: int) -> void:
 	for i in n:
 		await get_tree().process_frame
@@ -99,12 +112,12 @@ func _run() -> void:
 	mm.relative = Vector2(120, 0)
 	Input.parse_input_event(mm)
 	await frames(3)
-	check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "mouse is captured during play")
-	check(absf(s.ctl.yaw - yaw0) > 0.1, "mouse motion turns the camera")
+	needs_display(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "mouse is captured during play")
+	needs_display(absf(s.ctl.yaw - yaw0) > 0.1, "mouse motion turns the camera")
 	s.ctl.yaw = -PI / 2.0
 	var x0 := s.player.position.x
 	Input.action_press("move_forward")
-	await frames(30)
+	await wait(0.5)
 	Input.action_release("move_forward")
 	check(s.player.position.x > x0 + 0.8, "W walks the rat forward (%.2f)" % (s.player.position.x - x0))
 	await press("camera_toggle")
@@ -128,12 +141,17 @@ func _run() -> void:
 		click.button_index = MOUSE_BUTTON_LEFT
 		click.pressed = true
 		Input.parse_input_event(click)
-		await frames(90)
+		await wait(1.6)
 		var release := InputEventMouseButton.new()
 		release.button_index = MOUSE_BUTTON_LEFT
 		release.pressed = false
 		Input.parse_input_event(release)
-		check(s.m.world.get_cell(cell) == Blocks.AIR, "holding left mouse digs the aimed block")
+		needs_display(s.m.world.get_cell(cell) == Blocks.AIR, "holding left mouse digs the aimed block")
+		if DisplayServer.get_name() == "headless":
+			for i in 3:   # same request the mouse would make, sent straight to the authority
+				s.player.dig_cd = 0.0
+				s.m.try_dig(s.player, cell)
+		check(s.m.world.get_cell(cell) == Blocks.AIR, "the aimed block is dug out")
 		check(int(s.player.mats["dirt"]) > 0, "dug dirt lands in the hotbar stash")
 		await frames(5)
 		if not s.ctl.aim.is_empty():
