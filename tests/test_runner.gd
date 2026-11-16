@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -1262,6 +1262,29 @@ func test_review_fixes() -> void:
 	end(rep)
 
 
+func test_bot_sees_cheese() -> void:
+	## A bot next to a cheese block behind a wall digs the wall first; it no
+	## longer mines cheese straight through solid stone.
+	var m := new_match()
+	flat_arena(m, ARENA, 6)
+	var cheese := ARENA + Vector3i(2, 0, 0)
+	var wall := ARENA + Vector3i(1, 0, 0)
+	m.world.set_block(cheese, Blocks.CHEESE)
+	m.world.set_block(wall, Blocks.STONE)
+	m.world.set_block(wall + Vector3i(0, 1, 0), Blocks.STONE)
+	var bot := m.spawn_rat(0, "digger", true)
+	bot.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	var wall_when_mined := -1
+	for i in int(12.0 / DT):
+		m.step(DT)
+		if m.world.get_cell(cheese) != Blocks.CHEESE:
+			wall_when_mined = m.world.get_cell(wall)
+			break
+	check(wall_when_mined != -1, "the bot gets the cheese")
+	check(wall_when_mined != Blocks.STONE, "but only after digging through the wall in front of it")
+	end(m)
+
+
 func test_dash_with_cheese() -> void:
 	var m := new_match()
 	flat_arena(m, ARENA, 9)
@@ -1425,15 +1448,20 @@ func test_cheese_drop_and_springs() -> void:
 	m.world.set_block(spring, Blocks.SPRING)
 	var drop := m.spawn_pickup("cheese", Vector3(spring) + Vector3(0.5, 2.5, 0.5), Vector3.ZERO)
 	var top := 0.0
-	for i in 90:
+	for i in 120:
 		m.step(DT)
 		top = maxf(top, drop.pos.y)
-	run(m, 0.3)
-	var top2 := 0.0
-	for i in 60:
-		m.step(DT)
-		top2 = maxf(top2, drop.pos.y)
-	check(top2 > float(spring.y) + 3.0, "a spring launches loose cheese (peak %.1f above it)" % (top2 - spring.y))
+	check(top > float(spring.y) + 4.0, "a spring launches loose cheese (peak %.1f above it)" % (top - spring.y))
+	run(m, 3.0)
+	check(Vector3i(drop.pos.floor()) - spring != Vector3i(0, 1, 0) and drop.vel.length() < 0.1, "and it hops off and comes to rest instead of bouncing forever")
+	# cheese floats in water
+	var pool := ARENA + Vector3i(4, 0, 4)
+	for dy in range(-3, 1):
+		m.world.set_block(pool + Vector3i(0, dy, 0), Blocks.WATER)
+	m.world.set_block(pool + Vector3i(0, -4, 0), Blocks.STONE)
+	var wet := m.spawn_pickup("cheese", Vector3(pool) + Vector3(0.5, -3.5, 0.5), Vector3.ZERO)
+	run(m, 2.5)
+	check(wet.pos.y > float(pool.y) - 0.1 and m.world.block_at(wet.pos) == Blocks.WATER, "loose cheese floats up to the surface of water (y %.2f)" % (wet.pos.y - pool.y))
 	# a wall spring bats it back
 	var wall := ARENA + Vector3i(0, 0, -6)
 	m.world.set_block(wall, Blocks.WALL_SPRING)

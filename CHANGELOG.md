@@ -11,6 +11,9 @@
 | Online players no longer generate a map that the server's snapshot replaces (about 0.7 s saved per join and per round) | `match/match.gd` |
 | Fix: carving, dabbing paint and breaking a block turned dirt into stone; dabs now refund (and cost in the pantograph) as dirt | `match/match.gd`, `match/blueprint.gd` |
 | Server encodes each snapshot and event batch once for all players and reads the peer list once per tick (net protocol 6) | `net/net_server.gd`, `net/net.gd` |
+| Fix: loose cheese on a spring bounced forever (and played BOING forever); each launch now nudges it sideways so it hops off | `match/match.gd` |
+| Loose cheese floats up to the surface of water instead of sinking | `match/match.gd` |
+| Fix: bots mined cheese through walls; they now need a clear line of sight, otherwise they dig toward it | `actors/bot_brain.gd` |
 | Cleanup: removed the unused Team Block ability code, `Blocks.mirror`, `LiquidFlow.wake_all`; one `MapGenerator.in_any_base` rule and one `Match.wire_aim` helper replace copied code | several |
 
 ## 1.8.0 - Team Block gadget, cheese dash, team-coloured menus (2026-11-16)

@@ -153,10 +153,14 @@ func _navigate() -> void:
 		rat.down_held = d.y < -0.4
 	# cheese block within paw's reach: mine it
 	if mode == "seek" and target_cell.y >= 0 and m.world.get_cell(target_cell) == Blocks.CHEESE:
-		if (Vector3(target_cell) + Vector3(0.5, 0.5, 0.5)).distance_to(rat.eye()) < 2.1:
-			_face(Vector3(target_cell) + Vector3(0.5, 0.5, 0.5) - rat.eye())
-			m.try_dig(rat, target_cell)
-			return
+		var to_cheese := Vector3(target_cell) + Vector3(0.5, 0.5, 0.5) - rat.eye()
+		if to_cheese.length() < 2.1:
+			# only when nothing is in between; otherwise walk (and dig) toward it like anyone else
+			var seen := m.world.raycast(rat.eye(), to_cheese, to_cheese.length() + 0.5)
+			if not seen.is_empty() and Vector3i(seen["cell"]) == target_cell:
+				_face(to_cheese)
+				m.try_dig(rat, target_cell)
+				return
 	var ax := absf(d.x)
 	var az := absf(d.z)
 	# close underneath (or on top of) the goal: go straight up or down

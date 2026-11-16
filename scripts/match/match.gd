@@ -1042,12 +1042,29 @@ func _step_pickups(dt: float) -> void:
 		if here == Blocks.LAVA or world.solid_point(p.pos):
 			p.pos.y = floorf(p.pos.y) + 1.15
 			p.vel = Vector3.ZERO
+		elif here == Blocks.WATER:
+			# cheese floats: it drifts up and bobs just under the surface
+			p.vel.y = move_toward(p.vel.y, 2.0, 25.0 * dt)
+			p.vel.x = move_toward(p.vel.x, 0.0, 4.0 * dt)
+			p.vel.z = move_toward(p.vel.z, 0.0, 4.0 * dt)
+			var wp := p.pos + p.vel * dt
+			if p.vel.y > 0.0 and world.block_at(wp + Vector3(0, 0.3, 0)) != Blocks.WATER:
+				wp.y = p.pos.y
+				p.vel.y = 0.0
+			if world.solid_point(wp):
+				wp = p.pos
+				p.vel = Vector3.ZERO
+			p.pos = wp
 		else:
 			p.vel.y = maxf(p.vel.y - 20.0 * dt, -20.0)
 			var np := p.pos + p.vel * dt
 			var below := world.block_at(Vector3(p.pos.x, np.y - 0.15, p.pos.z))
 			if below == Blocks.SPRING and p.vel.y <= 0.0:
-				p.vel.y = 13.0          # springs launch loose cheese too
+				p.vel.y = 13.0          # springs launch loose cheese too...
+				if Vector2(p.vel.x, p.vel.z).length() < 1.5:
+					var ang := _rng.randf() * TAU   # ...and nudge it sideways, so it hops off rather than bouncing forever
+					p.vel.x = cos(ang) * 2.2
+					p.vel.z = sin(ang) * 2.2
 				np.y = p.pos.y
 				fx.emit("spring", p.pos, null)
 			elif world.solid_point(Vector3(p.pos.x, np.y - 0.15, p.pos.z)) and p.vel.y <= 0.0:
