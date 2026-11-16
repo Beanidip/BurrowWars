@@ -10,7 +10,7 @@ MAPS  Esc > Export map saves the current map. Pick it under Map when you set up 
 
 DIG  Hold left mouse. Dirt takes 2 hits, stone 4, scrap 5. Mined dirt, stone, ice and obsidian go into your stash; place them with right mouse (1-4 picks the material). Wood is scenery: it breaks but gives nothing.
 
-CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying cheese slows you down, more for every extra piece (45% / 34% / 25% speed) - dash (Shift), build highways or get an escort. Walk into your base to bank it. G drops one.
+CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying cheese slows you down, more for every extra piece (45% / 34% / 25% speed), and your dash (Shift) only goes half as far - build highways or get an escort. Walk into your base to bank it. G drops one.
 
 BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a cheese and can't grab it back for 2 seconds.
 
@@ -22,7 +22,7 @@ RAIDS  Stand inside the ENEMY base for 3 seconds to steal a cheese they already 
 
 GATES  Aim at your own Team Gate and press Q to put a ladder, spring, conveyor, wall spring or highway INSIDE it: your team uses the gadget, enemies still bump into the gate. (A highway aimed at the top of a gate lies on top instead.)
 
-CLASSES  Digger: carries 3, Super Dig (E) smashes a 3x3x3. Scout: fast, sniffs out cheese. Builder: patches walls, free team gates, Team Blocks (F) only your team can stand on, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.
+CLASSES  Digger: carries 3, Super Dig (E) smashes a 3x3x3. Scout: fast, sniffs out cheese. Builder: patches walls (E), starts with Team Blocks (a Q gadget only your team can stand on; also in the workshop), free team gates, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.
 
 CHISEL (9)  Every block is 7x7x7 microvoxels. Left mouse carves one, right mouse adds one from the selected material. You climb ledges up to 4 microvoxels automatically, so you can carve stairs. Carving and refilling is zero-sum: 343 microvoxels is one block.
 

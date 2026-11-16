@@ -32,7 +32,7 @@ jackpot in the mushroom chapel at the centre, reached by the sewer that both tea
 |---|---|---|---|---|---|---|
 | Digger | 0.85 | 150 | 3 | Biggest hauler; normal dig like everyone | Super Dig: 2 hits on the aimed block + 1 on the 3x3x3 around it (1 s, 12 stamina) | - |
 | Scout | 1.25 | 100 | 2 | Full speed in water | Sniff: marks nearest cheese within 30 | Beacon: team marker, 120 s |
-| Builder | 1.0 | 100 | 2 | Remote workshop, team gates free, starts with 6 ladders, spring, 4 gates | Patch: fills a 3x3 | Team Block: a block only your team can stand on or remove (0.8 s, 12 stamina) |
+| Builder | 1.0 | 100 | 2 | Remote workshop, team gates free, starts with 6 ladders, spring, 4 gates, 6 team blocks | Patch: fills a 3x3 (5 s) | - (Team Block is now a Q gadget anyone can buy: 4 for 4 scrap) |
 | Saboteur | 1.05 | 100 | 2 | Starts with 3 TNT + 2 traps | Detonate nearest own TNT | Plant TNT at crosshair |
 | Chisel Maestro | 1.3 | 1000 | 6 | Free Build only: flight, everything free | Detonate | Patch |
 
@@ -60,6 +60,9 @@ are placed by the seed. A brick sewer runs from just outside each base to the mu
 at the centre. The ground is flat for about 15 blocks around each base.
 
 ## Hazards and safety valves
+
+Carrying cheese halves your dash, on top of the carry slowdown.
+
 
 Lava bounces a rat out on the first touch; a second touch within 8 s bounces it again, spills everything it carries right there, and sends it back to base 0.7 s later. Water slows everyone
 but Scouts. Ctrl+K respawns: cheese and the material stash are left behind as pickups.
@@ -118,7 +121,7 @@ wall spring (flings back whatever runs into it).
 - **Target square:** a see-through team-colour outline on the aimed face. The edge nearest the crosshair is solid, and a conveyor runs toward it.
 - **Keys:** R changes the Q slot, T pilots siege machines.
 - **Digger:** Burrow Sense removed. Default dig is the same as every class; Super Dig (E) is the old big dig.
-- **Builder:** Highway ability removed (highways are still sold). Team gates are free. New ability Team Block.
+- **Builder:** Highway ability removed (highways are still sold). Team gates are free. Team Block moved from an ability to a Q gadget (v1.8).
 - **Team block:** solid only for its own team. Enemies and loose objects pass through; enemies cannot dig it; its team removes it in one hit; explosions destroy it.
 - **Team gate** is a plain see-through coloured block (centre rod removed).
 - **Ice:** rats keep sliding for a moment after the ice ends; dropped cheese and stashes slide across and off it.

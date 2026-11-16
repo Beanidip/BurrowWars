@@ -60,8 +60,8 @@ const DEFS := [
 	["Wrecking Crane", 0, Color(0.75, 0.60, 0.25), true, false, ""],
 	["Bulldozer", 0, Color(0.85, 0.65, 0.20), true, false, ""],
 	# Team blocks: a floor/wall only their own team can stand on or touch.
-	["Team Block", 1, Color(0.42, 0.66, 1.0), false, true, ""],
-	["Team Block", 1, Color(1.0, 0.50, 0.45), false, true, ""],
+	["Team Block", 1, Color(0.42, 0.66, 1.0), false, true, "item:teamblock"],
+	["Team Block", 1, Color(1.0, 0.50, 0.45), false, true, "item:teamblock"],
 	# Painted blocks: dyed dirt (or stone), placed with the Paint slot, colour picked with C.
 	# Hits 3. The last 10 are see-through glass.
 	["Red Block", 3, Color(0.86, 0.22, 0.22), true, true, "mat:dirt"],

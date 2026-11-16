@@ -244,8 +244,9 @@ func _step_motion(dt: float) -> void:
 	# dash: a burst along the wish direction (or facing when standing still)
 	if dash_pressed and dash_cd <= 0.0 and stamina >= Config.DASH_COST:
 		var dir := w.normalized() if w.length() > 0.1 else Vector3(-sin(yaw), 0, -cos(yaw))
-		vel.x = dir.x * DASH_SPEED
-		vel.z = dir.z * DASH_SPEED
+		var burst := DASH_SPEED * (0.5 if carried > 0 else 1.0)   # hauling cheese: half the dash
+		vel.x = dir.x * burst
+		vel.z = dir.z * burst
 		vel.y = maxf(vel.y, 2.5)
 		stamina -= Config.DASH_COST
 		dash_t = 0.16

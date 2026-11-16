@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.0 - Team Block gadget, cheese dash, team-coloured menus (2026-11-16)
+
+| Change | Files |
+|---|---|
+| Team Block is a Q-slot gadget: Builders start with 6, anyone can buy 4 for 4 scrap, digging your own gives it back. The Builder's F ability is gone | `match/class_defs.gd`, `world/blocks.gd` |
+| Carrying cheese halves your dash | `actors/rat.gd` |
+| Menus: grained wood panels framed blue (top/left) and red (bottom/right), generated in code as a 9-slice | `ui/ui_kit.gd` |
+
 ## 1.7.0 - Big goals, map export/import, paint brush, pantograph transforms (2026-11-16)
 
 | Change | Files |

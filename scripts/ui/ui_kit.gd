@@ -1,6 +1,8 @@
 class_name UiKit
-## Shared look for every menu: wood panels, brass trim, parchment text.
-## Everything is built from StyleBoxFlat so it scales cleanly at any
+## Shared look for every menu: grained wood panels framed half in Blue and
+## half in Red (split on the diagonal, like the map: Blue's corner top-left,
+## Red's bottom-right), brass buttons, parchment text. The panel texture is
+## generated once in code and drawn as a 9-slice, so it scales cleanly at any
 ## resolution (the project uses canvas_items stretch with an expanding aspect).
 
 const WOOD_DARK := Color(0.16, 0.11, 0.07)
@@ -12,6 +14,68 @@ const INK := Color(0.18, 0.13, 0.09)
 const TEAM := [Color(0.35, 0.58, 0.98), Color(0.95, 0.38, 0.33)]
 
 static var _theme: Theme
+static var _panel_style: StyleBoxTexture
+
+const PANEL_TEX := 256       # generated texture size
+const PANEL_EDGE := 22       # 9-slice margin (border + rounded corner)
+const PANEL_RADIUS := 14.0
+const PANEL_BORDER := 6.0
+
+
+static func team_panel() -> StyleBoxTexture:
+	## The menu panel: wood grain inside a blue/red diagonal frame.
+	if _panel_style != null:
+		return _panel_style
+	var n := PANEL_TEX
+	var grain := FastNoiseLite.new()
+	grain.seed = 7
+	grain.frequency = 0.03
+	grain.fractal_octaves = 3
+	var fleck := FastNoiseLite.new()
+	fleck.seed = 11
+	fleck.frequency = 0.35
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var base := WOOD_DARK.lerp(WOOD, 0.38)
+	var blue: Color = TEAM[0]
+	var red: Color = TEAM[1]
+	for y in n:
+		for x in n:
+			# distance inside a rounded rectangle (negative = outside)
+			var qx := maxf(absf(float(x) + 0.5 - n * 0.5) - (n * 0.5 - PANEL_RADIUS), 0.0)
+			var qy := maxf(absf(float(y) + 0.5 - n * 0.5) - (n * 0.5 - PANEL_RADIUS), 0.0)
+			var inside := PANEL_RADIUS - Vector2(qx, qy).length()
+			var edge := minf(minf(float(x) + 0.5, n - float(x) - 0.5), minf(float(y) + 0.5, n - float(y) - 0.5))
+			var depth := minf(inside, edge)
+			if inside <= 0.0:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+				continue
+			var alpha := clampf(inside, 0.0, 1.0)
+			if depth <= PANEL_BORDER:
+				# frame: blue on the top-left side of the diagonal, red on the other
+				var t := clampf((float(x + y) - float(n)) * 0.5 + 0.5, 0.0, 1.0)
+				var c := blue.lerp(red, t)
+				c = c.lightened(0.18) if depth < 1.6 else c.darkened(0.05)
+				c.a = alpha
+				img.set_pixel(x, y, c)
+				continue
+			# long horizontal grain, a few flecks, and a soft vignette toward the frame
+			var g := grain.get_noise_2d(float(x) * 0.35, float(y) * 2.2) * 0.5 + 0.5
+			var f := fleck.get_noise_2d(float(x), float(y))
+			var shade := 0.82 + 0.3 * g + (0.06 if f > 0.55 else 0.0)
+			shade *= lerpf(0.78, 1.0, clampf((depth - PANEL_BORDER) / 14.0, 0.0, 1.0))
+			if depth - PANEL_BORDER < 1.5:
+				shade *= 0.6     # inner shadow line under the frame
+			var w := Color(base.r * shade, base.g * shade, base.b * shade, 1.0)
+			img.set_pixel(x, y, w)
+	var s := StyleBoxTexture.new()
+	s.texture = ImageTexture.create_from_image(img)
+	s.texture_margin_left = PANEL_EDGE
+	s.texture_margin_right = PANEL_EDGE
+	s.texture_margin_top = PANEL_EDGE
+	s.texture_margin_bottom = PANEL_EDGE
+	s.set_content_margin_all(18)
+	_panel_style = s
+	return s
 
 
 static func box(bg: Color, border: Color, radius := 8, width := 2, pad := 10) -> StyleBoxFlat:
@@ -39,7 +103,7 @@ static func theme() -> Theme:
 		t.set_color("font_hover_color", type, Color.WHITE)
 		t.set_color("font_pressed_color", type, BRASS)
 		t.set_color("font_disabled_color", type, PAPER.darkened(0.5))
-	t.set_stylebox("panel", "PanelContainer", box(WOOD_DARK.lerp(WOOD, 0.35), BRASS, 12, 3, 16))
+	t.set_stylebox("panel", "PanelContainer", team_panel())
 	t.set_stylebox("background", "ProgressBar", box(WOOD_DARK, WOOD, 6, 2, 0))
 	t.set_stylebox("fill", "ProgressBar", box(BRASS, BRASS.lightened(0.2), 6, 1, 0))
 	t.set_color("font_color", "Label", PAPER)

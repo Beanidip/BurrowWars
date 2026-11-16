@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -1053,12 +1053,13 @@ func test_team_block_and_builder() -> void:
 			m.world.set_block(ARENA + Vector3i(dx, dy, 0), Blocks.AIR)
 		m.world.set_block(ARENA + Vector3i(dx, -4, 0), Blocks.STONE)
 	var placed := 0
+	check(int(b.gadgets.get("teamblock", 0)) == 6, "Builders start with 6 team blocks")
+	b.equipped = "teamblock"
 	for dx in range(1, 4):
-		b.ability_cd = [0.0, 0.0]
-		if m.use_ability(b, 1, {"cell": ARENA + Vector3i(dx - 1, -1, 0), "normal": Vector3i(1, 0, 0)}) == "":
+		if m.try_use_equipped(b, {"cell": ARENA + Vector3i(dx - 1, -1, 0), "normal": Vector3i(1, 0, 0)}, Vector3(1, 0, 0), false) == "":
 			placed += 1
-	check(placed == 3 and m.world.get_cell(ARENA + Vector3i(2, -1, 0)) == Blocks.TEAM_BLUE, "Builder's Team Block ability places team-coloured blocks")
-	check(b.stamina < b.max_stamina(), "it costs stamina, not scrap or materials")
+	check(placed == 3 and m.world.get_cell(ARENA + Vector3i(2, -1, 0)) == Blocks.TEAM_BLUE, "Team Blocks are placed from the Q slot")
+	check(int(b.gadgets["teamblock"]) == 3, "each one uses a team block")
 	b.wish = Vector3(1, 0, 0)
 	run(m, 0.45)
 	b.wish = Vector3.ZERO
@@ -1073,14 +1074,19 @@ func test_team_block_and_builder() -> void:
 	foe.mats["dirt"] = 3
 	b.dig_cd = 0.0
 	check(m.try_dig(b, ARENA + Vector3i(3, -1, 0)) and m.world.get_cell(ARENA + Vector3i(3, -1, 0)) == Blocks.AIR, "its own team removes it in one hit")
+	check(int(b.gadgets["teamblock"]) == 4, "and gets the team block back")
 	var pk := m.spawn_pickup("stash", Vector3(ARENA) + Vector3(2.5, 0.6, 0.5), Vector3.ZERO)
 	pk.lock_id = b.id
 	pk.lock_t = 99.0
 	pk.mats = {"dirt": 1}
 	run(m, 1.0)
 	check(pk.pos.y < ARENA.y - 1.0, "loose objects drop through it as well")
-	b.ability_cd = [0.0, 0.0]
-	check(m.use_ability(b, 1, {"cell": b.feet_cell() + Vector3i(0, -1, 0), "normal": Vector3i(0, 1, 0)}) != "", "cannot be placed inside a teammate")
+	b.equipped = "teamblock"
+	check(m.try_use_equipped(b, {"cell": b.feet_cell() + Vector3i(0, -1, 0), "normal": Vector3i(0, 1, 0)}, Vector3(1, 0, 0), false) != "", "cannot be placed inside a teammate")
+	var s := arena_rat(m, 0, "scout", Vector3(-3, 0, -3))
+	s.position = MapGenerator.spawn_point(0)
+	s.scrap = 10
+	check(m.try_buy(s, "teamblock") == "" and int(s.gadgets["teamblock"]) == 4 and s.scrap == 6, "any class can buy team blocks in the workshop (4 for 4 scrap)")
 	# free gates
 	var scrap := b.scrap
 	check(int(b.gadgets["gate"]) == 4, "Builder starts with team gates")
@@ -1088,7 +1094,7 @@ func test_team_block_and_builder() -> void:
 	foe.position = MapGenerator.spawn_point(1)
 	foe.scrap = 3
 	check(m.try_buy(foe, "gate") != "" and foe.scrap == 3, "other classes still pay for gates")
-	check((b.cls["abilities"] as Array).size() == 2 and b.cls["abilities"][1][0] == "teamblock", "Highway ability is replaced by Team Block")
+	check((b.cls["abilities"] as Array).size() == 1 and b.cls["abilities"][0][0] == "patch", "Builder keeps Patch; Team Block moved to the Q slot (no F ability)")
 	end(m)
 
 
@@ -1185,6 +1191,27 @@ func test_painted_blocks() -> void:
 		r.mats["stone"] = 5
 		var dest := ARENA + Vector3i(0, 0, 3)
 		check(m.try_paste(r, res["blueprint"], dest) == "" and (m.world.micro[dest] as PackedByteArray)[0 + 7 * (0 + 7 * 6)] == 9, "and pastes it with its colours")
+	end(m)
+
+
+func test_dash_with_cheese() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 9)
+	var a := arena_rat(m, 0, "scout", Vector3(-7, 0, -3))
+	var b := arena_rat(m, 0, "scout", Vector3(-7, 0, 3))
+	run(m, 0.3)
+	b.carried = 1
+	for r in [a, b]:
+		r.yaw = -PI / 2.0      # face +x
+		r.dash_pressed = true
+	m.step(DT)
+	check(a.vel.x > Rat.DASH_SPEED * 0.9 and absf(b.vel.x - Rat.DASH_SPEED * 0.5) < 0.6, "carrying cheese halves the dash burst (%.1f vs %.1f)" % [a.vel.x, b.vel.x])
+	var a0 := a.position.x
+	var b0 := b.position.x
+	run(m, 0.4)
+	var da := a.position.x - a0
+	var db := b.position.x - b0
+	check(db < da * 0.65, "and the dash covers much less ground (%.2f vs %.2f blocks)" % [db, da])
 	end(m)
 
 
