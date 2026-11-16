@@ -392,6 +392,91 @@ func _run() -> void:
 	s.ctl.cam_dist = 6.0
 	await frames(10)
 	await shot("22_siege_yard")
+	# --- v1.2: target outline, floor-laid conveyor, key swap, team blocks, water, lava ---
+	check(Inputs.KEYS["cycle_gadget"][0] == KEY_R and Inputs.KEYS["interact"][0] == KEY_T, "R changes the Q slot, T pilots siege machines")
+	s.ctl.first_person = true
+	s.player.position = Vector3(pad) + Vector3(-3.5, 0, -4.5)
+	s.player.vel = Vector3.ZERO
+	s.player.equipped = "ladder"
+	await press("cycle_gadget")
+	check(s.player.equipped != "ladder", "pressing R cycles the Q slot (now %s)" % s.player.equipped)
+	s.player.equipped = "conveyor"
+	var floor_cell := pad + Vector3i(-2, -1, -5)
+	look_at(s, Vector3(floor_cell) + Vector3(0.85, 1.0, 0.5))      # near the +X edge of the top face
+	await frames(6)
+	check(not s.ctl.aim.is_empty() and Vector3i(s.ctl.aim["cell"]) == floor_cell, "crosshair is on the floor block")
+	check(s.ctl._highlight.visible and s.ctl.edge_dir.is_equal_approx(Vector3(1, 0, 0)), "the bright edge of the target square is the one nearest the crosshair (%s)" % str(s.ctl.edge_dir))
+	await shot("23_target_outline")
+	await press("gadget")
+	check(w.get_cell(floor_cell) == Blocks.CONV_XP and w.get_cell(floor_cell + Vector3i(0, 1, 0)) == Blocks.AIR, "Q lays the conveyor into the floor, running toward the bright edge")
+	look_at(s, Vector3(floor_cell) + Vector3(1.5, 1.0, 0.15))      # next block, near its -Z edge
+	await frames(6)
+	await press("gadget")
+	check(w.get_cell(floor_cell + Vector3i(1, 0, 0)) == Blocks.CONV_ZN, "a different edge gives a different direction")
+	# ladder stack via the real aim point
+	s.player.equipped = "ladder"
+	var lad := pad + Vector3i(-2, 0, -3)
+	w.set_block(lad, Blocks.LADDER)
+	look_at(s, Vector3(lad) + Vector3(0.2, 0.8, 0.5))
+	await frames(6)
+	await press("gadget")
+	check(w.get_cell(lad + Vector3i(0, 1, 0)) == Blocks.LADDER, "Q on the top half of a ladder stacks one above")
+	# team blocks, clear gates, water and lava for the camera
+	for i in 3:
+		w.set_block(pad + Vector3i(-5 + i, 0, 2), Blocks.TEAM_BLUE)
+		w.set_block(pad + Vector3i(-5 + i, 0, 4), Blocks.TEAM_RED)
+		w.set_block(pad + Vector3i(-1, i, 3), Blocks.GATE_BLUE)
+		w.set_block(pad + Vector3i(0, i, 3), Blocks.GATE_RED)
+	for dx in range(1, 5):
+		for dz in range(1, 5):
+			w.set_block(pad + Vector3i(dx, -1, dz), Blocks.WATER)
+			w.set_block(pad + Vector3i(dx, -2, dz), Blocks.WATER)
+			w.set_block(pad + Vector3i(dx, -3, dz), Blocks.BRICK if (dx + dz) % 2 == 0 else Blocks.GLOW)
+	s.ctl.first_person = false
+	s.player.position = Vector3(pad) + Vector3(-2.5, 0, 0.5)
+	look_at(s, Vector3(pad) + Vector3(1.5, -1.5, 3.5))
+	await frames(12)
+	await shot("24_team_blocks_gates_water")
+	s.ctl.first_person = true
+	s.player.position = Vector3(pad) + Vector3(0.5, 0.6, 2.5)
+	look_at(s, Vector3(pad) + Vector3(3.0, -2.0, 3.0))
+	await frames(12)
+	await shot("24b_water_closeup")
+	s.player.position = Vector3(pad) + Vector3(-6.5, 0.3, 3.5)
+	look_at(s, Vector3(pad) + Vector3(0.0, 1.2, 3.5))
+	await frames(12)
+	await shot("24c_gates_closeup")
+	var pool := Vector3i(-1, -1, -1)
+	for cy in range(6, 16):
+		for cz in range(4, 44):
+			for cx in range(16, 46):
+				if pool.y < 0 and w.get_block(cx, cy, cz) == Blocks.LAVA and w.get_block(cx, cy + 2, cz) == Blocks.AIR and w.get_block(cx + 2, cy, cz) == Blocks.LAVA and w.get_block(cx - 2, cy, cz) == Blocks.LAVA:
+					pool = Vector3i(cx, cy, cz)
+	check(pool.y > 0, "an underground lava pool exists on this map")
+	if pool.y > 0:
+		s.player.flying = true
+		s.ctl.first_person = true
+		s.player.position = Vector3(pool) + Vector3(0.5, 1.6, 0.5)
+		s.ctl.yaw = 0.6
+		s.ctl.pitch = -0.45
+		await frames(12)
+		await shot("25_lava_pool")
+		# open the basin wall and watch it run
+		var before_lava := count_block(w, pool + Vector3i(-8, -6, -8), Vector3i(17, 8, 17), Blocks.LAVA)
+		for dx in range(1, 9):
+			for dy in range(-1, 2):
+				if w.get_cell(pool + Vector3i(dx, dy, 0)) != Blocks.LAVA:
+					w.set_block(pool + Vector3i(dx, dy, 0), Blocks.AIR)
+		for dx in range(5, 9):
+			for dy in range(-5, -1):
+				w.set_block(pool + Vector3i(dx, dy, 0), Blocks.AIR)
+		await wait(4.0)
+		var after_lava := count_block(w, pool + Vector3i(-8, -6, -8), Vector3i(17, 8, 17), Blocks.LAVA)
+		check(after_lava > before_lava, "lava runs out through a breach and down the drop (%d -> %d blocks)" % [before_lava, after_lava])
+		s.ctl.yaw = -PI / 2.0
+		s.ctl.pitch = -0.5
+		await frames(8)
+		await shot("26_lava_flowing")
 	main.queue_free()
 	await frames(3)
 	print("---- smoke: %d failed ----" % _fails)

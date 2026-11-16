@@ -37,6 +37,7 @@ var pickups: Array[Pickup] = []
 var markers: Array[Dictionary] = []
 var tnt: Dictionary = {}        # Vector3i -> {"owner": rat id, "fuse": seconds or -1}
 var gate_damage: Dictionary = {}
+var lava: LavaFlow
 var over := false
 var winner := -1
 var time := 0.0
@@ -63,6 +64,9 @@ func setup(match_settings: Dictionary, with_visuals := true) -> void:
 	add_child(world)
 	dynamite = DynamiteSystem.new(self)
 	siege = SiegeSystem.new(self)
+	lava = LavaFlow.new(self)
+	world.block_changed.connect(lava.on_block_changed)
+	lava.wake_all()
 	world.block_changed.connect(siege.on_block_changed)
 	MapGenerator.generate(world, map_seed)
 	for cell: Vector3i in _find_blocks(Blocks.TNT):
@@ -145,6 +149,7 @@ func step(dt: float) -> void:
 	_step_tnt(dt)
 	dynamite.step(dt)
 	siege.step(dt)
+	lava.step(dt)
 	for i in range(markers.size() - 1, -1, -1):
 		markers[i]["ttl"] = float(markers[i]["ttl"]) - dt
 		if float(markers[i]["ttl"]) <= 0.0:
@@ -245,6 +250,9 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 			return true
 		fx.emit("clang", Vector3(cell), id)
 		return false
+	if Blocks.is_team_block(id) and not Blocks.solid_for(id, rat.team):
+		fx.emit("clang", Vector3(cell), id)   # the other team's block: untouchable
+		return false
 	if Blocks.is_machine(id):
 		var why := siege.try_pickup(rat, cell)
 		if why != "":
@@ -256,24 +264,26 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 		fx.emit("clang", Vector3(cell), id)
 		return false
 	var power := 99 if free_mode else 1
-	_damage(rat, cell, power if free_mode else int(rat.cls.get("power", 1)))
-	var brush := int(rat.cls["brush"])
-	var feet_y := rat.feet_cell().y
-	if brush > 0:
-		for dx in range(-brush, brush + 1):
-			for dy in range(-brush, brush + 1):
-				for dz in range(-brush, brush + 1):
-					if dx == 0 and dy == 0 and dz == 0:
-						continue
-					var c := cell + Vector3i(dx, dy, dz)
-					# Never undermine the digger's own footing unless they aim downward.
-					if c.y < feet_y and cell.y >= feet_y:
-						continue
-					# The wide brush only chews natural terrain, never gadgets or cheese.
-					var nid := world.get_cell(c)
-					if nid == Blocks.DIRT or nid == Blocks.GRASS or nid == Blocks.STONE or nid == Blocks.LEAVES:
-						_damage(rat, c, power)
+	_damage(rat, cell, power)
+	_brush(rat, cell, int(rat.cls["brush"]), power)
 	return true
+
+
+func _brush(rat: Rat, cell: Vector3i, brush: int, power: int) -> void:
+	## Wide dig around a cell. Only chews natural terrain (never gadgets or
+	## cheese) and never the floor under the digger unless they aim downward.
+	var feet_y := rat.feet_cell().y
+	for dx in range(-brush, brush + 1):
+		for dy in range(-brush, brush + 1):
+			for dz in range(-brush, brush + 1):
+				if dx == 0 and dy == 0 and dz == 0:
+					continue
+				var c := cell + Vector3i(dx, dy, dz)
+				if c.y < feet_y and cell.y >= feet_y:
+					continue
+				var nid := world.get_cell(c)
+				if nid == Blocks.DIRT or nid == Blocks.GRASS or nid == Blocks.STONE or nid == Blocks.LEAVES:
+					_damage(rat, c, power)
 
 
 func _damage(rat: Rat, cell: Vector3i, power: int, quiet := false) -> bool:
@@ -327,24 +337,26 @@ func _give_gadget(rat: Rat, gadget: String, n: int) -> void:
 
 # ---------------------------------------------------------------- placing
 
-func can_place_at(rat: Rat, cell: Vector3i, block: int) -> String:
+func can_place_at(rat: Rat, cell: Vector3i, block: int, reach := -1.0, replace := false) -> String:
 	## Returns "" when legal, otherwise a short human-readable reason.
+	## `replace` is for gadgets laid INTO an existing floor block.
 	if over:
 		return "Match is over"
 	if not VoxelWorld.in_bounds(cell) or cell.y < 1:
 		return "Out of bounds"
-	if (Vector3(cell) + Vector3(0.5, 0.5, 0.5)).distance_to(rat.eye()) > Config.DIG_REACH + 1.5:
+	if (Vector3(cell) + Vector3(0.5, 0.5, 0.5)).distance_to(rat.eye()) > (reach if reach > 0.0 else Config.DIG_REACH + 1.5):
 		return "Too far"
 	var cur := world.get_cell(cell)
-	if cur != Blocks.AIR and cur != Blocks.WATER and cur != Blocks.LAVA:
+	if not replace and cur != Blocks.AIR and cur != Blocks.WATER and cur != Blocks.LAVA:
 		return "Space is occupied"
 	for t in 2:
 		if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
 			return "Bases are protected"
-	if Blocks.SOLID[block] == 1:
-		for r in rats:
-			if r.overlaps_cell(cell) and not (Blocks.is_gate(block) and Blocks.gate_team(block) == r.team):
-				return "A rat is in the way"
+	if replace:
+		return ""
+	for r in rats:
+		if Blocks.solid_for(block, r.team) and r.overlaps_cell(cell):
+			return "A rat is in the way"
 	return ""
 
 
@@ -365,7 +377,9 @@ func try_place_mat(rat: Rat, cell: Vector3i, mat: String) -> String:
 	return ""
 
 
-func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "") -> String:
+func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vector3.ZERO, reach := -1.0, replace := false) -> String:
+	## `dir` (optional) is the direction a conveyor should run; default is the
+	## rat's facing. `replace` lays the gadget into the block at `cell`.
 	var g := gadget if gadget != "" else rat.equipped
 	if g == "" or not ClassDefs.GADGET_NAME.has(g):
 		return "Nothing equipped - buy gadgets at the workshop (B)"
@@ -374,12 +388,20 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "") -> String:
 	if not free_mode and int(rat.gadgets.get(g, 0)) <= 0:
 		return "Out of %s" % ClassDefs.GADGET_NAME[g]
 	var facing := Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
+	if absf(dir.x) + absf(dir.z) > 0.5:
+		facing = Vector3(dir.x, 0, dir.z)
 	var block := ClassDefs.gadget_block(g, rat.team, facing)
-	var why := can_place_at(rat, cell, block)
+	var old := world.get_cell(cell)
+	if replace and not _is_floor_material(cell):
+		return "Can't lay that into %s" % Blocks.block_name(old)
+	var why := can_place_at(rat, cell, block, reach, replace)
 	if why != "":
 		return why
 	if not free_mode:
 		rat.gadgets[g] = int(rat.gadgets[g]) - 1
+		if replace:   # the floor block you swapped out goes into your stash, as if dug
+			var mat := Blocks.mat_of(old)
+			rat.mats[mat] = mini(int(rat.mats[mat]) + 1, 99)
 	world.set_block(cell, block)
 	if block == Blocks.TNT:
 		tnt[cell] = {"owner": rat.id, "fuse": -1.0}
@@ -390,13 +412,41 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "") -> String:
 	return ""
 
 
-func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool) -> String:
+func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, dir := Vector3.ZERO) -> String:
 	## The Q key: throw Mobile TNT, or place the equipped gadget at the aim.
 	if rat.equipped == "dynamite":
 		return dynamite.try_throw(rat, look, gentle)
 	if aim.is_empty():
 		return "Aim at a surface to place a gadget"
-	return try_place_gadget(rat, Vector3i(aim["cell"]) + Vector3i(aim["normal"]))
+	var aimed := Vector3i(aim["cell"])
+	var normal := Vector3i(aim["normal"])
+	var g := rat.equipped
+	# Ladder aimed at a ladder: extend that stack, upward from its top half,
+	# downward from its bottom half.
+	if g == "ladder" and world.get_cell(aimed) == Blocks.LADDER:
+		var up := normal.y >= 0
+		if aim.has("point"):
+			up = float(Vector3(aim["point"]).y) - float(aimed.y) >= 0.5
+		var step := Vector3i(0, 1 if up else -1, 0)
+		var cell := aimed
+		var guard := 0
+		while world.get_cell(cell) == Blocks.LADDER and guard < VoxelWorld.SY:
+			cell += step
+			guard += 1
+		var why := try_place_gadget(rat, cell, g, Vector3.ZERO, 14.0)
+		if why == "Space is occupied":
+			return "The ladder stack is blocked %s" % ("above" if up else "below")
+		return why
+	# Highways and conveyors are laid INTO the floor block you point at.
+	if (g == "highway" or g == "conveyor") and normal.y == 1 and _is_floor_material(aimed):
+		return try_place_gadget(rat, aimed, g, dir, -1.0, true)
+	return try_place_gadget(rat, aimed + normal, g, dir)
+
+
+func _is_floor_material(cell: Vector3i) -> bool:
+	var id := world.get_cell(cell)
+	return (id == Blocks.DIRT or id == Blocks.GRASS or id == Blocks.STONE or id == Blocks.WOOD or id == Blocks.BRICK \
+		or id == Blocks.ICE) and not world.has_micro(cell)
 
 
 # ---------------------------------------------------------------- chisel
@@ -663,8 +713,9 @@ func _step_pickups(dt: float) -> void:
 				var under := Vector3i(floori(p.pos.x), floori(np.y - 0.15), floori(p.pos.z))
 				np.y = p.pos.y if world.has_micro(under) else floorf(np.y - 0.15) + 1.15
 				p.vel.y = 0.0
-				p.vel.x = move_toward(p.vel.x, 0.0, 12.0 * dt)
-				p.vel.z = move_toward(p.vel.z, 0.0, 12.0 * dt)
+				var grip := 0.6 if below == Blocks.ICE else 12.0   # loose things slide across ice and off its end
+				p.vel.x = move_toward(p.vel.x, 0.0, grip * dt)
+				p.vel.z = move_toward(p.vel.z, 0.0, grip * dt)
 				if Blocks.is_conveyor(below):
 					var push := Blocks.conveyor_dir(below) * 3.0 * dt
 					np.x += push.x
@@ -788,12 +839,12 @@ func use_ability(rat: Rat, slot: int, aim: Dictionary = {}) -> String:
 		return "Not enough stamina"
 	var err := ""
 	match String(ab[0]):
-		"sense": err = _ab_marker(rat, _nearest_poi(rat.position, 30.0), "Hollow", "No hollows within 30 blocks")
+		"superdig": err = _ab_superdig(rat, aim)
+		"teamblock": err = _ab_teamblock(rat, aim)
 		"sniff": err = _ab_marker(rat, _nearest_cheese(rat.position, 30.0), "Cheese", "No cheese scent within 30 blocks")
 		"beacon":
 			add_marker(rat.position + Vector3(0, 1, 0), "Beacon", rat.team, 120.0)
 		"patch": err = _ab_patch(rat, aim)
-		"highway": err = _ab_highway(rat)
 		"detonate": err = _ab_detonate(rat, aim)
 		"plant":
 			if aim.is_empty():
@@ -869,28 +920,36 @@ func _ab_patch(rat: Rat, aim: Dictionary) -> String:
 	return ""
 
 
-func _ab_highway(rat: Rat) -> String:
-	if not rat.on_floor:
-		return "Stand on the ground to lay a highway"
-	var f := Vector3i(roundi(-sin(rat.yaw)), 0, 0)
-	if absf(cos(rat.yaw)) > absf(sin(rat.yaw)):
-		f = Vector3i(0, 0, roundi(-cos(rat.yaw)))
-	var c := rat.feet_cell() + Vector3i(0, -1, 0)
-	var laid := 0
-	for i in 7:
-		var cell := c + f * i
-		var id := world.get_cell(cell)
-		var natural := id == Blocks.DIRT or id == Blocks.GRASS or id == Blocks.STONE or id == Blocks.AIR or id == Blocks.WOOD
-		var zone_ok := true
-		for t in 2:
-			if MapGenerator.base_zone(t).grow(1.5).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
-				zone_ok = false
-		if natural and zone_ok and VoxelWorld.in_bounds(cell) and cell.y >= 1:
-			world.set_block(cell, Blocks.HIGHWAY)
-			laid += 1
-	if laid == 0:
-		return "Can't lay a highway here"
-	fx.emit("place", Vector3(c), Blocks.HIGHWAY)
+func _ab_superdig(rat: Rat, aim: Dictionary) -> String:
+	## Digger: one heavy swing. Double damage on the aimed block plus the
+	## 3x3x3 brush around it.
+	if aim.is_empty():
+		return "Aim at something to Super Dig"
+	var cell := Vector3i(aim["cell"])
+	if (Vector3(cell) + Vector3(0.5, 0.5, 0.5)).distance_to(rat.eye()) > Config.DIG_REACH + 1.0:
+		return "Too far"
+	var id := world.get_cell(cell)
+	if Blocks.HITS[id] == 0 or id == Blocks.TNT or Blocks.is_gate(id) or Blocks.is_machine(id) or Blocks.is_team_block(id):
+		return "Super Dig needs something diggable"
+	rat.dig_cd = 1.0 / Config.DIG_RATE
+	rat.play_action("dig", 0.35)
+	_damage(rat, cell, 99 if free_mode else 2)
+	_brush(rat, cell, 1, 99 if free_mode else 1)
+	return ""
+
+
+func _ab_teamblock(rat: Rat, aim: Dictionary) -> String:
+	## Builder: a block in team colours that only teammates can stand on or
+	## remove. Enemies (and loose objects) pass straight through it.
+	if aim.is_empty():
+		return "Aim at a surface to place a Team Block"
+	var cell := Vector3i(aim["cell"]) + Vector3i(aim["normal"])
+	var block := Blocks.TEAM_BLUE if rat.team == 0 else Blocks.TEAM_RED
+	var why := can_place_at(rat, cell, block)
+	if why != "":
+		return why
+	world.set_block(cell, block)
+	fx.emit("place", Vector3(cell), block)
 	return ""
 
 
@@ -929,7 +988,7 @@ func try_buy(rat: Rat, item_id: String) -> String:
 		return "Match is over"
 	if not can_shop(rat):
 		return "Return to your base to use the workshop"
-	var cost := 0 if free_mode else int(item["cost"])
+	var cost := 0 if (free_mode or (rat.cls.get("free_items", []) as Array).has(item_id)) else int(item["cost"])
 	if rat.scrap < cost:
 		return "Need %d scrap (you have %d)" % [cost, rat.scrap]
 	var qty := int(item["qty"])

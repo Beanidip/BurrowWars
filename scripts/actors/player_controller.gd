@@ -28,8 +28,12 @@ var corner := Vector3i.ZERO
 var blueprint: Blueprint
 var paste_error := ""
 
-var _highlight: MeshInstance3D
-var _highlight_mat: StandardMaterial3D
+var edge_dir := Vector3.ZERO   # world direction of the bright edge of the target square
+
+var _highlight: Node3D
+var _edges: Array[MeshInstance3D] = []   # +X, -X, +Y, -Y in the square's own plane
+var _edge_weak: StandardMaterial3D
+var _edge_strong: StandardMaterial3D
 var _select_box: MeshInstance3D
 var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
@@ -47,12 +51,23 @@ func _ready() -> void:
 	apply_settings()
 	yaw = rat.yaw
 	var tc: Color = UiKit.TEAM[rat.team]
-	_highlight = MeshInstance3D.new()
-	var quad := QuadMesh.new()
-	quad.size = Vector2.ONE
-	_highlight.mesh = quad
-	_highlight_mat = _clear_mat(Color(tc.r, tc.g, tc.b, 0.4))
-	_highlight.material_override = _highlight_mat
+	# Target square: a see-through outline in team colour. The edge nearest
+	# the crosshair is drawn solid; that is the way a conveyor will run.
+	_highlight = Node3D.new()
+	_edge_weak = _clear_mat(Color(tc.r, tc.g, tc.b, 0.3))
+	_edge_strong = _clear_mat(Color(minf(tc.r + 0.25, 1.0), minf(tc.g + 0.25, 1.0), minf(tc.b + 0.25, 1.0), 0.95))
+	_edge_weak.no_depth_test = false
+	for i in 4:
+		var bar := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		var thick := 0.07
+		quad.size = Vector2(thick, 1.0) if i < 2 else Vector2(1.0, thick)
+		bar.mesh = quad
+		var off := 0.5 - thick * 0.5
+		bar.position = [Vector3(off, 0, 0), Vector3(-off, 0, 0), Vector3(0, off, 0), Vector3(0, -off, 0)][i]
+		bar.material_override = _edge_weak
+		_highlight.add_child(bar)
+		_edges.append(bar)
 	_highlight.visible = false
 	add_child(_highlight)
 	_select_box = MeshInstance3D.new()
@@ -131,7 +146,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("place"):
 		_secondary()
 	elif event.is_action_pressed("gadget"):
-		_say(m.try_use_equipped(rat, aim, forward(), Input.is_action_pressed("descend")))
+		_say(m.try_use_equipped(rat, aim, forward(), Input.is_action_pressed("descend"), edge_dir))
 	elif event.is_action_pressed("cycle_gadget"):
 		cycle_gadget()
 	elif event.is_action_pressed("ability_1"):
@@ -370,10 +385,12 @@ func _update_aim(eye: Vector3, fwd: Vector3, operating: bool) -> void:
 		var hit := m.world.raycast_micro(eye, dir, Config.DIG_REACH)
 		if not hit.is_empty():
 			aim = hit
+			aim["point"] = eye + dir.normalized() * float(hit["dist"])
 
 
 func _update_tool_visuals() -> void:
 	tool_text = ""
+	edge_dir = Vector3.ZERO
 	_highlight.visible = false
 	_select_box.visible = false
 	_ghost.visible = false
@@ -409,6 +426,19 @@ func _update_tool_visuals() -> void:
 		_highlight.rotation = Vector3(PI / 2.0, 0, 0)
 	else:
 		_highlight.rotation = Vector3.ZERO
+	# which edge of the square is the crosshair nearest to?
+	var local: Vector3 = _highlight.transform.affine_inverse() * Vector3(aim.get("point", _highlight.position))
+	var strong := 0
+	if absf(local.x) >= absf(local.y):
+		strong = 0 if local.x >= 0.0 else 1
+	else:
+		strong = 2 if local.y >= 0.0 else 3
+	for i in 4:
+		_edges[i].material_override = _edge_strong if i == strong else _edge_weak
+	var world_dir: Vector3 = _highlight.transform.basis * [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN][strong]
+	edge_dir = world_dir.normalized() if absf(world_dir.normalized().y) < 0.5 else Vector3.ZERO
+	if tool == Tool.DIG and rat.equipped == "conveyor" and edge_dir != Vector3.ZERO:
+		tool_text = "Conveyor will run toward the bright edge   [%s]" % Inputs.key_name("gadget")
 
 
 func _update_pantograph() -> void:

@@ -7,7 +7,7 @@ enum {
 	BEDROCK, BASE_BLUE, BASE_RED, BRICK, LEAVES, SHROOM_CAP, SHROOM_STEM, GLOW,
 	HIGHWAY, LADDER, SPRING, TNT, TRAP_BLUE, TRAP_RED,
 	CONV_XP, CONV_XN, CONV_ZP, CONV_ZN, GATE_BLUE, GATE_RED,
-	STICKY_BLUE, STICKY_RED, PIT_BLUE, PIT_RED, WALL_SPRING, CANNON, CRANE, DOZER, COUNT
+	STICKY_BLUE, STICKY_RED, PIT_BLUE, PIT_RED, WALL_SPRING, CANNON, CRANE, DOZER, TEAM_BLUE, TEAM_RED, COUNT
 }
 
 const OBSIDIAN_HITS := 12   # balance knob: ordinary dig hits to break obsidian
@@ -25,7 +25,7 @@ const DEFS := [
 	["Obsidian", OBSIDIAN_HITS, Color(0.17, 0.12, 0.24), true, true, "mat:obsidian"],
 	["Wood", 3, Color(0.62, 0.44, 0.24), true, true, "mat:wood"],
 	["Ice", 2, Color(0.70, 0.88, 0.96), true, true, "mat:ice"],
-	["Water", 0, Color(0.25, 0.52, 0.85, 0.55), false, false, ""],
+	["Water", 0, Color(0.22, 0.52, 0.90, 0.46), false, false, ""],
 	["Lava", 0, Color(1.0, 0.42, 0.08), false, false, ""],
 	["Golden Cheese", 3, Color(1.0, 0.82, 0.18), true, true, "cheese"],
 	["Bedrock", 0, Color(0.14, 0.13, 0.15), true, true, ""],
@@ -46,8 +46,8 @@ const DEFS := [
 	["Conveyor", 2, Color(0.33, 0.34, 0.38), true, true, "item:conveyor"],
 	["Conveyor", 2, Color(0.33, 0.34, 0.38), true, true, "item:conveyor"],
 	["Conveyor", 2, Color(0.33, 0.34, 0.38), true, true, "item:conveyor"],
-	["Team Gate", 0, Color(0.30, 0.52, 0.95, 0.5), true, false, "item:gate"],
-	["Team Gate", 0, Color(0.95, 0.34, 0.30, 0.5), true, false, "item:gate"],
+	["Team Gate", 0, Color(0.30, 0.52, 0.95, 0.42), true, false, "item:gate"],
+	["Team Gate", 0, Color(0.95, 0.34, 0.30, 0.42), true, false, "item:gate"],
 	["Sticky Trap", 1, Color(0.35, 0.55, 0.85), false, false, "item:sticky"],
 	["Sticky Trap", 1, Color(0.85, 0.42, 0.38), false, false, "item:sticky"],
 	["Pitfall", 1, Color(0.36, 0.58, 0.30), false, false, "item:pitfall"],
@@ -56,6 +56,9 @@ const DEFS := [
 	["Scrap Cannon", 0, Color(0.55, 0.45, 0.30), true, false, ""],
 	["Wrecking Crane", 0, Color(0.75, 0.60, 0.25), true, false, ""],
 	["Bulldozer", 0, Color(0.85, 0.65, 0.20), true, false, ""],
+	# Team blocks: a floor/wall only their own team can stand on or touch.
+	["Team Block", 1, Color(0.42, 0.66, 1.0), false, true, ""],
+	["Team Block", 1, Color(1.0, 0.50, 0.45), false, true, ""],
 ]
 
 const CHISELABLE := [DIRT, GRASS, STONE, OBSIDIAN, WOOD, ICE, BRICK]
@@ -128,6 +131,10 @@ static func mat_of(id: int) -> String:
 	return d.substr(4) if d.begins_with("mat:") else ""
 
 
+static func is_team_block(id: int) -> bool:
+	return id == TEAM_BLUE or id == TEAM_RED
+
+
 static func solid_for(id: int, team: int) -> bool:
 	## Collision rule: team gates let their own team through; a pitfall is
 	## solid ground for its owners and thin air for everyone else.
@@ -135,6 +142,8 @@ static func solid_for(id: int, team: int) -> bool:
 		return gate_team(id) != team
 	if is_pit(id):
 		return (0 if id == PIT_BLUE else 1) == team
+	if is_team_block(id):
+		return (0 if id == TEAM_BLUE else 1) == team
 	return SOLID[id] == 1
 
 

@@ -18,7 +18,8 @@ func _ready() -> void:
 		"carry_slowdown", "dig_durability_and_rate", "placement_rules", "cheese_loop_and_capacity",
 		"bonk_rules", "respawn_conserves_cheese", "economy_multiplier", "workshop_rules",
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
-		"class_permissions", "win_condition", "vault_raid", "digger_power", "save_load", "free_build",
+		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "ladder_stack_and_floor_gadgets",
+		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -55,6 +56,10 @@ func new_match(extra: Dictionary = {}) -> Match:
 func run(m: Match, seconds: float) -> void:
 	for i in int(seconds / DT):
 		m.step(DT)
+
+
+func end_noop() -> void:
+	pass
 
 
 func end(m: Match) -> void:
@@ -244,37 +249,48 @@ func test_dig_durability_and_rate() -> void:
 	run(m, 0.4)
 	m.try_dig(r, base_cell)
 	check(m.world.get_cell(base_cell) == Blocks.BASE_BLUE, "base blocks are indestructible")
-	# digger brush
+	# Digger: ordinary dig is the same as everyone's; Super Dig (ability) is the big one
 	var d := arena_rat(m, 0, "digger")
 	for dx in range(1, 4):
 		for dy in 3:
 			for dz in range(-1, 2):
 				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.DIRT)
+	var mid := ARENA + Vector3i(2, 1, 0)
+	m.world.set_block(mid, Blocks.STONE)
 	run(m, 0.4)
-	m.try_dig(d, ARENA + Vector3i(2, 1, 0))
+	m.try_dig(d, mid)
+	check(m.world.damage.size() == 1 and int(m.world.damage[mid]) == 1, "digger's normal dig hits one block for one hit")
+	run(m, 0.4)
+	var aim := {"cell": mid, "normal": Vector3i(-1, 0, 0)}
+	check(m.use_ability(d, 0, aim) == "", "Super Dig fires")
+	check(int(m.world.damage[mid]) == 3, "Super Dig hits the aimed block twice as hard")
 	var chipped := 0
-	for cell: Vector3i in m.world.damage:
-		if (cell - (ARENA + Vector3i(2, 1, 0))).abs() <= Vector3i.ONE and int(m.world.damage[cell]) == 1:
-			chipped += 1
-	check(m.world.get_cell(ARENA + Vector3i(2, 1, 0)) == Blocks.AIR and chipped == 26, "digger: aimed dirt goes in one swing, the 26 around it are chipped (%d)" % chipped)
-	m.world.set_block(ARENA + Vector3i(2, 1, 0), Blocks.DIRT)
-	run(m, 0.4)
-	m.try_dig(d, ARENA + Vector3i(2, 1, 0))
+	for dx in range(1, 4):
+		for dy in 3:
+			for dz in range(-1, 2):
+				if int(m.world.damage.get(ARENA + Vector3i(dx, dy, dz), 0)) == 1:
+					chipped += 1
+	check(chipped == 26, "and chips the 26 blocks around it (%d)" % chipped)
+	check(m.use_ability(d, 0, aim) != "", "Super Dig has a cooldown")
+	run(m, 1.1)
+	check(m.use_ability(d, 0, aim) == "", "second Super Dig")
 	var gone := 0
 	for dx in range(1, 4):
 		for dy in 3:
 			for dz in range(-1, 2):
 				if m.world.get_cell(ARENA + Vector3i(dx, dy, dz)) == Blocks.AIR:
 					gone += 1
-	check(gone == 27, "digger brush clears a 3x3x3 of dirt in two swings (%d)" % gone)
+	check(gone == 27, "two Super Digs clear a 3x3x3 with stone at its heart (%d)" % gone)
+	check(d.stamina < d.max_stamina(), "Super Dig costs stamina")
 	for dx in range(-1, 3):
 		for dz in range(-1, 2):
 			m.world.set_block(ARENA + Vector3i(dx, -1, dz), Blocks.DIRT)
 	m.world.set_block(ARENA + Vector3i(1, 0, 0), Blocks.DIRT)
 	for i in 2:
-		run(m, 0.4)
-		m.try_dig(d, ARENA + Vector3i(1, 0, 0))
-	check(m.world.get_cell(ARENA + Vector3i(0, -1, 0)) == Blocks.DIRT, "digger brush does not undermine its own footing when digging level")
+		run(m, 1.1)
+		m.use_ability(d, 0, {"cell": ARENA + Vector3i(1, 0, 0), "normal": Vector3i(-1, 0, 0)})
+	check(m.world.get_cell(ARENA + Vector3i(0, -1, 0)) == Blocks.DIRT, "Super Dig does not undermine the digger's own footing when digging level")
+	check(m.use_ability(d, 0, {"cell": Vector3i(5, MapGenerator.GROUND - 1, 24), "normal": Vector3i(0, 1, 0)}) != "", "Super Dig is refused out of reach / on base blocks")
 	end(m)
 
 
@@ -571,7 +587,7 @@ func test_ladder_spring_conveyor_gate() -> void:
 	r.position = Vector3(ARENA) + Vector3(0.5, 0, -4.5)
 	r.dig_cd = 0.0
 	m.try_dig(r, ARENA + Vector3i(0, 0, -6))
-	check(m.world.get_cell(ARENA + Vector3i(0, 0, -6)) == Blocks.AIR and int(r.gadgets.get("gate", 0)) == 1, "owner team removes and recovers its gate")
+	check(m.world.get_cell(ARENA + Vector3i(0, 0, -6)) == Blocks.AIR and int(r.gadgets.get("gate", 0)) == 5, "owner team removes and recovers its gate")
 	# ice keeps momentum
 	end(m)
 
@@ -586,11 +602,11 @@ func test_class_abilities() -> void:
 	check(scout.move_speed() > digger.move_speed(), "scout is faster than digger")
 	digger.position = Vector3(30, MapGenerator.GROUND + 4, 24)
 	scout.position = digger.position
-	check(m.use_ability(digger, 0) == "" and m.markers.size() == 1, "Burrow Sense marks a hollow")
-	check(m.use_ability(digger, 0) != "", "ability cooldown enforced")
-	check(m.use_ability(scout, 0) == "" and m.markers.size() == 2, "Sniff marks cheese")
-	check(m.use_ability(scout, 1) == "" and m.markers.size() == 3, "Beacon drops a team marker")
-	check(is_equal_approx(float(m.markers[2]["ttl"]), 120.0), "beacon lasts two minutes")
+	check((digger.cls["abilities"] as Array).size() == 1 and digger.cls["abilities"][0][0] == "superdig", "Digger's ability is Super Dig (Burrow Sense is gone)")
+	check(m.use_ability(scout, 0) == "" and m.markers.size() == 1, "Sniff marks cheese")
+	check(m.use_ability(scout, 0) != "", "ability cooldown enforced")
+	check(m.use_ability(scout, 1) == "" and m.markers.size() == 2, "Beacon drops a team marker")
+	check(is_equal_approx(float(m.markers[1]["ttl"]), 120.0), "beacon lasts two minutes")
 	flat_arena(m, ARENA)
 	builder.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
 	run(m, 0.3)
@@ -602,14 +618,12 @@ func test_class_abilities() -> void:
 			if m.world.get_cell(ARENA + Vector3i(dx, 0, dz)) == Blocks.DIRT:
 				filled += 1
 	check(filled == 9, "Patch fills a 3x3 (%d)" % filled)
-	builder.yaw = PI / 2.0   # facing -X
-	builder.stamina = 100.0
-	check(m.use_ability(builder, 1) == "", "Highway fires")
-	check(m.world.get_cell(ARENA + Vector3i(-3, -1, 0)) == Blocks.HIGHWAY, "Highway lays planks ahead")
+	m.world.set_block(ARENA + Vector3i(0, -1, 0), Blocks.HIGHWAY)
 	run(m, 0.1)
 	var base_speed := Config.BASE_SPEED * float(builder.cls["speed"])
 	check(builder.move_speed() > base_speed * 1.5, "highway boosts speed")
-	check(int(builder.gadgets.get("ladder", 0)) == 6, "builder starts with ladders")
+	check(int(builder.gadgets.get("ladder", 0)) == 6 and int(builder.gadgets.get("gate", 0)) == 4, "builder starts with ladders and team gates")
+	builder.stamina = 100.0
 	builder.stamina = 0.0
 	builder.ability_cd = [0.0, 0.0]
 	check(m.use_ability(builder, 0, aim) != "", "abilities need stamina")
@@ -751,15 +765,270 @@ func test_digger_power() -> void:
 	flat_arena(m, ARENA)
 	var d := arena_rat(m, 0, "digger")
 	var cell := ARENA + Vector3i(1, 0, 0)
-	for pair: Array in [[Blocks.STONE, 2], [Blocks.SCRAP, 3], [Blocks.OBSIDIAN, 6], [Blocks.CHEESE, 2]]:
+	for pair: Array in [[Blocks.STONE, 4], [Blocks.SCRAP, 5], [Blocks.OBSIDIAN, 12], [Blocks.CHEESE, 3]]:
 		m.world.set_block(cell, int(pair[0]))
 		var n := 0
 		while m.world.get_cell(cell) == int(pair[0]) and n < 40:
 			d.dig_cd = 0.0
 			m.try_dig(d, cell)
 			n += 1
-		check(n == int(pair[1]), "digger breaks %s in %d swings (%d)" % [Blocks.block_name(int(pair[0])), int(pair[1]), n])
+		check(n == int(pair[1]), "digger's default dig matches everyone else: %s in %d swings (%d)" % [Blocks.block_name(int(pair[0])), int(pair[1]), n])
 	end(m)
+
+
+func test_water_exit() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	# a pond flush with the ground, like the generated ones: 3 deep, 5 wide
+	for dx in range(-3, 4):
+		for dz in range(-3, 4):
+			var inside := absi(dx) <= 2 and absi(dz) <= 2
+			for dy in range(-3, 0):
+				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.WATER if inside else Blocks.STONE)
+			m.world.set_block(ARENA + Vector3i(dx, -4, dz), Blocks.STONE)
+	for cls: String in ["scout", "digger"]:
+		var r := arena_rat(m, 0, cls, Vector3(0, -2.5, 0))
+		run(m, 0.5)
+		check(r.in_water, "%s is swimming" % cls)
+		r.jump_held = true
+		r.wish = Vector3(1, 0, 0)
+		var guard := 0
+		while r.position.x < ARENA.x + 4.0 and guard < 400:
+			m.step(DT)
+			guard += 1
+		r.jump_held = false
+		r.wish = Vector3.ZERO
+		run(m, 0.6)
+		check(r.position.x > ARENA.x + 3.0 and r.position.y > ARENA.y - 0.05 and r.on_floor, "%s holds Space and climbs out onto the bank (x=%.1f y=%.2f)" % [cls, r.position.x - ARENA.x, r.position.y - ARENA.y])
+		# a single tap at the surface also works
+		r.position = Vector3(ARENA) + Vector3(0.5, -1.0, 0.5)
+		r.vel = Vector3.ZERO
+		run(m, 0.3)
+		r.jump_held = true
+		var top := -9.0
+		for i in 90:
+			m.step(DT)
+			top = maxf(top, r.position.y - ARENA.y)
+		r.jump_held = false
+		check(top > 0.4, "%s leaps clear of the surface (feet %.2f above the bank)" % [cls, top])
+		r.position = Vector3(ARENA) + Vector3(6.5, 0, 6.5 if cls == "scout" else 5.0)
+	end(m)
+
+
+func test_lava_flows() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	for i in 60:
+		m.step(0.5)     # let generated pools settle before counting
+	# a walled tank of lava two blocks above the floor
+	var tank := ARENA + Vector3i(0, 2, 0)
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			m.world.set_block(tank + Vector3i(dx, -1, dz), Blocks.STONE)
+			if dx != 0 or dz != 0:
+				m.world.set_block(tank + Vector3i(dx, 0, dz), Blocks.STONE)
+	m.world.set_block(tank, Blocks.LAVA)
+	run(m, 3.0)
+	var count := func() -> int:
+		var n := 0
+		for dx in range(-8, 9):
+			for dz in range(-8, 9):
+				for dy in range(0, 4):
+					if m.world.get_cell(ARENA + Vector3i(dx, dy, dz)) == Blocks.LAVA:
+						n += 1
+		return n
+	check(count.call() == 1, "contained lava stays put")
+	m.world.set_block(tank + Vector3i(1, 0, 0), Blocks.AIR)    # break the tank wall
+	run(m, 1.2)
+	check(m.world.get_cell(tank + Vector3i(1, 0, 0)) == Blocks.LAVA, "lava flows into the gap")
+	run(m, 6.0)
+	check(m.world.get_cell(ARENA + Vector3i(2, 0, 0)) == Blocks.LAVA, "then pours down over the edge")
+	check(m.world.get_cell(ARENA + Vector3i(4, 0, 0)) == Blocks.LAVA, "and spreads across the floor")
+	var n1: int = count.call()
+	run(m, 10.0)
+	check(count.call() == n1 and n1 < 60, "the flow comes to rest instead of flooding forever (%d blocks)" % n1)
+	check(m.world.get_cell(ARENA + Vector3i(8, 0, 0)) != Blocks.LAVA, "spread is limited to a few blocks from where it lands")
+	# plugging and hazards
+	var r := arena_rat(m, 0, "scout", Vector3(-6, 0, 0))
+	r.mats["dirt"] = 5
+	r.position = Vector3(ARENA) + Vector3(5.5, 0, 3.5)
+	run(m, 0.2)
+	var lava_cell := Vector3i.ZERO
+	for dz in range(0, 4):
+		if m.world.get_cell(ARENA + Vector3i(4, 0, dz)) == Blocks.LAVA:
+			lava_cell = ARENA + Vector3i(4, 0, dz)
+	check(m.try_place_mat(r, lava_cell, "dirt") == "", "lava can be plugged with a block")
+	r.carried = 1
+	r.position = Vector3(ARENA) + Vector3(3.5, 0.2, 0.5)
+	m.step(DT)
+	check(m.in_base(r) and r.carried == 0, "touching lava sends a rat home without its cheese (nobody dies)")
+	# generated pools exist on both halves
+	var per_half := [0, 0]
+	var fresh := new_match()
+	for i in fresh.world.data.size():
+		if fresh.world.data[i] == Blocks.LAVA and i / (VoxelWorld.SX * VoxelWorld.SZ) >= 5:
+			per_half[0 if i % VoxelWorld.SX < VoxelWorld.SX / 2 else 1] += 1
+	check(per_half[0] > 20 and per_half[0] == per_half[1], "underground lava pools are generated and mirrored (%d per side)" % per_half[0])
+	end(fresh)
+	end(m)
+
+
+func test_ladder_stack_and_floor_gadgets() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var r := arena_rat(m, 0, "builder")
+	run(m, 0.2)
+	r.equipped = "ladder"
+	var base := ARENA + Vector3i(2, 0, 0)
+	var look := Vector3(1, 0, 0)
+	check(m.try_use_equipped(r, {"cell": base + Vector3i(0, -1, 0), "normal": Vector3i(0, 1, 0)}, look, false) == "", "first ladder placed on the floor")
+	# aim at the top half -> goes on top of the stack, wherever its top is
+	for i in 3:
+		check(m.try_use_equipped(r, {"cell": base, "normal": Vector3i(-1, 0, 0), "point": Vector3(base) + Vector3(0, 0.8, 0.5)}, look, false) == "", "extend upward")
+	var h := 0
+	while m.world.get_cell(base + Vector3i(0, h, 0)) == Blocks.LADDER:
+		h += 1
+	check(h == 4, "aiming at the top half stacks ladders upward (%d tall)" % h)
+	check(int(r.gadgets["ladder"]) == 2, "each one is paid for")
+	# a shaft below: aim at the bottom half -> goes under the stack
+	for dy in range(-3, 0):
+		m.world.set_block(base + Vector3i(0, dy, 0), Blocks.AIR)
+	check(m.try_use_equipped(r, {"cell": base, "normal": Vector3i(-1, 0, 0), "point": Vector3(base) + Vector3(0, 0.2, 0.5)}, look, false) == "", "extend downward")
+	check(m.world.get_cell(base + Vector3i(0, -1, 0)) == Blocks.LADDER and m.world.get_cell(base + Vector3i(0, 4, 0)) == Blocks.AIR, "aiming at the bottom half adds below the stack")
+	m.world.set_block(base + Vector3i(0, 4, 0), Blocks.STONE)
+	check(m.try_use_equipped(r, {"cell": base, "normal": Vector3i(-1, 0, 0), "point": Vector3(base) + Vector3(0, 0.9, 0.5)}, look, false) != "" and int(r.gadgets["ladder"]) == 1, "a blocked stack refuses and costs nothing")
+	# conveyors and highways are laid INTO the aimed floor block
+	r.gadgets["conveyor"] = 3
+	r.gadgets["highway"] = 2
+	r.equipped = "conveyor"
+	var floor_cell := ARENA + Vector3i(0, -1, 2)
+	var stone_before := int(r.mats["stone"])
+	var aim := {"cell": floor_cell, "normal": Vector3i(0, 1, 0)}
+	check(m.try_use_equipped(r, aim, look, false, Vector3(0, 0, -1)) == "", "conveyor placed")
+	check(m.world.get_cell(floor_cell) == Blocks.CONV_ZN and m.world.get_cell(floor_cell + Vector3i(0, 1, 0)) == Blocks.AIR, "it replaces the floor block, flush with the ground")
+	check(int(r.mats["stone"]) == stone_before + 1, "the swapped-out stone goes to the stash")
+	for pair: Array in [[Vector3(1, 0, 0), Blocks.CONV_XP], [Vector3(-1, 0, 0), Blocks.CONV_XN], [Vector3(0, 0, 1), Blocks.CONV_ZP]]:
+		r.gadgets["conveyor"] = 3
+		var c2 := floor_cell + Vector3i(2, 0, 0)
+		m.world.set_block(c2, Blocks.STONE)
+		m.try_use_equipped(r, {"cell": c2, "normal": Vector3i(0, 1, 0)}, look, false, pair[0])
+		check(m.world.get_cell(c2) == int(pair[1]), "conveyor runs toward the chosen edge %s" % str(pair[0]))
+	r.yaw = PI   # facing +Z
+	m.world.set_block(floor_cell + Vector3i(2, 0, 0), Blocks.STONE)
+	m.try_use_equipped(r, {"cell": floor_cell + Vector3i(2, 0, 0), "normal": Vector3i(0, 1, 0)}, look, false)
+	check(m.world.get_cell(floor_cell + Vector3i(2, 0, 0)) == Blocks.CONV_ZP, "with no edge given it falls back to the rat's facing")
+	r.equipped = "highway"
+	check(m.try_use_equipped(r, {"cell": ARENA + Vector3i(-1, -1, 0), "normal": Vector3i(0, 1, 0)}, look, false) == "" and m.world.get_cell(ARENA + Vector3i(-1, -1, 0)) == Blocks.HIGHWAY, "highway is laid into the floor too")
+	# aimed at a wall face it still goes in the free cell next to it
+	m.world.set_block(ARENA + Vector3i(3, 0, 3), Blocks.STONE)
+	check(m.try_use_equipped(r, {"cell": ARENA + Vector3i(3, 0, 3), "normal": Vector3i(-1, 0, 0)}, look, false) == "" and m.world.get_cell(ARENA + Vector3i(2, 0, 3)) == Blocks.HIGHWAY, "on a side face the gadget goes beside the block")
+	r.gadgets["highway"] = 1
+	check(m.try_use_equipped(r, {"cell": Vector3i(5, MapGenerator.GROUND - 1, 24), "normal": Vector3i(0, 1, 0)}, look, false) != "" and int(r.gadgets["highway"]) == 1, "base floor cannot be converted")
+	end(m)
+
+
+func test_team_block_and_builder() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var b := arena_rat(m, 0, "builder")
+	var foe := arena_rat(m, 1, "scout", Vector3(4, 0, 0))
+	run(m, 0.2)
+	# a bridge of team blocks over a gap
+	for dx in range(1, 4):
+		for dy in range(-3, 0):
+			m.world.set_block(ARENA + Vector3i(dx, dy, 0), Blocks.AIR)
+		m.world.set_block(ARENA + Vector3i(dx, -4, 0), Blocks.STONE)
+	var placed := 0
+	for dx in range(1, 4):
+		b.ability_cd = [0.0, 0.0]
+		if m.use_ability(b, 1, {"cell": ARENA + Vector3i(dx - 1, -1, 0), "normal": Vector3i(1, 0, 0)}) == "":
+			placed += 1
+	check(placed == 3 and m.world.get_cell(ARENA + Vector3i(2, -1, 0)) == Blocks.TEAM_BLUE, "Builder's Team Block ability places team-coloured blocks")
+	check(b.stamina < b.max_stamina(), "it costs stamina, not scrap or materials")
+	b.wish = Vector3(1, 0, 0)
+	run(m, 0.45)
+	b.wish = Vector3.ZERO
+	run(m, 0.3)
+	check(b.position.y > ARENA.y - 0.05 and b.position.x > ARENA.x + 1.2, "the owning team walks across")
+	foe.position = Vector3(ARENA) + Vector3(2.5, 0.3, 0.5)
+	foe.vel = Vector3.ZERO
+	run(m, 0.8)
+	check(foe.position.y < ARENA.y - 1.5, "the other team falls straight through")
+	foe.dig_cd = 0.0
+	check(not m.try_dig(foe, ARENA + Vector3i(2, -1, 0)) and m.world.get_cell(ARENA + Vector3i(2, -1, 0)) == Blocks.TEAM_BLUE, "enemies cannot dig it")
+	foe.mats["dirt"] = 3
+	b.dig_cd = 0.0
+	check(m.try_dig(b, ARENA + Vector3i(3, -1, 0)) and m.world.get_cell(ARENA + Vector3i(3, -1, 0)) == Blocks.AIR, "its own team removes it in one hit")
+	var pk := m.spawn_pickup("stash", Vector3(ARENA) + Vector3(2.5, 0.6, 0.5), Vector3.ZERO)
+	pk.lock_id = b.id
+	pk.lock_t = 99.0
+	pk.mats = {"dirt": 1}
+	run(m, 1.0)
+	check(pk.pos.y < ARENA.y - 1.0, "loose objects drop through it as well")
+	b.ability_cd = [0.0, 0.0]
+	check(m.use_ability(b, 1, {"cell": b.feet_cell() + Vector3i(0, -1, 0), "normal": Vector3i(0, 1, 0)}) != "", "cannot be placed inside a teammate")
+	# free gates
+	var scrap := b.scrap
+	check(int(b.gadgets["gate"]) == 4, "Builder starts with team gates")
+	check(m.try_buy(b, "gate") == "" and b.scrap == scrap and int(b.gadgets["gate"]) == 5, "Builder gets team gates free at the workshop")
+	foe.position = MapGenerator.spawn_point(1)
+	foe.scrap = 3
+	check(m.try_buy(foe, "gate") != "" and foe.scrap == 3, "other classes still pay for gates")
+	check((b.cls["abilities"] as Array).size() == 2 and b.cls["abilities"][1][0] == "teamblock", "Highway ability is replaced by Team Block")
+	end(m)
+
+
+func test_ice_slides_off_the_end() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 10)
+	for dx in range(-6, 1):
+		m.world.set_block(ARENA + Vector3i(dx, -1, 0), Blocks.ICE)
+	var r := arena_rat(m, 0, "scout", Vector3(-6, 0, 0))
+	run(m, 0.3)
+	r.wish = Vector3(1, 0, 0)
+	while r.position.x < ARENA.x - 0.2:
+		m.step(DT)
+	r.wish = Vector3.ZERO      # let go just before the last ice block
+	var v0 := Vector2(r.vel.x, r.vel.z).length()
+	run(m, 0.5)
+	check(r.position.x > ARENA.x + 1.6, "a rat slides off the end of the ice instead of stopping at it (%.2f past)" % (r.position.x - ARENA.x - 1.0))
+	run(m, 1.5)
+	check(Vector2(r.vel.x, r.vel.z).length() < 0.2 and v0 > 3.0, "and comes to rest on normal ground")
+	# the same run on stone stops almost at once
+	r.position = Vector3(ARENA) + Vector3(-6.5, 0, 4.5)
+	r.vel = Vector3.ZERO
+	run(m, 0.6)
+	r.wish = Vector3(1, 0, 0)
+	run(m, 0.8)
+	r.wish = Vector3.ZERO
+	var x := r.position.x
+	run(m, 0.5)
+	check(r.position.x - x < 0.5, "ordinary ground still stops you promptly")
+	# loose objects
+	var pk := m.spawn_pickup("stash", Vector3(ARENA) + Vector3(-5.5, 0.2, 0.5), Vector3(5.0, 0, 0))
+	pk.lock_id = r.id
+	pk.lock_t = 99.0
+	pk.mats = {"dirt": 1}
+	run(m, 2.5)
+	check(pk.pos.x > ARENA.x + 1.0, "a sliding object leaves the end of the ice (x=%.1f)" % (pk.pos.x - ARENA.x))
+	end(m)
+
+
+func test_scrap_abundance() -> void:
+	var total := 0
+	var solid := 0
+	for seed_n: int in [7, 21, 4242]:
+		var m := new_match({"seed": seed_n})
+		for id in m.world.data:
+			if id == Blocks.SCRAP:
+				total += 1
+			if id == Blocks.STONE or id == Blocks.DIRT or id == Blocks.SCRAP:
+				solid += 1
+		end(m)
+	var pct := 100.0 * total / solid
+	print("    scrap: %d blocks per map on average, %.2f%% of diggable ground" % [total / 3, pct])
+	check(total / 3 > 500, "plenty of scrap on a map (%d)" % (total / 3))
+	end_noop()
 
 
 func test_bots_complete_a_match() -> void:

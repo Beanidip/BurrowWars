@@ -74,6 +74,20 @@ static func generate(world: VoxelWorld, map_seed: int) -> void:
 					id = Blocks.AIR
 				world.set_raw(x, y, z, id)
 
+	# --- lava pools: molten basins in their own caverns. They sit still until
+	# someone digs a way out, then LavaFlow takes over. --------------------
+	for i in 3:
+		var lc0 := Vector3i(rng.randi_range(18, 43), rng.randi_range(6, 13), rng.randi_range(6, 41))
+		for dx in range(-3, 4):
+			for dz in range(-3, 4):
+				for dy in range(-2, 3):
+					if float(dx * dx) / 10.0 + float(dz * dz) / 10.0 + float(dy * dy) / 4.5 > 1.0:
+						continue
+					if lc0.x + dx >= HALF - 1 or lc0.y + dy < 2:
+						continue
+					world.set_raw(lc0.x + dx, lc0.y + dy, lc0.z + dz, Blocks.LAVA if dy < 0 else Blocks.AIR)
+		world.points_of_interest.append(Vector3(lc0) + Vector3(0.5, 0.5, 0.5))
+
 	# --- sewer: a brick tunnel from each side toward the centre ------------
 	for x in range(14, HALF):
 		for z in range(MID_Z - 3, MID_Z + 3):
@@ -114,9 +128,9 @@ static func generate(world: VoxelWorld, map_seed: int) -> void:
 	world.points_of_interest.append(Vector3(HALF, 21, MID_Z))
 
 	# --- resource deposits -------------------------------------------------
-	for i in 8:
+	for i in 15:
 		var s := rng.randi_range(2, 4)
-		var cx := rng.randi_range(10, 20) if i < 2 else rng.randi_range(14, 44)
+		var cx := rng.randi_range(10, 20) if i < 3 else rng.randi_range(14, 45)
 		_blob(world, Vector3i(cx, rng.randi_range(5, 22), rng.randi_range(3, 44)), s, Blocks.SCRAP)
 	for i in 2:
 		var c := Vector3i(rng.randi_range(26, 43), rng.randi_range(6, 13), rng.randi_range(5, 42))

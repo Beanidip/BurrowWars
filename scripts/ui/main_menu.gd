@@ -12,11 +12,11 @@ CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying ch
 
 BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a cheese and can't grab it back for 2 seconds.
 
-SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Q places the equipped gadget, T cycles, I opens your pack.
+SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Conveyors and highways are laid into the floor you aim at; a conveyor runs toward the bright edge of your target square. Aim at a ladder and press Q to extend it up or down. Q places the equipped gadget, R changes it, I opens your pack.
 
 RAIDS  Stand inside the ENEMY base for 3 seconds to steal a cheese they already banked. Everyone hears the alarm, and any defender standing in their own base locks the vault - so guard it, gate it, trap it.
 
-CLASSES  Digger: hits twice as hard, huge brush, carries 3. Scout: fast, sniffs out cheese. Builder: patches walls, lays highways, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.
+CLASSES  Digger: carries 3, Super Dig (E) smashes a 3x3x3. Scout: fast, sniffs out cheese. Builder: patches walls, free team gates, Team Blocks (F) only your team can stand on, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.
 
 CHISEL (9)  Every block is 7x7x7 microvoxels. Left mouse carves one, right mouse adds one from the selected material. You climb ledges up to 4 microvoxels automatically, so you can carve stairs. Carving and refilling is zero-sum: 343 microvoxels is one block.
 
@@ -24,7 +24,7 @@ PANTOGRAPH (0)  Left-click two corners to copy a build (up to 9 blocks a side, c
 
 MOBILE TNT  Q throws a bouncing dynamite stick (Ctrl+Q sets it down). Springs launch it, conveyors carry it, ice lets it slide, wall springs bat it back, glue stops it, pitfalls swallow it.
 
-SIEGE  Buy a Scrap Cannon, Wrecking Crane or Bulldozer, place it with Q, look at it and press R. Mouse aims, left mouse works it, R leaves. Machines have no engines: put conveyors under or beside them. Stone shrugs off light hits; obsidian (12 hits) laughs at most things.
+SIEGE  Buy a Scrap Cannon, Wrecking Crane or Bulldozer, place it with Q, look at it and press T. Mouse aims, left mouse works it, T leaves. Machines have no engines: put conveyors under or beside them. Stone shrugs off light hits; obsidian (12 hits) laughs at most things.
 
 ALSO  V toggles first/third person. Ctrl+K respawns at base (you leave your cheese and materials behind). Lava sends you home. Esc pauses."""
 

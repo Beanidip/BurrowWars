@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.0 - Playtest changes (2026-11-16)
+
+| Change | Files |
+|---|---|
+| Rats can leap out of water (hold or tap Space at the surface) | `actors/rat.gd` |
+| Flowing lava + three underground lava basins per side | `match/lava_flow.gd` (new), `world/map_generator.gd`, `match/match.gd` |
+| Q on a ladder extends the stack up or down by which half you aim at | `match/match.gd` |
+| R changes the Q slot; T pilots siege machines | `core/inputs.gd` |
+| Digger: Burrow Sense removed, normal dig by default, Super Dig ability | `match/class_defs.gd`, `match/match.gd` |
+| Builder: free team gates, Team Block ability replaces Highway | `match/class_defs.gd`, `match/match.gd`, `ui/hud.gd` |
+| Team blocks (solid for one team only) | `world/blocks.gd`, `world/chunk_mesher.gd` |
+| Team gate is a plain transparent block; water is more see-through | `world/chunk_mesher.gd`, `world/blocks.gd` |
+| Highways and conveyors are laid into the aimed floor block | `match/match.gd` |
+| Outline target square; bright edge sets conveyor direction | `actors/player_controller.gd` |
+| Ice: rats and loose objects slide off the end | `actors/rat.gd`, `match/match.gd` |
+| Roughly twice the scrap | `world/map_generator.gd` |
+
+Tests: 467 assertions in 43 tests; smoke test 76 steps. One thing to know if you
+rebound keys earlier: saved custom bindings win over the new R / T defaults.
+
 ## 1.1.0 - Siege Engineering & Advanced Voxel Tools (2026-11-16)
 
 Built on top of the 1.0 jam project; nothing was rebuilt.

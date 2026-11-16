@@ -1,6 +1,6 @@
 # Test results
 
-Only tests that were actually executed are listed. Last full run: 2026-11-16 (v1.1).
+Only tests that were actually executed are listed. Last full run: 2026-11-16 (v1.2).
 Engine: Godot 4.7.2.stable.official.ed1daf0bf, Linux x86_64.
 
 ## Executed and passing
@@ -9,8 +9,8 @@ Engine: Godot 4.7.2.stable.official.ed1daf0bf, Linux x86_64.
 |---|---|---|
 | Import + editor validation | `godot --headless --path . --editor --quit` | Pass, no script or resource errors |
 | Boot main scene | `godot --headless --path . --quit-after 120` | Pass |
-| App-flow smoke test (headless) | `godot --headless --path . res://tests/smoke_runner.tscn` | 64 checks pass, 3 skipped (mouse capture needs a display) |
-| Gameplay regression suite | `godot --headless --path . res://tests/test_runner.tscn` | 37 tests, 411 assertions, 0 failed |
+| App-flow smoke test (headless) | `godot --headless --path . res://tests/smoke_runner.tscn` | 73 checks pass, 3 skipped (mouse capture needs a display) |
+| Gameplay regression suite | `godot --headless --path . res://tests/test_runner.tscn` | 43 tests, 467 assertions, 0 failed |
 | App-flow smoke test on a virtual display (Xvfb, Mesa llvmpipe, OpenGL Compatibility) | same scene with `--rendering-driver opengl3` | 67 checks pass, 0 skipped, at 1280x720, 1920x1080 and 5120x1440 (v1.1) |
 | UI fit at each target resolution | smoke test at 1280x720, 1920x1080, 2560x1440, 3440x1440, 5120x1440 | Pass at all five for v1.0; v1.1 re-run at 1280x720, 1920x1080 and 5120x1440 only |
 | Gate self-test | made a bonk drop 2 cheese; added a parse error | `tools/check.sh` exited non-zero both times |
@@ -66,6 +66,23 @@ switch tools, the crosshair picks a single microvoxel, right mouse adds one, X r
 right mouse pastes, Q throws, R mans and leaves each machine, the mouse aims it, and each
 machine visibly chews a stone wall. Screenshots: `docs/screenshots/chisel.jpg`,
 `pantograph.jpg`, `cannon.jpg`, `crane.jpg`, `bulldozer.jpg`, `siege_yard.jpg`.
+
+## v1.2 changes and how each was checked
+
+| Change | Automated test | Also seen in the running game |
+|---|---|---|
+| Leap out of water | `water_exit` (Scout and Digger, hold and tap) | - |
+| Lava flows, rests, can be plugged, pools mirrored | `lava_flows` | breach a basin and watch it run (screenshots `lava_pool`, `lava_flowing`) |
+| Ladder stack up / down, blocked stack refuses | `ladder_stack_and_floor_gadgets` | Q on a ladder's top half via the real crosshair |
+| Conveyor / highway laid into the floor; edge sets direction | `ladder_stack_and_floor_gadgets` | bright edge matches the crosshair, Q lays it that way (`target_outline`) |
+| R / T key swap | - | R cycles the Q slot; T mans each machine |
+| Super Dig, default dig equal to other classes | `dig_durability_and_rate`, `digger_power`, `class_abilities` | - |
+| Team Block rules, free gates for Builder | `team_block_and_builder` | `team_blocks_gates_water` |
+| Gate without rod, water see-through | - | looked at close-up screenshots |
+| Ice slide-off for rats and objects | `ice_slides_off_the_end` | - |
+| More scrap | `scrap_abundance` (about 870 blocks per map) | - |
+
+The display smoke run for v1.2 was at 1280x720 only (76 steps, 0 failed).
 
 ## Not executed
 

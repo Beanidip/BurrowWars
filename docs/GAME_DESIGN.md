@@ -30,9 +30,9 @@ jackpot in the mushroom chapel at the centre, reached by the sewer that both tea
 
 | Class | Speed | Stamina | Carry | Identity | E | F |
 |---|---|---|---|---|---|---|
-| Digger | 0.85 | 150 | 3 | 3x3x3 brush on natural terrain | Burrow Sense: marks nearest hollow/ruin within 30 | - |
+| Digger | 0.85 | 150 | 3 | Biggest hauler; normal dig like everyone | Super Dig: 2 hits on the aimed block + 1 on the 3x3x3 around it (1 s, 12 stamina) | - |
 | Scout | 1.25 | 100 | 2 | Full speed in water | Sniff: marks nearest cheese within 30 | Beacon: team marker, 120 s |
-| Builder | 1.0 | 100 | 2 | Remote workshop, starts with 6 ladders + spring | Patch: fills a 3x3 | Highway: 7 planks ahead, +60% speed |
+| Builder | 1.0 | 100 | 2 | Remote workshop, team gates free, starts with 6 ladders, spring, 4 gates | Patch: fills a 3x3 | Team Block: a block only your team can stand on or remove (0.8 s, 12 stamina) |
 | Saboteur | 1.05 | 100 | 2 | Starts with 3 TNT + 2 traps | Detonate nearest own TNT | Plant TNT at crosshair |
 | Chisel Maestro | 1.3 | 1000 | 6 | Free Build only: flight, everything free | Detonate | Patch |
 
@@ -92,3 +92,18 @@ on a conveyor under or beside them, keep sliding on ice, and stop at anything so
 
 **New traps.** Sticky trap (enemies at half speed), pitfall (solid for your team only),
 wall spring (flings back whatever runs into it).
+
+## v1.2 changes
+
+- **Water:** hold or tap Space at the surface to leap out. Water is drawn see-through.
+- **Lava flows.** Three molten basins per side sit in their own caverns. Open one and lava pours down any gap and creeps up to 3 blocks sideways from where it lands, then rests. Plug it with any block. `LavaFlow` constants: tick 0.45 s, reach 3, cap 1200 blocks per match.
+- **Ladders:** Q while aiming at a ladder extends that stack - upward from its top half, downward from its bottom half - even when the end of the stack is out of normal reach.
+- **Highways and conveyors** are laid into the floor block you aim at (dirt, grass, stone, wood, brick, ice); the block you swap out goes to your stash. Aimed at a wall they go beside it as before.
+- **Target square:** a see-through team-colour outline on the aimed face. The edge nearest the crosshair is solid, and a conveyor runs toward it.
+- **Keys:** R changes the Q slot, T pilots siege machines.
+- **Digger:** Burrow Sense removed. Default dig is the same as every class; Super Dig (E) is the old big dig.
+- **Builder:** Highway ability removed (highways are still sold). Team gates are free. New ability Team Block.
+- **Team block:** solid only for its own team. Enemies and loose objects pass through; enemies cannot dig it; its team removes it in one hit; explosions destroy it.
+- **Team gate** is a plain see-through coloured block (centre rod removed).
+- **Ice:** rats keep sliding for a moment after the ice ends; dropped cheese and stashes slide across and off it.
+- **Scrap:** 15 deposits per side instead of 8 - about 870 scrap blocks per map.

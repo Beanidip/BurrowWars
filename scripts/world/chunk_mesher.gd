@@ -37,7 +37,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 					_micro_block(world, ov, oc, Vector3i(x, y, z), id, tint * depth)
 					continue
 				if opaque[id] == 1:
-					var glow := id == Blocks.CHEESE or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED
+					var glow := id == Blocks.CHEESE or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED or Blocks.is_team_block(id)
 					var base := col * (tint if glow else tint * depth)
 					for f in 6:
 						var ax: int = x + NX[f]
@@ -89,9 +89,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 							else:
 								_face(tv, tc, mn, mn + Vector3(1, top, 1), f, _shade(col, SHADE[f]))
 					Blocks.GATE_BLUE, Blocks.GATE_RED:
-						_box(tv, tc, mn + Vector3(0.02, 0.02, 0.02), mn + Vector3(0.98, 0.98, 0.98), col)
-						var bar := Color(col.r, col.g, col.b, 1.0)
-						_box(ov, oc, mn + Vector3(0.45, 0, 0.45), mn + Vector3(0.55, 1, 0.55), bar)
+						_box(tv, tc, mn + Vector3(0.01, 0.01, 0.01), mn + Vector3(0.99, 0.99, 0.99), col)
 					Blocks.LADDER:
 						var wood := col * depth
 						_box(ov, oc, mn + Vector3(0.12, 0, 0.44), mn + Vector3(0.22, 1, 0.56), wood)

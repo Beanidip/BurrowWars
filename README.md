@@ -28,7 +28,7 @@ From a terminal: `godot --path .`
 | Input | Action | Input | Action |
 |---|---|---|---|
 | WASD / mouse | Move / look | Q | Place equipped gadget |
-| Space | Jump, double jump, climb, swim up | T | Cycle equipped gadget |
+| Space | Jump, double jump, climb, swim up | R | Change the Q slot gadget |
 | Shift | Dash | E / F | Class abilities |
 | Left mouse | Dig / bonk | B | Workshop (at base; Builder anywhere) |
 | Right mouse | Place selected material | I | Inventory |
@@ -37,7 +37,7 @@ From a terminal: `godot --path .`
 | Ctrl | Climb down / fly down | Esc | Pause, settings, key rebinding |
 | N, F5, F9 | Free Build: fly, save map, load map | Mouse wheel | Camera distance |
 | 9 | Chisel: LMB carve, RMB add a microvoxel | 0 | Pantograph: click 2 corners, RMB paste, X rotate |
-| R | Man / leave a siege machine | Ctrl+Q | Set Mobile TNT down gently |
+| T | Pilot / leave a siege machine | Ctrl+Q | Set Mobile TNT down gently |
 | 5 | Obsidian | | |
 
 ## Verify

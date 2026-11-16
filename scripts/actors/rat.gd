@@ -37,6 +37,7 @@ var mats := {"dirt": 0, "stone": 0, "wood": 0, "ice": 0, "obsidian": 0}
 var gadgets: Dictionary = {}
 var equipped := ""
 var raid_t := 0.0
+var ice_t := 0.0
 var kits_claimed: Dictionary = {}
 var class_cd := 0.0
 var micro_bank: Dictionary = {}   # material -> spare microvoxels (343 = one block)
@@ -159,10 +160,13 @@ func step(dt: float) -> void:
 
 	var body_id := _world.block_at(center())
 	in_water = body_id == Blocks.WATER
+	# feet in water but chest out: at the surface, able to hop onto the bank
+	var wading := not in_water and _world.block_at(position + Vector3(0, 0.1, 0)) == Blocks.WATER
 	on_ladder = not flying and (body_id == Blocks.LADDER or _world.block_at(position + Vector3(0, 0.1, 0)) == Blocks.LADDER)
 	var floor_id := _world.block_at(position - Vector3(0, 0.1, 0)) if on_floor else Blocks.AIR
 	var speed := move_speed()
 	var target := w * speed
+	ice_t = 0.45 if floor_id == Blocks.ICE else maxf(0.0, ice_t - dt)
 
 	if flying:
 		vel = target * 2.2
@@ -179,8 +183,8 @@ func step(dt: float) -> void:
 	var accel := 60.0
 	if knock > 0.0 or dash_t > 0.0:
 		accel = 2.0
-	elif floor_id == Blocks.ICE:
-		accel = 5.0
+	elif ice_t > 0.0:
+		accel = 5.0     # on ice, and for a moment after sliding off its end
 	elif not on_floor and not on_ladder and not in_water:
 		accel = 22.0
 	var hv := Vector3(vel.x, 0, vel.z).move_toward(target * (0.6 if on_ladder else 1.0), accel * dt)
@@ -198,9 +202,14 @@ func step(dt: float) -> void:
 	elif in_water:
 		vel.y = move_toward(vel.y, 3.6 if jump_held else -2.0, 20.0 * dt)
 		jumps_left = 1
+		if jump_pressed and _world.block_at(position + Vector3(0, HEIGHT + 0.3, 0)) != Blocks.WATER:
+			vel.y = JUMP_SPEED      # kick off just under the surface
 	else:
 		vel.y -= GRAVITY * dt
-		if jump_pressed:
+		if wading and (jump_pressed or jump_held) and vel.y < 3.7:
+			vel.y = JUMP_SPEED      # leap out of the water instead of bobbing at the surface
+			jumps_left = 1
+		elif jump_pressed:
 			if on_floor:
 				vel.y = JUMP_SPEED
 				jumps_left = 1

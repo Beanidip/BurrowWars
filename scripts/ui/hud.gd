@@ -482,7 +482,8 @@ func _fill_workshop(v: VBoxContainer) -> void:
 		_owned_labels.append(own_label)
 		text.add_child(own_label)
 		text.add_child(UiKit.wrapped(item["desc"], 13, UiKit.PAPER.darkened(0.2)))
-		var price := "free" if m.free_mode else "%d scrap" % int(item["cost"])
+		var gratis: bool = m.free_mode or (rat.cls.get("free_items", []) as Array).has(item["id"])
+		var price := "free" if gratis else "%d scrap" % int(item["cost"])
 		list.add_child(UiKit.row(text, UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))))
 	if not m.free_mode:
 		v.add_child(UiKit.label("Change class (at base, 15 s cooldown)", 15, UiKit.BRASS))
