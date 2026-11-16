@@ -50,7 +50,7 @@ Digging a gadget returns it to the digger's pack.
 
 ## Hazards and safety valves
 
-Lava sends a rat back to base (cheese stays behind, floating on top). Water slows everyone
+Lava bounces a rat out on the first touch; a second touch within 8 s bounces it again, spills everything it carries right there, and sends it back to base 0.7 s later. Water slows everyone
 but Scouts. Ctrl+K respawns: cheese and the material stash are left behind as pickups.
 Bases cannot be dug or built in.
 
@@ -97,6 +97,10 @@ wall spring (flings back whatever runs into it).
 
 - **Water:** hold or tap Space at the surface to leap out. Water is drawn see-through.
 - **Lava flows.** Three molten basins per side sit in their own caverns. Open one and lava pours down any gap and creeps up to 3 blocks sideways from where it lands, then rests. Plug it with any block. 
+- **Gates hold gadgets.** Aim at your own team gate and press Q with a ladder, spring, conveyor, wall spring or highway: it goes inside the gate. Your team uses the gadget; enemies still bump into the gate and cannot dig the gadget out. Digging it out yourself leaves the gate; breaking the gate (10 wrecking-ball hits or 2 TNT blasts) destroys both.
+- **Paint and glass.** 26 opaque colours (greys and in-between shades included) and 10 see-through glass colours. A painted block costs one dirt, or one stone when you have no dirt, takes 3 hits and gives a dirt back. Glass is whole blocks only.
+- **Wood is scenery.** It breaks but gives nothing, and is neither carved nor copied.
+- **Loose cheese** is put down where you look (G), or tossed forward. Springs launch it and wall springs bat it back.
 - **Water flows** the same way, faster and further: dig into the pond or the sewer channel and it pours into your tunnels (tick 0.25 s, reach 5, cap 2500 blocks). Lava that touches water hardens into stone, so a bucket-less player can still cap a lava basin by flooding it. Liquids never flow into a base. Constants live in `LiquidFlow` (lava: tick 0.45 s, reach 3, cap 1200).
 - **Ladders:** Q while aiming at a ladder extends that stack - upward from its top half, downward from its bottom half - even when the end of the stack is out of normal reach.
 - **Highways and conveyors** are laid into the floor block you aim at (dirt, grass, stone, wood, brick, ice); the block you swap out goes to your stash. Aimed at a wall they go beside it as before.

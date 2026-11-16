@@ -122,7 +122,7 @@ func _show_home() -> void:
 	col.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_theme_constant_override("separation", 8)
 	_page.add_child(col)
-	var play := UiKit.button("Cheese Race", _show_setup, Vector2(320, 52))
+	var play := UiKit.button("Cheese Race (Bot Game)", _show_setup, Vector2(320, 52))
 	col.add_child(play)
 	col.add_child(UiKit.button("Play Online", _show_online, Vector2(320, 44)))
 	col.add_child(UiKit.button("Free Build", _start_free, Vector2(320, 44)))
@@ -355,9 +355,18 @@ func _show_online() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
 	buttons.add_child(UiKit.button("Back", _show_home, Vector2(160, 46)))
-	buttons.add_child(UiKit.button("Host a game...", _show_host_setup, Vector2(240, 46)))
+	buttons.add_child(UiKit.button("Host Cheese Race...", _show_host_setup, Vector2(220, 46)))
+	buttons.add_child(UiKit.button("Host Free Build", _host_free, Vector2(200, 46)))
 	_page.add_child(buttons)
 	_name_edit.grab_focus()
+
+
+func _host_free() -> void:
+	## A creative sandbox friends can join: everyone builds with everything.
+	if not _save_identity():
+		return
+	start_requested.emit({"mode": "free", "seed": randi_range(1, 999999), "goal": 9999, "team": 0, "class": "maestro",
+		"team_size": 1, "net": "host", "port": Net.DEFAULT_PORT})
 
 
 func _save_identity() -> bool:

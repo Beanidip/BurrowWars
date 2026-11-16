@@ -615,8 +615,16 @@ func _equip(g: String) -> void:
 
 
 func _fill_pause(v: VBoxContainer) -> void:
-	_dialog_header(v, "Paused", "Esc")
-	var sc := UiKit.scroll(430)
+	_dialog_header(v, "Paused" if not m.networked else "Menu (the online game keeps going)", "Esc")
+	var music_label := UiKit.label("Music volume  %d%%" % roundi(float(Config.get_value("music_volume")) * 100.0), 17, UiKit.BRASS)
+	var music := UiKit.slider(0.0, 1.0, 0.05, float(Config.get_value("music_volume")), func(value: float) -> void:
+		Config.set_value("music_volume", value)
+		Config.save()
+		Sfx.set_music_volume(value)
+		music_label.text = "Music volume  %d%%" % roundi(value * 100.0))
+	music.custom_minimum_size = Vector2(300, 0)
+	v.add_child(UiKit.row(music_label, music))
+	var sc := UiKit.scroll(390)
 	var body: VBoxContainer = sc[1]
 	v.add_child(sc[0])
 	var settings := SettingsPanel.new()

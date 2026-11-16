@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.0 - Playtest round 2 (2026-11-16)
+
+| Change | Files |
+|---|---|
+| Wood is scenery (breaks, gives nothing); removed from stash, hotbar, shop, chisel, pantograph. Paint is slot 5 | `world/blocks.gd`, `match/class_defs.gd`, `core/inputs.gd`, `ui/hud.gd` |
+| 36 paint colours: greys, in-between shades, 10 see-through glass colours. Paint costs dirt (stone when out of dirt), gives dirt back, 3 hits | `world/blocks.gd`, `world/chunk_mesher.gd`, `match/match.gd`, `ui/hud.gd` |
+| Ladders, springs, conveyors, wall springs and highways can go inside your own team gate | `world/voxel_world.gd`, `match/match.gd`, `actors/rat.gd`, `net/*` |
+| G puts cheese where you look; springs and wall springs move loose cheese | `match/match.gd`, `actors/player_controller.gd` |
+| Lava: first touch bounces you; a second touch spills your load and sends you home | `match/match.gd`, `actors/rat.gd`, `match/match_view.gd` |
+| Mouse wheel scrolls the Q gadget (Alt + wheel zooms the camera); hotbar shows the real "next" key | `actors/player_controller.gd`, `ui/hud.gd` |
+| Super Dig 4 s and Patch 5 s cooldowns | `match/class_defs.gd` |
+| Play Online can host a Free Build map; menu says "Cheese Race (Bot Game)" | `ui/main_menu.gd` |
+| Music volume at the top of the Esc menu | `ui/hud.gd` |
+| Fix: the sea no longer shows as a blue sheet through underground tunnels | `match/game_session.gd` |
+
 ## 1.4.0 - Online multiplayer, flowing water (2026-11-16)
 
 | Change | Files |

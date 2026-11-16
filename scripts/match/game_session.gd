@@ -27,13 +27,29 @@ func _ready() -> void:
 	add_child(env)
 
 	# a calm sea around the island so the world edge never shows a void
+	# (a frame around the island, not a sheet through it: underground you
+	# must never see the sea surface cutting across your tunnels)
 	var sea := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(900, 900)
+	var sv := PackedVector3Array()
+	var far := 450.0
+	var sx := float(VoxelWorld.SX) * 0.5
+	var sz := float(VoxelWorld.SZ) * 0.5
+	for r: Array in [[-far, -far, far, -sz], [-far, sz, far, far], [-far, -sz, -sx, sz], [sx, -sz, far, sz]]:
+		var a := Vector3(r[0], 0, r[1])
+		var b := Vector3(r[2], 0, r[1])
+		var c := Vector3(r[2], 0, r[3])
+		var d := Vector3(r[0], 0, r[3])
+		sv.append_array([a, b, c, a, c, d])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = sv
+	var plane := ArrayMesh.new()
+	plane.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	sea.mesh = plane
 	var sea_mat := StandardMaterial3D.new()
 	sea_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	sea_mat.albedo_color = Color(0.22, 0.47, 0.72)
+	sea_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	sea.material_override = sea_mat
 	sea.position = Vector3(VoxelWorld.SX * 0.5, MapGenerator.GROUND - 3.4, VoxelWorld.SZ * 0.5)
 	add_child(sea)

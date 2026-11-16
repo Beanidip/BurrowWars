@@ -45,6 +45,10 @@ var chisel_cd := 0.0
 var throw_cd := 0.0
 var operating := -1               # uid of the siege machine this rat controls
 var jumps_left := 1
+var lava_strikes := 0             # 1 after a first lava bounce; the next touch sends you home
+var lava_reset := 0.0             # seconds until a first strike is forgiven
+var lava_grace := 0.0             # no second strike while still bouncing out
+var lava_home := -1.0             # >= 0: heading home in this many seconds
 
 # timers (seconds remaining)
 var dig_cd := 0.0

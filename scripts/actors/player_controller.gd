@@ -126,10 +126,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton and event.is_pressed():
 		var mb := event as InputEventMouseButton
+		var wheel := 0
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-			cam_dist = maxf(1.5, cam_dist - 0.4)
+			wheel = -1
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			cam_dist = minf(8.0, cam_dist + 0.4)
+			wheel = 1
+		if wheel != 0:
+			if mb.alt_pressed or Input.is_key_pressed(KEY_ALT):
+				cam_dist = clampf(cam_dist + 0.4 * wheel, 1.5, 8.0)   # Alt + wheel: camera distance
+			elif rat.operating == -1:
+				cycle_gadget(wheel)                                  # wheel: scroll the Q slot
+			return
 	if event.is_action_pressed("interact"):
 		_interact()
 		return
@@ -155,7 +162,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ability_2"):
 		_say(m.use_ability(rat, 1, aim))
 	elif event.is_action_pressed("drop_cheese"):
-		if not m.drop_cheese(rat):
+		if not m.drop_cheese(rat, aim, forward()):
 			_say("You aren't carrying any cheese")
 	elif event.is_action_pressed("respawn"):
 		if Input.is_key_pressed(KEY_CTRL):
@@ -270,7 +277,7 @@ func _micro_neighbor() -> Array:
 	return [c, g - c * Blocks.MICRO]
 
 
-func cycle_gadget() -> void:
+func cycle_gadget(step := 1) -> void:
 	var owned: Array[String] = []
 	for g: String in ClassDefs.GADGETS:
 		if m.free_mode or int(rat.gadgets.get(g, 0)) > 0:
@@ -279,7 +286,7 @@ func cycle_gadget() -> void:
 		_say("No gadgets yet - buy some at the workshop (B)")
 		return
 	var i := owned.find(rat.equipped)
-	m.set_equipped(rat, owned[(i + 1) % owned.size()])
+	m.set_equipped(rat, owned[posmod(i + step, owned.size())] if i >= 0 else owned[0])
 
 
 func _place_cell() -> Vector3i:

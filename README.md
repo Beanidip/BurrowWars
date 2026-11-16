@@ -36,13 +36,13 @@ See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 | Shift | Dash | E / F | Class abilities |
 | Left mouse | Dig / bonk | B | Workshop (at base; Builder anywhere) |
 | Right mouse | Place selected material | I | Inventory |
-| 1-4 | Dirt / stone / wood / ice | G | Drop one cheese |
+| 1-4 | Dirt / stone / ice / obsidian | G | Drop one cheese where you look |
 | V | First / third person | Ctrl+K | Respawn at base |
 | Ctrl | Climb down / fly down | Esc | Pause, settings, key rebinding |
-| N, F5, F9 | Free Build: fly, save map, load map | Mouse wheel | Camera distance |
+| N, F5, F9 | Free Build: fly, save map, load map | Mouse wheel | Scroll the Q gadget (Alt + wheel: camera distance) |
 | 9 | Chisel: LMB carve, RMB add a microvoxel | 0 | Pantograph: click 2 corners, RMB paste, X rotate |
 | T | Pilot / leave a siege machine | Ctrl+Q | Set Mobile TNT down gently |
-| 5 | Obsidian | 6 / C | Painted block / colour picker |
+| 5 / C | Painted block or glass / colour picker (36 colours) | | |
 
 ## Verify
 

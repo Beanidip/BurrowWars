@@ -11,7 +11,7 @@ const CLASSES := {
 		"name": "Digger", "speed": 0.85, "stamina": 150.0, "carry": 3, "brush": 0, "water": 0.5,
 		"remote_shop": false, "fly": false,
 		"blurb": "Hauls 3 cheese. Super Dig smashes the aimed block twice as hard and chews the 3x3x3 around it.",
-		"abilities": [["superdig", "Super Dig", 1.0, 12.0]],
+		"abilities": [["superdig", "Super Dig", 4.0, 12.0]],
 		"kit": {},
 	},
 	"scout": {
@@ -25,7 +25,7 @@ const CLASSES := {
 		"name": "Builder", "speed": 1.0, "stamina": 100.0, "carry": 2, "brush": 0, "water": 0.5,
 		"remote_shop": true, "fly": false,
 		"blurb": "Patches walls, conjures team-only blocks, gets team gates free and shops from anywhere.",
-		"abilities": [["patch", "Patch 3x3", 3.0, 25.0], ["teamblock", "Team Block", 0.8, 12.0]],
+		"abilities": [["patch", "Patch 3x3", 5.0, 25.0], ["teamblock", "Team Block", 0.8, 12.0]],
 		"free_items": ["gate"],
 		"kit": {"ladder": 6, "spring": 1, "gate": 4},
 	},

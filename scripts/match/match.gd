@@ -219,7 +219,7 @@ func step(dt: float) -> void:
 			r.step(dt)
 			if r.landed_on_spring:
 				fx.emit("spring", r.position, null)
-		_check_rat_hazards(r)
+		_check_rat_hazards(r, dt)
 		_check_raid(r, dt)
 	_step_pickups(dt)
 	_step_tnt(dt)
@@ -253,13 +253,44 @@ func set_equipped(rat: Rat, gadget: String) -> void:
 		rat.equipped = gadget
 
 
-func _check_rat_hazards(r: Rat) -> void:
+func _lava_touch(r: Rat) -> void:
+	## Lava: the first touch bounces you out. A second touch soon after
+	## bounces you again, spills what you carry right there, and sends you home.
+	siege.release(r)
+	var away := Vector3(r.vel.x, 0, r.vel.z)
+	away = -away.normalized() * 3.0 if away.length() > 0.2 else Vector3.ZERO
+	r.vel = away + Vector3(0, 11.0, 0)
+	r.knock = 0.35
+	r.on_floor = false
+	r.lava_grace = 0.8
+	fx.emit("lava", r.position, null)
+	if r.lava_strikes == 0:
+		r.lava_strikes = 1
+		r.lava_reset = 8.0
+		toast.emit("Ouch! %s bounced off the lava. Touch it again and it's back to base." % r.display_name, r.team)
+		return
+	r.lava_strikes = 0
+	drop_everything(r)
+	r.lava_home = 0.7
+	toast.emit("%s got a hot tail and dropped everything!" % r.display_name, r.team)
+
+
+func _check_rat_hazards(r: Rat, dt: float) -> void:
 	if over:
 		return
 	var here := world.block_at(r.position + Vector3(0, 0.2, 0))
-	if here == Blocks.LAVA and not r.flying:
-		toast.emit("%s got a hot tail! Back to base." % r.display_name, r.team)
-		respawn(r)
+	if r.lava_home >= 0.0:
+		r.lava_home -= dt
+		if r.lava_home < 0.0:
+			respawn(r)
+			toast.emit("%s is back at base, nursing a hot tail." % r.display_name, r.team)
+			return
+	r.lava_grace = maxf(0.0, r.lava_grace - dt)
+	r.lava_reset = maxf(0.0, r.lava_reset - dt)
+	if r.lava_reset <= 0.0:
+		r.lava_strikes = 0
+	if here == Blocks.LAVA and not r.flying and r.lava_grace <= 0.0 and r.lava_home < 0.0:
+		_lava_touch(r)
 		return
 	if r.position.y < -4.0:
 		respawn(r)
@@ -847,13 +878,36 @@ func _drop(rat: Rat, count: int, lock_seconds: float) -> void:
 		p.lock_t = lock_seconds
 
 
-func drop_cheese(rat: Rat) -> bool:
+func drop_cheese(rat: Rat, aim: Dictionary = {}, look := Vector3.ZERO) -> bool:
+	## G: put one cheese down where you are looking (the open cell in front of
+	## the aimed face), or toss it forward when you are not aiming at anything
+	## in reach.
 	if rat.carried <= 0:
 		return false
 	if remote != null:
-		remote.act("drop_cheese", [])
+		var clean := {}
+		for k: String in ["cell", "normal", "point"]:
+			if aim.has(k):
+				clean[k] = aim[k]
+		remote.act("drop_cheese", [clean, look])
 		return true
-	_drop(rat, 1, 1.0)
+	rat.carried -= 1
+	var spot := Vector3.INF
+	if aim.has("cell") and aim.has("normal"):
+		var c := Vector3i(aim["cell"]) + Vector3i(aim["normal"])
+		var p := Vector3(c) + Vector3(0.5, 0.3, 0.5)
+		if p.distance_to(rat.eye()) <= Config.DIG_REACH + 1.0 and not world.solid_point(p) and world.get_cell(c) != Blocks.LAVA:
+			spot = p
+	var pk: Pickup
+	if spot != Vector3.INF:
+		pk = spawn_pickup("cheese", spot, Vector3.ZERO)
+	else:
+		var f := look if look.length() > 0.1 else Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
+		f = f.normalized()
+		pk = spawn_pickup("cheese", rat.eye() + f * 0.4, f * 5.0 + Vector3(0, 2.5, 0))
+	pk.lock_id = rat.id
+	pk.lock_t = 1.0
+	fx.emit("place", pk.pos - Vector3(0.5, 0.3, 0.5), Blocks.CHEESE)
 	return true
 
 
@@ -892,6 +946,21 @@ func respawn(rat: Rat) -> void:
 		remote.act("respawn", [])
 		return
 	siege.release(rat)
+	drop_everything(rat)
+	var slot := rat.id % 4
+	rat.position = MapGenerator.spawn_point(rat.team, slot)
+	rat.vel = Vector3.ZERO
+	rat.stun = 0.0
+	rat.knock = 0.0
+	rat.lava_home = -1.0
+	rat.lava_strikes = 0
+	rat.unstick()
+	fx.emit("respawn", rat.position, null)
+
+
+func drop_everything(rat: Rat) -> void:
+	## Carried cheese and the material stash fall where the rat stands, as
+	## pickups (moved, never copied).
 	if rat.carried > 0:
 		_drop(rat, rat.carried, 1.0)
 	var any := false
@@ -905,13 +974,6 @@ func respawn(rat: Rat) -> void:
 		stash.lock_t = 1.0
 		for m: String in rat.mats:
 			rat.mats[m] = 0
-	var slot := rat.id % 4
-	rat.position = MapGenerator.spawn_point(rat.team, slot)
-	rat.vel = Vector3.ZERO
-	rat.stun = 0.0
-	rat.knock = 0.0
-	rat.unstick()
-	fx.emit("respawn", rat.position, null)
 
 
 func _step_pickups(dt: float) -> void:
@@ -927,7 +989,11 @@ func _step_pickups(dt: float) -> void:
 			p.vel.y = maxf(p.vel.y - 20.0 * dt, -20.0)
 			var np := p.pos + p.vel * dt
 			var below := world.block_at(Vector3(p.pos.x, np.y - 0.15, p.pos.z))
-			if world.solid_point(Vector3(p.pos.x, np.y - 0.15, p.pos.z)) and p.vel.y <= 0.0:
+			if below == Blocks.SPRING and p.vel.y <= 0.0:
+				p.vel.y = 13.0          # springs launch loose cheese too
+				np.y = p.pos.y
+				fx.emit("spring", p.pos, null)
+			elif world.solid_point(Vector3(p.pos.x, np.y - 0.15, p.pos.z)) and p.vel.y <= 0.0:
 				var under := Vector3i(floori(p.pos.x), floori(np.y - 0.15), floori(p.pos.z))
 				np.y = p.pos.y if world.has_micro(under) else floorf(np.y - 0.15) + 1.15
 				p.vel.y = 0.0
@@ -939,11 +1005,21 @@ func _step_pickups(dt: float) -> void:
 					np.x += push.x
 					np.z += push.z
 			if world.solid_point(Vector3(np.x, np.y, p.pos.z)):
+				if world.block_at(Vector3(np.x, np.y, p.pos.z)) == Blocks.WALL_SPRING:
+					p.vel.x = -signf(np.x - p.pos.x) * 9.0   # wall springs bat it back
+					p.vel.y = maxf(p.vel.y, 5.0)
+					fx.emit("spring", p.pos, null)
+				else:
+					p.vel.x = 0.0
 				np.x = p.pos.x
-				p.vel.x = 0.0
 			if world.solid_point(Vector3(np.x, np.y, np.z)):
+				if world.block_at(Vector3(np.x, np.y, np.z)) == Blocks.WALL_SPRING:
+					p.vel.z = -signf(np.z - p.pos.z) * 9.0
+					p.vel.y = maxf(p.vel.y, 5.0)
+					fx.emit("spring", p.pos, null)
+				else:
+					p.vel.z = 0.0
 				np.z = p.pos.z
-				p.vel.z = 0.0
 			p.pos = np
 		if over:
 			continue

@@ -265,7 +265,10 @@ func on_act(id: int, method: String, a: Array) -> void:
 						bp.cells.append(e)
 					res = m.try_paste(rat, bp, a[1])
 		"drop_cheese":
-			m.drop_cheese(rat)
+			if _ok(a, [TYPE_DICTIONARY, TYPE_VECTOR3]):
+				var aim: Variant = _aim(a[0])
+				if aim != null and (a[1] as Vector3).is_finite():
+					m.drop_cheese(rat, aim, a[1])
 		"respawn":
 			m.respawn(rat)
 		"use_ability":

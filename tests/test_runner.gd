@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -273,7 +273,7 @@ func test_dig_durability_and_rate() -> void:
 					chipped += 1
 	check(chipped == 26, "and chips the 26 blocks around it (%d)" % chipped)
 	check(m.use_ability(d, 0, aim) != "", "Super Dig has a cooldown")
-	run(m, 1.1)
+	run(m, 4.1)
 	check(m.use_ability(d, 0, aim) == "", "second Super Dig")
 	var gone := 0
 	for dx in range(1, 4):
@@ -862,7 +862,22 @@ func test_lava_flows() -> void:
 	r.carried = 1
 	r.position = Vector3(ARENA) + Vector3(3.5, 0.2, 0.5)
 	m.step(DT)
-	check(m.in_base(r) and r.carried == 0, "touching lava sends a rat home without its cheese (nobody dies)")
+	check(r.vel.y > 5.0 and r.carried == 1 and not m.in_base(r) and r.lava_strikes == 1, "the first touch of lava bounces you out, cheese and all")
+	var safe := Vector3(ARENA) + Vector3(-5.5, 0, -5.5)
+	run(m, 0.3)
+	r.position = Vector3(ARENA) + Vector3(3.5, 0.2, 0.5)
+	m.step(DT)
+	check(r.carried == 1 and not m.in_base(r), "no second strike while you are still bouncing out")
+	r.position = safe
+	r.vel = Vector3.ZERO
+	run(m, 1.0)
+	var cheese_before := m.pickups.size()
+	r.position = Vector3(ARENA) + Vector3(3.5, 0.2, 0.5)
+	m.step(DT)
+	check(r.vel.y > 5.0 and r.carried == 0 and m.pickups.size() >= cheese_before + 1, "a second touch bounces you and spills your cheese right there")
+	check(not m.in_base(r), "... and only then")
+	run(m, 1.0)
+	check(m.in_base(r) and r.lava_strikes == 0, "you are sent home (nobody dies)")
 	# generated pools exist on both halves
 	var per_half := [0, 0]
 	var fresh := new_match()
@@ -1141,6 +1156,63 @@ func test_painted_blocks() -> void:
 		r.mats["stone"] = 5
 		var dest := ARENA + Vector3i(0, 0, 3)
 		check(m.try_paste(r, res["blueprint"], dest) == "" and (m.world.micro[dest] as PackedByteArray)[0 + 7 * (0 + 7 * 6)] == 9, "and pastes it with its colours")
+	end(m)
+
+
+func test_cheese_drop_and_springs() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var r := arena_rat(m, 0, "digger")
+	run(m, 0.2)
+	r.carried = 3
+	var floor_cell := ARENA + Vector3i(3, -1, 0)
+	check(m.drop_cheese(r, {"cell": floor_cell, "normal": Vector3i(0, 1, 0)}, Vector3(1, -0.3, 0).normalized()), "drop one cheese")
+	var pk: Match.Pickup = m.pickups[-1]
+	check(r.carried == 2 and Vector3i(pk.pos.floor()) == floor_cell + Vector3i(0, 1, 0), "it lands where you were looking")
+	check(m.drop_cheese(r, {}, Vector3(0, 0, 1)), "drop with nothing aimed at")
+	var tossed: Match.Pickup = m.pickups[-1]
+	check(tossed.vel.z > 3.0, "it is tossed forward instead")
+	r.position = Vector3(ARENA) + Vector3(-6.5, 0, 6.5)    # out of the way
+	# a spring launches loose cheese
+	var spring := ARENA + Vector3i(-3, 0, -3)
+	m.world.set_block(spring, Blocks.SPRING)
+	var drop := m.spawn_pickup("cheese", Vector3(spring) + Vector3(0.5, 2.5, 0.5), Vector3.ZERO)
+	var top := 0.0
+	for i in 90:
+		m.step(DT)
+		top = maxf(top, drop.pos.y)
+	run(m, 0.3)
+	var top2 := 0.0
+	for i in 60:
+		m.step(DT)
+		top2 = maxf(top2, drop.pos.y)
+	check(top2 > float(spring.y) + 3.0, "a spring launches loose cheese (peak %.1f above it)" % (top2 - spring.y))
+	# a wall spring bats it back
+	var wall := ARENA + Vector3i(0, 0, -6)
+	m.world.set_block(wall, Blocks.WALL_SPRING)
+	var slide := m.spawn_pickup("cheese", Vector3(wall) + Vector3(0.5, 0.3, 2.2), Vector3(0, 0, -9))
+	var turned := false
+	for i in 60:
+		m.step(DT)
+		if slide.vel.z > 3.0:
+			turned = true
+	check(turned and slide.pos.z > float(wall.z) + 1.0, "a wall spring bats cheese back")
+	end(m)
+
+
+func test_ability_cooldowns() -> void:
+	check(float(ClassDefs.CLASSES["digger"]["abilities"][0][2]) == 4.0, "Super Dig recharges in 4 s")
+	check(float(ClassDefs.CLASSES["builder"]["abilities"][0][2]) == 5.0, "Patch recharges in 5 s")
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "builder")
+	run(m, 0.2)
+	var aim := {"cell": ARENA + Vector3i(2, -1, 0), "normal": Vector3i(0, 1, 0)}
+	check(m.use_ability(r, 0, aim) == "", "patch")
+	run(m, 4.0)
+	check(m.use_ability(r, 0, {"cell": ARENA + Vector3i(-2, -1, 0), "normal": Vector3i(0, 1, 0)}).ends_with("recharging"), "still recharging after 4 s")
+	run(m, 1.2)
+	check(m.use_ability(r, 0, {"cell": ARENA + Vector3i(-2, -1, 0), "normal": Vector3i(0, 1, 0)}) == "", "ready again after 5 s")
 	end(m)
 
 
