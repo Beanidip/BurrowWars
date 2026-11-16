@@ -279,7 +279,7 @@ func cycle_gadget() -> void:
 		_say("No gadgets yet - buy some at the workshop (B)")
 		return
 	var i := owned.find(rat.equipped)
-	rat.equipped = owned[(i + 1) % owned.size()]
+	m.set_equipped(rat, owned[(i + 1) % owned.size()])
 
 
 func _place_cell() -> Vector3i:

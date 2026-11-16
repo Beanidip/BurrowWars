@@ -63,6 +63,13 @@ var jump_held := false
 var down_held := false
 var dash_pressed := false
 
+# networking (see scripts/net): on the server, the peer that drives this rat
+# (0 = local player or bot); on a client, true for the one rat it controls
+var net_peer := 0
+var net_local := false
+var net_pre: Array = []           # server: movement state before this tick, to spot authority changes
+var net_kick := 0                 # server: bumped whenever the authority moved this rat itself
+
 # presentation hooks (read by RatSprite)
 var anim_action := ""
 var anim_action_t := 0.0
@@ -133,6 +140,13 @@ func move_speed() -> float:
 # ---------------------------------------------------------------- simulation
 
 func step(dt: float) -> void:
+	step_timers(dt)
+	_step_motion(dt)
+
+
+func step_timers(dt: float) -> void:
+	## Cooldowns and status timers. A networked server runs only this part
+	## for a remote player's rat: that player's own game moves the body.
 	dig_cd = maxf(0.0, dig_cd - dt)
 	bonk_cd = maxf(0.0, bonk_cd - dt)
 	stun = maxf(0.0, stun - dt)
@@ -146,6 +160,9 @@ func step(dt: float) -> void:
 	anim_action_t = maxf(0.0, anim_action_t - dt)
 	ability_cd[0] = maxf(0.0, ability_cd[0] - dt)
 	ability_cd[1] = maxf(0.0, ability_cd[1] - dt)
+
+
+func _step_motion(dt: float) -> void:
 	landed_on_spring = false
 
 	var w := wish

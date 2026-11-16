@@ -22,4 +22,5 @@ run "import + editor validation" "$GODOT" --headless --path . --editor --quit
 run "boot main scene (120 frames)" "$GODOT" --headless --path . --quit-after 120
 run "smoke: menu -> match -> pause -> results" "$GODOT" --headless --path . res://tests/smoke_runner.tscn
 run "gameplay regression suite" "$GODOT" --headless --path . res://tests/test_runner.tscn
+tools/net_check.sh "$GODOT" || fail=1
 exit $fail

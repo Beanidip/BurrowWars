@@ -50,6 +50,8 @@ const DEFAULTS := {
 	"bot_skill": 1,
 	"last_class": "digger",
 	"last_team": 0,
+	"player_name": "",
+	"last_address": "",
 }
 
 var _cfg := ConfigFile.new()

@@ -45,6 +45,13 @@ var time := 0.0
 var auto_step := true
 var visual := true
 
+# Networking (scripts/net). A client runs a *replica* Match: it draws the
+# world and moves its own rat, but every request goes to the server through
+# `remote`, and everything else arrives from the server.
+var replica := false
+var remote: Object = null       # NetClient on a replica, else null
+var networked := false          # true on a server or a client (never pauses)
+
 var dynamite: DynamiteSystem
 var siege: SiegeSystem
 
@@ -52,8 +59,9 @@ var _next_uid := 1
 var _rng := RandomNumberGenerator.new()
 
 
-func setup(match_settings: Dictionary, with_visuals := true) -> void:
+func setup(match_settings: Dictionary, with_visuals := true, as_replica := false) -> void:
 	settings = match_settings
+	replica = as_replica
 	visual = with_visuals
 	free_mode = settings.get("mode", "race") == "free"
 	goal = int(settings.get("goal", 8))
@@ -67,10 +75,11 @@ func setup(match_settings: Dictionary, with_visuals := true) -> void:
 	siege = SiegeSystem.new(self)
 	lava = LiquidFlow.lava(self)
 	water = LiquidFlow.water(self)
-	world.block_changed.connect(lava.on_block_changed)
-	world.block_changed.connect(water.on_block_changed)
-	world.block_changed.connect(_on_block_changed)
-	world.block_changed.connect(siege.on_block_changed)
+	if not replica:   # a replica only mirrors the server's terrain changes
+		world.block_changed.connect(lava.on_block_changed)
+		world.block_changed.connect(water.on_block_changed)
+		world.block_changed.connect(_on_block_changed)
+		world.block_changed.connect(siege.on_block_changed)
 	MapGenerator.generate(world, map_seed)
 	for cell: Vector3i in _find_blocks(Blocks.TNT):
 		tnt[cell] = {"owner": -1, "fuse": -1.0}
@@ -95,9 +104,14 @@ func _find_blocks(id: int) -> Array[Vector3i]:
 	return out
 
 
-func spawn_rat(team: int, class_id: String, is_bot: bool) -> Rat:
+func spawn_rat(team: int, class_id: String, is_bot: bool, fixed_id := -1) -> Rat:
 	var rat := Rat.new()
-	rat.setup(world, rats.size() + 1, team, class_id, is_bot)
+	var new_id := fixed_id
+	if new_id < 0:
+		new_id = 1
+		for r in rats:
+			new_id = maxi(new_id, r.id + 1)
+	rat.setup(world, new_id, team, class_id, is_bot)
 	var slot := 0
 	for r in rats:
 		if r.team == team:
@@ -111,10 +125,45 @@ func spawn_rat(team: int, class_id: String, is_bot: bool) -> Rat:
 		rat.flying = false
 	add_child(rat)
 	rats.append(rat)
-	if is_bot:
+	if is_bot and not replica:
 		bots.append(BotBrain.new(self, rat, _rng.randi()))
 	rat_spawned.emit(rat)
 	return rat
+
+
+func make_bot(rat: Rat) -> void:
+	## A rat whose player left (or a fresh seat): a bot takes over.
+	rat.is_bot = true
+	rat.net_peer = 0
+	rat.display_name = BOT_NAMES[(rat.id * 3 + rat.team) % BOT_NAMES.size()]
+	for b in bots:
+		if b.rat == rat:
+			return
+	bots.append(BotBrain.new(self, rat, _rng.randi()))
+
+
+func make_player(rat: Rat, peer: int, player_name: String) -> void:
+	## A networked player takes over a rat (normally one a bot was driving).
+	for i in range(bots.size() - 1, -1, -1):
+		if bots[i].rat == rat:
+			bots.remove_at(i)
+	rat.is_bot = false
+	rat.net_peer = peer
+	rat.display_name = player_name
+	rat.wish = Vector3.ZERO
+	rat.jump_held = false
+	rat.down_held = false
+
+
+func remove_rat(rat: Rat) -> void:
+	siege.release(rat)
+	if rat.carried > 0:
+		_drop(rat, rat.carried, 0.0)
+	for i in range(bots.size() - 1, -1, -1):
+		if bots[i].rat == rat:
+			bots.remove_at(i)
+	rats.erase(rat)
+	rat.queue_free()
 
 
 func rat_by_id(rat_id: int) -> Rat:
@@ -143,6 +192,21 @@ func _physics_process(delta: float) -> void:
 
 func step(dt: float) -> void:
 	time += dt
+	if replica:
+		# Only our own rat is simulated here; the server sends the rest.
+		for r in rats:
+			if r.net_local:
+				if over:
+					r.wish = Vector3.ZERO
+					r.jump_pressed = false
+					r.dash_pressed = false
+				r.step(dt)
+		return
+	for r in rats:
+		if r.net_peer != 0:
+			# a remote player's own game moves this body; we keep its timers
+			r.step_timers(dt)
+			r.net_pre = net_state(r)
 	if not over:
 		for b in bots:
 			b.think(dt)
@@ -151,9 +215,10 @@ func step(dt: float) -> void:
 			r.wish = Vector3.ZERO
 			r.jump_pressed = false
 			r.dash_pressed = false
-		r.step(dt)
-		if r.landed_on_spring:
-			fx.emit("spring", r.position, null)
+		if r.net_peer == 0:
+			r.step(dt)
+			if r.landed_on_spring:
+				fx.emit("spring", r.position, null)
 		_check_rat_hazards(r)
 		_check_raid(r, dt)
 	_step_pickups(dt)
@@ -166,6 +231,26 @@ func step(dt: float) -> void:
 		markers[i]["ttl"] = float(markers[i]["ttl"]) - dt
 		if float(markers[i]["ttl"]) <= 0.0:
 			markers.remove_at(i)
+
+
+static func net_state(r: Rat) -> Array:
+	## The parts of a rat that its player's game simulates. When the authority
+	## changes any of them (bonk, blast, respawn, trap...) the player is told.
+	return [r.position, r.vel, r.stun, r.knock, r.slow, r.stamina, r.flying]
+
+
+func cd_slack(r: Rat) -> float:
+	## Network jitter allowance on short cooldowns for remote players.
+	return 0.08 if r.net_peer != 0 else 0.0
+
+
+func set_equipped(rat: Rat, gadget: String) -> void:
+	if remote != null:
+		rat.equipped = gadget
+		remote.act("set_equipped", [gadget])
+		return
+	if gadget == "" or ClassDefs.GADGET_NAME.has(gadget):
+		rat.equipped = gadget
 
 
 func _check_rat_hazards(r: Rat) -> void:
@@ -240,8 +325,13 @@ func _deposit(r: Rat) -> void:
 # ---------------------------------------------------------------- digging
 
 func try_dig(rat: Rat, cell: Vector3i) -> bool:
-	if over or rat.stun > 0.0 or rat.dig_cd > 0.0:
+	if over or rat.stun > 0.0 or rat.dig_cd > cd_slack(rat):
 		return false
+	if remote != null:
+		rat.dig_cd = 1.0 / Config.DIG_RATE
+		rat.play_action("dig", 0.28)
+		remote.act("try_dig", [cell])
+		return true
 	if not VoxelWorld.in_bounds(cell):
 		return false
 	if (Vector3(cell) + Vector3(0.5, 0.5, 0.5)).distance_to(rat.eye()) > Config.DIG_REACH + 1.0:
@@ -373,6 +463,8 @@ func can_place_at(rat: Rat, cell: Vector3i, block: int, reach := -1.0, replace :
 
 
 func try_place_mat(rat: Rat, cell: Vector3i, mat: String) -> String:
+	if remote != null:
+		return remote.act("try_place_mat", [cell, mat])
 	if not ClassDefs.MAT_BLOCK.has(mat):
 		return "Unknown material"
 	if not free_mode and int(rat.mats.get(mat, 0)) <= 0:
@@ -390,6 +482,8 @@ func try_place_mat(rat: Rat, cell: Vector3i, mat: String) -> String:
 
 
 func try_place_paint(rat: Rat, cell: Vector3i, color: int) -> String:
+	if remote != null:
+		return remote.act("try_place_paint", [cell, color])
 	## A full block in one of the palette colours. Painted blocks are dyed
 	## stone: each costs one stone, and gives it back when dug.
 	if color < 0 or color >= Blocks.PALETTE_SIZE:
@@ -457,6 +551,12 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 
 func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, dir := Vector3.ZERO) -> String:
 	## The Q key: throw Mobile TNT, or place the equipped gadget at the aim.
+	if remote != null:
+		var clean := {}
+		for k: String in ["cell", "normal", "point"]:
+			if aim.has(k):
+				clean[k] = aim[k]
+		return remote.act("try_use_equipped", [clean, look, gentle, dir])
 	if rat.equipped == "dynamite":
 		return dynamite.try_throw(rat, look, gentle)
 	if aim.is_empty():
@@ -529,7 +629,7 @@ func _refund_micro(rat: Rat, mat: String, n: int) -> void:
 func _chisel_gate(rat: Rat, cell: Vector3i, mv: Vector3i) -> String:
 	if over or rat.stun > 0.0:
 		return "Can't chisel right now"
-	if rat.chisel_cd > 0.0:
+	if rat.chisel_cd > cd_slack(rat):
 		return "wait"
 	if not VoxelWorld.in_bounds(cell) or mv.x < 0 or mv.y < 0 or mv.z < 0 or mv.x >= Blocks.MICRO or mv.y >= Blocks.MICRO or mv.z >= Blocks.MICRO:
 		return "Out of bounds"
@@ -543,6 +643,9 @@ func try_chisel_remove(rat: Rat, cell: Vector3i, mv: Vector3i) -> String:
 	var why := _chisel_gate(rat, cell, mv)
 	if why != "":
 		return why
+	if remote != null:
+		rat.chisel_cd = 1.0 / Config.CHISEL_RATE
+		return remote.act("try_chisel_remove", [cell, mv])
 	var id := world.get_cell(cell)
 	if not Blocks.CHISELABLE.has(id):
 		return "%s can't be chiseled" % Blocks.block_name(id)
@@ -561,6 +664,9 @@ func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String, color :
 	var why := _chisel_gate(rat, cell, mv)
 	if why != "":
 		return why
+	if remote != null:
+		rat.chisel_cd = 1.0 / Config.CHISEL_RATE
+		return remote.act("try_chisel_add", [cell, mv, mat, color])
 	var id := world.get_cell(cell)
 	var block := id
 	var value := 1
@@ -647,6 +753,8 @@ func paste_check(rat: Rat, bp: Blueprint, origin: Vector3i) -> String:
 
 func try_paste(rat: Rat, bp: Blueprint, origin: Vector3i) -> String:
 	## All or nothing: validated in full, paid in full, then built in full.
+	if remote != null:
+		return remote.act("try_paste", [{"size": bp.size, "cells": bp.cells}, origin])
 	var why := paste_check(rat, bp, origin)
 	if why != "":
 		return why
@@ -697,6 +805,9 @@ func _drop(rat: Rat, count: int, lock_seconds: float) -> void:
 func drop_cheese(rat: Rat) -> bool:
 	if rat.carried <= 0:
 		return false
+	if remote != null:
+		remote.act("drop_cheese", [])
+		return true
 	_drop(rat, 1, 1.0)
 	return true
 
@@ -704,10 +815,16 @@ func drop_cheese(rat: Rat) -> bool:
 func try_bonk(rat: Rat, target: Rat) -> bool:
 	if over or rat == target or target == null:
 		return false
-	if rat.team == target.team or rat.bonk_cd > 0.0 or rat.stun > 0.0:
+	if rat.team == target.team or rat.bonk_cd > cd_slack(rat) or rat.stun > 0.0:
 		return false
-	if rat.center().distance_to(target.center()) > Config.BONK_RANGE:
+	if rat.center().distance_to(target.center()) > Config.BONK_RANGE + (0.7 if rat.net_peer != 0 else 0.0):
 		return false
+	if remote != null:
+		rat.bonk_cd = Config.BONK_COOLDOWN
+		rat.dig_cd = 1.0 / Config.DIG_RATE
+		rat.play_action("attack", 0.3)
+		remote.act("try_bonk", [target.id])
+		return true
 	rat.bonk_cd = Config.BONK_COOLDOWN
 	rat.dig_cd = 1.0 / Config.DIG_RATE
 	rat.play_action("attack", 0.3)
@@ -726,6 +843,9 @@ func try_bonk(rat: Rat, target: Rat) -> bool:
 func respawn(rat: Rat) -> void:
 	## Ctrl+K / hazards. Carried cheese and the material stash stay behind as
 	## pickups (moved, not copied), then the rat returns to base empty-pawed.
+	if remote != null:
+		remote.act("respawn", [])
+		return
 	siege.release(rat)
 	if rat.carried > 0:
 		_drop(rat, rat.carried, 1.0)
@@ -878,6 +998,12 @@ func use_ability(rat: Rat, slot: int, aim: Dictionary = {}) -> String:
 	## Returns "" on success or a reason string for the HUD.
 	if over or rat.stun > 0.0:
 		return "Can't do that right now"
+	if remote != null:
+		var clean := {}
+		for k: String in ["cell", "normal", "point"]:
+			if aim.has(k):
+				clean[k] = aim[k]
+		return remote.act("use_ability", [slot, clean])
 	var list: Array = rat.cls["abilities"]
 	if slot < 0 or slot >= list.size():
 		return ""
@@ -1031,6 +1157,8 @@ func can_shop(rat: Rat) -> bool:
 
 
 func try_buy(rat: Rat, item_id: String) -> String:
+	if remote != null:
+		return remote.act("try_buy", [item_id])
 	var item := ClassDefs.shop_item(item_id)
 	if item.is_empty():
 		return "Unknown item"
@@ -1061,6 +1189,8 @@ func try_buy(rat: Rat, item_id: String) -> String:
 
 
 func try_change_class(rat: Rat, class_id: String) -> String:
+	if remote != null:
+		return remote.act("try_change_class", [class_id])
 	if not ClassDefs.CLASSES.has(class_id):
 		return "Unknown class"
 	# Permission check: the creative class is only ever granted by the authority.

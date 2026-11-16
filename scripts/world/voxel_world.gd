@@ -393,6 +393,45 @@ func save_to(path: String, extra: Dictionary = {}) -> bool:
 	return true
 
 
+func snapshot() -> Dictionary:
+	## The whole terrain (blocks + carvings) as one compact Variant, for a
+	## player joining a networked match.
+	var masks := {}
+	for c: Vector3i in micro:
+		masks[c.x + SX * (c.z + SZ * c.y)] = micro[c]
+	return {"d": data.compress(FileAccess.COMPRESSION_ZSTD), "m": masks}
+
+
+func apply_snapshot(snap: Variant) -> bool:
+	## Validates like load_from: a bad snapshot is rejected, never half-applied.
+	if not (snap is Dictionary) or not (snap.get("d") is PackedByteArray) or not (snap.get("m") is Dictionary):
+		return false
+	var raw: PackedByteArray = (snap["d"] as PackedByteArray).decompress(SX * SY * SZ, FileAccess.COMPRESSION_ZSTD)
+	if raw.size() != SX * SY * SZ:
+		return false
+	for i in raw.size():
+		if raw[i] >= Blocks.COUNT:
+			return false
+	var new_micro := {}
+	var masks: Dictionary = snap["m"]
+	for key: Variant in masks:
+		var mask: Variant = masks[key]
+		if not (key is int) or not (mask is PackedByteArray) or int(key) < 0 or int(key) >= raw.size() \
+				or (mask as PackedByteArray).size() != Blocks.MICRO_COUNT or raw[int(key)] == Blocks.AIR:
+			return false
+		var idx := int(key)
+		new_micro[Vector3i(idx % SX, idx / (SX * SZ), (idx / SX) % SZ)] = mask
+	data = raw
+	micro = new_micro
+	reindex()
+	return true
+
+
+func micro_mask(c: Vector3i) -> Variant:
+	## The carving of one cell, or null when it is a plain block.
+	return micro[c] if has_micro(c) else null
+
+
 func load_from(path: String) -> bool:
 	## Rejects malformed or mismatched saves instead of corrupting the world.
 	if not FileAccess.file_exists(path):

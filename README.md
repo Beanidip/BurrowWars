@@ -13,6 +13,10 @@ one complete, playable loop first, everything else on the cut list.
 
 From a terminal: `godot --path .`
 
+**Online:** main menu > **Play Online** to join a server or host a game for friends
+(UDP port 24565). Run an always-on public server with `--headless -- --server`.
+See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
+
 ## The game in one minute
 
 - Dig (hold left mouse) to find **golden cheese**. Each block is one cheese.
@@ -47,7 +51,8 @@ tools/check.sh /path/to/godot
 ```
 
 Runs editor validation, a boot test, an end-to-end smoke test of the real menu ->
-match -> results flow, and the gameplay regression suite. Exit code 0 means all passed.
+match -> results flow, the gameplay regression suite, and multiplayer tests that start
+real server and client processes on localhost. Exit code 0 means all passed.
 See `docs/TEST_RESULTS.md` for what was actually executed and what was not.
 
 ## Where things are
@@ -55,6 +60,7 @@ See `docs/TEST_RESULTS.md` for what was actually executed and what was not.
 - `docs/JAM_SCOPE.md` - the scope lock, schedule and cut list
 - `docs/GAME_DESIGN.md` - rules as implemented
 - `docs/ARCHITECTURE.md` - systems and why they are shaped this way
+- `docs/MULTIPLAYER.md` - playing online, hosting, dedicated/public servers, netcode
 - `docs/KNOWN_ISSUES.md`, `docs/NEXT_SESSION.md` - honest status and the next steps
 
 ## Credits

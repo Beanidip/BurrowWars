@@ -40,6 +40,17 @@ var _seed_edit: LineEdit
 var _blurb: Label
 var _class_buttons: Dictionary = {}
 var _team_buttons: Array[Button] = []
+var _hosting := false
+var _message := ""
+var _name_edit: LineEdit
+var _address_edit: LineEdit
+var _port_edit: LineEdit
+var _server_list: VBoxContainer
+var _status: Label
+
+## Public servers are listed in servers.json in the game's GitHub repository,
+## so adding one is a one-line change (see docs/MULTIPLAYER.md).
+const SERVER_LIST_URL := "https://raw.githubusercontent.com/Beanidip/BurrowWars/main/servers.json"
 
 
 func _ready() -> void:
@@ -111,19 +122,40 @@ func _show_home() -> void:
 	_page.add_child(col)
 	var play := UiKit.button("Cheese Race", _show_setup, Vector2(320, 52))
 	col.add_child(play)
+	col.add_child(UiKit.button("Play Online", _show_online, Vector2(320, 44)))
 	col.add_child(UiKit.button("Free Build", _start_free, Vector2(320, 44)))
 	col.add_child(UiKit.button("How to Play", _show_help, Vector2(320, 44)))
 	col.add_child(UiKit.button("Settings & Controls", _show_settings, Vector2(320, 44)))
 	col.add_child(UiKit.button("Quit", func() -> void: get_tree().quit(), Vector2(320, 44)))
-	var note := UiKit.label("Solo vs bots. LAN multiplayer was cut for the jam - see docs/JAM_SCOPE.md", 13, UiKit.PAPER.darkened(0.25))
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_page.add_child(note)
+	if _message != "":
+		var msg := UiKit.wrapped(_message, 15, UiKit.TEAM[1].lightened(0.3))
+		msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_page.add_child(msg)
+		_message = ""
 	play.grab_focus()
 
 
+func show_message(text: String) -> void:
+	## Shown on the home page, e.g. why an online game ended.
+	_message = text
+	_show_home()
+
+
 func _show_setup() -> void:
+	_hosting = false
+	_setup_page()
+
+
+func _show_host_setup() -> void:
+	if not _save_identity():
+		return
+	_hosting = true
+	_setup_page()
+
+
+func _setup_page() -> void:
 	_clear()
-	_page.add_child(UiKit.label("Cheese Race setup", 28, UiKit.BRASS))
+	_page.add_child(UiKit.label("Host an online game" if _hosting else "Cheese Race setup", 28, UiKit.BRASS))
 	# team
 	var teams := HBoxContainer.new()
 	teams.add_theme_constant_override("separation", 8)
@@ -179,7 +211,12 @@ func _show_setup() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
 	buttons.add_child(UiKit.button("Back", _show_home, Vector2(160, 46)))
-	var go := UiKit.button("Start digging!", _start_race, Vector2(260, 46))
+	if _hosting:
+		_port_edit = LineEdit.new()
+		_port_edit.text = str(Net.DEFAULT_PORT)
+		_port_edit.custom_minimum_size = Vector2(120, 34)
+		_page.add_child(UiKit.row(UiKit.label("Port (UDP; forward it on your router for internet play)"), _port_edit))
+	var go := UiKit.button("Open server & play" if _hosting else "Start digging!", _start_race, Vector2(260, 46))
 	buttons.add_child(go)
 	_page.add_child(buttons)
 	_pick_team(_team)
@@ -188,6 +225,8 @@ func _show_setup() -> void:
 
 
 func _size_text() -> String:
+	if _hosting:
+		return "Seats per team: %d  (players take bot seats as they join)" % _team_size
 	return "Rats per team: %d  (you + %d bot allies vs %d bots)" % [_team_size, _team_size - 1, _team_size]
 
 
@@ -218,8 +257,14 @@ func _start_race() -> void:
 	Config.set_value("team_size", _team_size)
 	Config.set_value("bot_skill", _skill)
 	Config.save()
-	start_requested.emit({"mode": "race", "seed": _seed(), "goal": _goal, "team": _team, "class": _class, "team_size": _team_size,
-		"bot_rest": [7.0, 3.0, 0.0][_skill]})
+	var s := {"mode": "race", "seed": _seed(), "goal": _goal, "team": _team, "class": _class, "team_size": _team_size,
+		"bot_rest": [7.0, 3.0, 0.0][_skill]}
+	if _hosting:
+		s["net"] = "host"
+		var port_text := _port_edit.text.strip_edges() if _port_edit != null else ""
+		var port := port_text.to_int() if port_text.is_valid_int() else 0
+		s["port"] = port if port > 0 and port < 65536 else Net.DEFAULT_PORT
+	start_requested.emit(s)
 
 
 func _start_free() -> void:
@@ -247,3 +292,156 @@ func _show_settings() -> void:
 	var back := UiKit.button("Back", _show_home, Vector2(160, 44))
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_page.add_child(back)
+
+
+# ---------------------------------------------------------------- online
+
+func _show_online() -> void:
+	_clear()
+	_hosting = false
+	_page.add_child(UiKit.label("Play Online", 28, UiKit.BRASS))
+	_name_edit = LineEdit.new()
+	_name_edit.max_length = Net.NAME_MAX
+	_name_edit.placeholder_text = "your rat's name"
+	_name_edit.text = String(Config.get_value("player_name"))
+	_name_edit.custom_minimum_size = Vector2(260, 34)
+	_page.add_child(UiKit.row(UiKit.label("Name"), _name_edit))
+	var teams := HBoxContainer.new()
+	teams.add_theme_constant_override("separation", 8)
+	_team_buttons.clear()
+	for t in 2:
+		var b := UiKit.button(Match.TEAM_NAMES[t], _pick_team.bind(t), Vector2(110, 36))
+		b.toggle_mode = true
+		b.add_theme_color_override("font_color", UiKit.TEAM[t])
+		b.add_theme_color_override("font_pressed_color", UiKit.TEAM[t].lightened(0.3))
+		teams.add_child(b)
+		_team_buttons.append(b)
+	_page.add_child(UiKit.row(UiKit.label("Preferred team"), teams))
+	var classes := HBoxContainer.new()
+	classes.add_theme_constant_override("separation", 6)
+	_class_buttons.clear()
+	for id: String in ClassDefs.ORDER:
+		var cb := UiKit.button(ClassDefs.CLASSES[id]["name"], _pick_class.bind(id), Vector2(104, 36))
+		cb.toggle_mode = true
+		classes.add_child(cb)
+		_class_buttons[id] = cb
+	_page.add_child(UiKit.row(UiKit.label("Class"), classes))
+	_blurb = UiKit.wrapped("", 14, UiKit.PAPER.darkened(0.1))
+	_page.add_child(_blurb)
+	_pick_team(_team)
+	_pick_class(_class)
+
+	_page.add_child(UiKit.label("Public servers", 20, UiKit.BRASS))
+	var sc := UiKit.scroll(110)
+	_server_list = sc[1]
+	_page.add_child(sc[0])
+	_server_list.add_child(UiKit.label("Looking for servers...", 15, UiKit.PAPER.darkened(0.2)))
+	_fetch_servers()
+
+	_address_edit = LineEdit.new()
+	_address_edit.placeholder_text = "address or address:port"
+	_address_edit.text = String(Config.get_value("last_address"))
+	_address_edit.custom_minimum_size = Vector2(300, 34)
+	var join_row := HBoxContainer.new()
+	join_row.add_theme_constant_override("separation", 8)
+	join_row.add_child(_address_edit)
+	join_row.add_child(UiKit.button("Join", func() -> void: _join(_address_edit.text), Vector2(110, 36)))
+	_page.add_child(UiKit.row(UiKit.label("Join by address"), join_row))
+	_status = UiKit.wrapped("", 15, UiKit.PAPER)
+	_page.add_child(_status)
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 12)
+	buttons.add_child(UiKit.button("Back", _show_home, Vector2(160, 46)))
+	buttons.add_child(UiKit.button("Host a game...", _show_host_setup, Vector2(240, 46)))
+	_page.add_child(buttons)
+	_name_edit.grab_focus()
+
+
+func _save_identity() -> bool:
+	var n := Net.clean_name(_name_edit.text) if _name_edit != null and is_instance_valid(_name_edit) else Net.player_name
+	if n == "":
+		if _status != null and is_instance_valid(_status):
+			_status.text = "Pick a name first."
+		return false
+	Net.player_name = n
+	Config.set_value("player_name", n)
+	Config.set_value("last_team", _team)
+	Config.set_value("last_class", _class)
+	Config.save()
+	return true
+
+
+static func split_address(text: String) -> Array:
+	## "host", "host:port" or "[ipv6]:port" -> [host, port]
+	var t := text.strip_edges()
+	var port := Net.DEFAULT_PORT
+	if t.begins_with("["):
+		var close := t.find("]")
+		if close > 0:
+			var rest := t.substr(close + 1)
+			if rest.begins_with(":") and rest.substr(1).is_valid_int():
+				port = rest.substr(1).to_int()
+			return [t.substr(1, close - 1), port]
+	if t.count(":") == 1:
+		var parts := t.split(":")
+		if parts[1].is_valid_int():
+			port = parts[1].to_int()
+		return [parts[0], port]
+	return [t, port]
+
+
+func _join(address: String) -> void:
+	if not _save_identity():
+		return
+	var hp := split_address(address)
+	if String(hp[0]) == "":
+		_status.text = "Type the server's address (ask the host for it)."
+		return
+	Config.set_value("last_address", address.strip_edges())
+	Config.save()
+	var err := Net.join(String(hp[0]), int(hp[1]), {"name": Net.player_name, "team": _team, "class": _class})
+	if err != "":
+		_status.text = err
+		return
+	_status.text = "Connecting to %s:%d ..." % [hp[0], hp[1]]
+	var waiting := _status
+	Net.join_failed.connect(func(reason: String) -> void:
+		if is_instance_valid(waiting):
+			waiting.text = reason, CONNECT_ONE_SHOT)
+
+
+func _fetch_servers() -> void:
+	var http := HTTPRequest.new()
+	http.timeout = 8.0
+	add_child(http)
+	http.request_completed.connect(func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
+		http.queue_free()
+		_show_servers(body.get_string_from_utf8() if result == HTTPRequest.RESULT_SUCCESS and code == 200 else ""))
+	if http.request(SERVER_LIST_URL) != OK:
+		http.queue_free()
+		_show_servers("")
+
+
+func _show_servers(json_text: String) -> void:
+	if _server_list == null or not is_instance_valid(_server_list):
+		return
+	for c in _server_list.get_children():
+		c.queue_free()
+	var data: Variant = JSON.parse_string(json_text) if json_text != "" else null
+	var list: Array = []
+	if data is Dictionary and data.get("servers") is Array:
+		list = data["servers"]
+	var shown := 0
+	for e: Variant in list:
+		if not (e is Dictionary) or not (e.get("address") is String):
+			continue
+		var addr := String(e["address"]).strip_edges()
+		var port := int(e.get("port", Net.DEFAULT_PORT))
+		var title := Net.clean_name(e.get("name", "")) if e.get("name") is String else ""
+		var region := Net.clean_name(e.get("region", "")) if e.get("region") is String else ""
+		var info := UiKit.label("%s   %s:%d   %s" % [title if title != "" else "Server", addr, port, region], 15)
+		_server_list.add_child(UiKit.row(info, UiKit.button("Join", _join.bind("%s:%d" % [addr, port]), Vector2(100, 34))))
+		shown += 1
+	if shown == 0:
+		_server_list.add_child(UiKit.wrapped("No public servers listed right now. Join a friend by address, or host a game.", 14, UiKit.PAPER.darkened(0.2)))

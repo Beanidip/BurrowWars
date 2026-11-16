@@ -1,33 +1,72 @@
 extends Node
-## Application root: owns scene transitions between the menu and a session.
+## Application root: owns scene transitions between the menu and a session,
+## and between rounds of an online game. Started with `-- --server` it runs a
+## headless dedicated server instead (see DedicatedServer).
 
 var menu: MainMenu
 var session: GameSession
+var dedicated: DedicatedServer
 var _last_settings: Dictionary = {}
 
 
 func _ready() -> void:
 	Log.info("Burrow Wars: Jam Edition %s on Godot %s" % [
 		ProjectSettings.get_setting("application/config/version"), Engine.get_version_info()["string"]])
+	Net.joined.connect(_on_joined)
+	Net.join_failed.connect(_on_net_problem)
+	Net.disconnected.connect(_on_net_problem)
+	var args := DedicatedServer.parse_args()
+	if args.has("server"):
+		dedicated = DedicatedServer.new()
+		dedicated.options = args
+		add_child(dedicated)
+		return
 	Sfx.play_music("res://assets/music/clockwork_colony.wav")
 	show_menu()
 
 
-func show_menu() -> void:
+func show_menu(message := "") -> void:
 	_clear()
+	if Net.is_online():
+		Net.close()
 	menu = MainMenu.new()
 	menu.start_requested.connect(start_match)
 	add_child(menu)
+	if message != "":
+		menu.show_message(message)
 
 
 func start_match(settings: Dictionary) -> void:
+	if String(settings.get("net", "")) == "host" and Net.role != Net.Role.SERVER:
+		var err := Net.host(int(settings.get("port", Net.DEFAULT_PORT)))
+		if err != "":
+			show_menu(err)
+			return
 	_clear()
 	_last_settings = settings
 	session = GameSession.new()
 	session.settings = settings
-	session.exit_requested.connect(show_menu, CONNECT_DEFERRED)
+	session.exit_requested.connect(show_menu.bind(""), CONNECT_DEFERRED)
 	session.rematch_requested.connect(_rematch, CONNECT_DEFERRED)
 	add_child(session)
+
+
+func _on_joined(info: Dictionary) -> void:
+	## The server seated us: a fresh session for the first round and every round after.
+	var s: Dictionary = (info.get("settings", {}) as Dictionary).duplicate()
+	s["net"] = "client"
+	_clear()
+	session = GameSession.new()
+	session.settings = s
+	session.net_info = info
+	session.exit_requested.connect(show_menu.bind(""), CONNECT_DEFERRED)
+	add_child(session)
+
+
+func _on_net_problem(reason: String) -> void:
+	if dedicated != null:
+		return
+	show_menu(reason)
 
 
 func _rematch() -> void:

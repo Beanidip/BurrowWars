@@ -1,9 +1,15 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 - Online multiplayer, flowing water (2026-11-16)
 
 | Change | Files |
 |---|---|
+| Online multiplayer: Play Online menu (join by address or from the public server list), host a game from a normal Cheese Race; players take bot seats and bots take them back | `net/net.gd`, `net/net_server.gd`, `net/net_client.gd`, `ui/main_menu.gd`, `core/main.gd`, `match/game_session.gd` |
+| Dedicated server mode (`--headless -- --server`): always-on, bots fill teams, new map after each win, idles when empty | `net/dedicated_server.gd` |
+| Match runs as authority or replica; every request goes through `Match.remote` on a client and is re-validated by the server | `match/match.gd`, `match/siege.gd`, `actors/rat.gd`, `world/voxel_world.gd` |
+| Online games never pause; Free Build map loading is offline-only | `ui/hud.gd` |
+| Public server list read from `servers.json` in this repository | `servers.json`, `ui/main_menu.gd` |
+| Multiplayer end-to-end tests with real processes (dedicated, player-hosted, round rollover) | `tests/net_client_test.gd`, `tests/net_host_test.gd`, `tools/net_check.sh` |
 | Water flows like lava, faster and further (reach 5); lava touching water turns to stone with a hiss of steam | `match/liquid_flow.gd` (was `lava_flow.gd`), `match/match.gd`, `match/match_view.gd` |
 | Windows export preset (single-file exe) | `export_presets.cfg` |
 

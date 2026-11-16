@@ -103,6 +103,8 @@ func try_pickup(rat: Rat, cell: Vector3i) -> String:
 
 
 func try_operate(rat: Rat, cell: Vector3i) -> String:
+	if m.remote != null:
+		return m.remote.act("operate", [cell])
 	var mc: Machine = machines.get(cell)
 	if mc == null:
 		return "Nothing to operate there"
@@ -123,6 +125,9 @@ func try_operate(rat: Rat, cell: Vector3i) -> String:
 
 func release(rat: Rat) -> void:
 	if rat.operating == -1:
+		return
+	if m.remote != null:
+		m.remote.act("release", [])
 		return
 	var mc := by_uid(rat.operating)
 	if mc != null and mc.operator == rat.id:
@@ -148,6 +153,9 @@ func _machine_of(rat: Rat) -> Machine:
 # ---------------------------------------------------------------- controls
 
 func aim(rat: Rat, yaw: float, pitch: float) -> void:
+	if m.remote != null:
+		m.remote.aim_machine(yaw, pitch)
+		return
 	var mc := _machine_of(rat)
 	if mc == null:
 		return
@@ -171,6 +179,8 @@ static func ball_power(id: int) -> int:
 
 func fire(rat: Rat) -> String:
 	## Primary action of whatever the rat is operating. "wait" = on cooldown.
+	if m.remote != null:
+		return m.remote.act("fire", [])
 	var mc := _machine_of(rat)
 	if mc == null:
 		return "You aren't operating a machine"

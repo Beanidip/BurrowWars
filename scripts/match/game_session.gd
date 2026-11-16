@@ -7,7 +7,9 @@ signal exit_requested
 signal rematch_requested
 
 var settings: Dictionary = {}
+var net_info: Dictionary = {}   # online client: the server's welcome
 var m: Match
+var net: Node                   # NetServer when hosting, NetClient when joined
 var player: Rat
 var ctl: PlayerController
 var hud: Hud
@@ -39,18 +41,35 @@ func _ready() -> void:
 	m = Match.new()
 	m.name = "Match"
 	add_child(m)
-	m.setup(settings, true)
+	var online_client := String(settings.get("net", "")) == "client"
+	m.setup(settings, true, online_client)
 	m.rat_spawned.connect(_attach_sprite)
-	var team := int(settings.get("team", 0))
-	player = m.spawn_rat(team, String(settings.get("class", "digger")), false)
-	if not m.free_mode:
-		var size := int(settings.get("team_size", 2))
-		var pick := 1
-		for i in size - 1:
-			m.spawn_rat(team, ClassDefs.ORDER[pick % 4], true)
-			pick += 1
-		for i in size:
-			m.spawn_rat(1 - team, ClassDefs.ORDER[(pick + i) % 4], true)
+	if online_client:
+		var nc := NetClient.new(m, net_info)
+		nc.name = "NetClient"
+		net = nc
+		add_child(nc)
+		player = nc.me()
+		player.net_local = true
+	else:
+		var team := int(settings.get("team", 0))
+		player = m.spawn_rat(team, String(settings.get("class", "digger")), false)
+		if not m.free_mode:
+			var size := int(settings.get("team_size", 2))
+			var pick := 1
+			for i in size - 1:
+				m.spawn_rat(team, ClassDefs.ORDER[pick % 4], true)
+				pick += 1
+			for i in size:
+				m.spawn_rat(1 - team, ClassDefs.ORDER[(pick + i) % 4], true)
+		if String(settings.get("net", "")) == "host":
+			if Net.player_name != "":
+				player.display_name = Net.player_name
+			var ns := NetServer.new()
+			ns.name = "NetServer"
+			ns.m = m
+			net = ns
+			add_child(ns)
 
 	ctl = PlayerController.new()
 	ctl.m = m
@@ -72,6 +91,8 @@ func _ready() -> void:
 	hud.rat = player
 	hud.ctl = ctl
 	add_child(hud)
+	if net is NetClient:
+		(net as NetClient).notice.connect(func(text: String) -> void: ctl.notice.emit(text))
 	hud.exit_requested.connect(func() -> void: exit_requested.emit())
 	hud.rematch_requested.connect(func() -> void: rematch_requested.emit())
 	m.won.connect(_celebrate)

@@ -1,6 +1,6 @@
 # Test results
 
-Only tests that were actually executed are listed. Last full run: 2026-11-16 (v1.3).
+Only tests that were actually executed are listed. Last full run: 2026-11-16 (v1.4).
 Engine: Godot 4.7.2.stable.official.ed1daf0bf, Linux x86_64.
 
 ## Executed and passing
@@ -10,12 +10,18 @@ Engine: Godot 4.7.2.stable.official.ed1daf0bf, Linux x86_64.
 | Import + editor validation | `godot --headless --path . --editor --quit` | Pass, no script or resource errors |
 | Boot main scene | `godot --headless --path . --quit-after 120` | Pass |
 | App-flow smoke test (headless) | `godot --headless --path . res://tests/smoke_runner.tscn` | 80 checks pass, 3 skipped (mouse capture needs a display) |
-| Gameplay regression suite | `godot --headless --path . res://tests/test_runner.tscn` | 48 tests, 526 assertions, 0 failed |
+| Gameplay regression suite | `godot --headless --path . res://tests/test_runner.tscn` | 49 tests, 536 assertions, 0 failed (v1.4 adds `water_flows`) |
+| Multiplayer: dedicated server + scripted client (two processes, ENet over localhost) | `tools/net_check.sh` | 19 checks pass: seat, world sync, bots visible, cheat snap-back, walk, dig, stash, place, refusal notice, server respawn, rejoin |
+| Multiplayer: player-hosted game + client | `tools/net_check.sh` | Host 8 checks + client 19 pass: client seen moving on the host, seat returns to a bot on leave |
+| Multiplayer: round rollover on a dedicated server | `tools/net_check.sh` | 5 checks pass: win shown on the client, client moved onto a new map with fresh scores |
+| Multiplayer UI on a virtual display | Xvfb screenshots of Play Online and an in-game client | Looked at: layout fits 1280x720, joined player and bots visible, join toast shown |
 | App-flow smoke test on a virtual display (Xvfb, Mesa llvmpipe, OpenGL Compatibility) | same scene with `--rendering-driver opengl3` | 67 checks pass, 0 skipped, at 1280x720, 1920x1080 and 5120x1440 (v1.1) |
 | UI fit at each target resolution | smoke test at 1280x720, 1920x1080, 2560x1440, 3440x1440, 5120x1440 | Pass at all five for v1.0; v1.1 re-run at 1280x720, 1920x1080 and 5120x1440 only |
 | Gate self-test | made a bonk drop 2 cheese; added a parse error | `tools/check.sh` exited non-zero both times |
 
 All of the above run from one command: `tools/check.sh /path/to/godot` (headless parts).
+Not yet executed: two humans on two machines over a real internet connection (latency, NAT,
+firewall prompts), and a public server under load.
 
 ### What the gameplay suite covers
 

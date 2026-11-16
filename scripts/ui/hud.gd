@@ -405,6 +405,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif m.free_mode and event.is_action_pressed("save_map"):
 		var ok := m.world.save_to("user://maps/free_build.bwmap", {"machines": m.siege.to_save()})
 		_push_toast("Map saved to %s" % ProjectSettings.globalize_path("user://maps/free_build.bwmap") if ok else "Map save failed - see log", UiKit.BRASS)
+	elif m.free_mode and event.is_action_pressed("load_map") and m.networked:
+		_push_toast("Loading a map is only possible offline", UiKit.PAPER)
 	elif m.free_mode and event.is_action_pressed("load_map"):
 		if m.world.load_from("user://maps/free_build.bwmap"):
 			m.tnt.clear()
@@ -457,7 +459,7 @@ func open_dialog(kind: String) -> void:
 		"pause":
 			v = UiKit.center_panel(_root, 720, 640)
 			_fill_pause(v)
-			get_tree().paused = true
+			get_tree().paused = not m.networked   # an online match never stops for one player
 		_:
 			v = UiKit.center_panel(_root, 640, 460)
 			_fill_results(v)
@@ -590,7 +592,7 @@ func _fill_inventory(v: VBoxContainer) -> void:
 
 
 func _equip(g: String) -> void:
-	rat.equipped = g
+	m.set_equipped(rat, g)
 	open_dialog("inventory")
 
 
@@ -653,6 +655,9 @@ func _fill_results(v: VBoxContainer) -> void:
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 12)
 	var again := UiKit.button("Rematch (new map)", func() -> void: rematch_requested.emit(), Vector2(220, 46))
+	if m.replica:
+		again = UiKit.button("Next round starts soon...", func() -> void: pass, Vector2(260, 46))
+		again.disabled = true
 	h.add_child(again)
 	h.add_child(UiKit.button("Main menu", _exit, Vector2(200, 46)))
 	v.add_child(h)

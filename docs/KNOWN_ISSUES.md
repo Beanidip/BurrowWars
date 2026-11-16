@@ -19,4 +19,7 @@ None of these block finishing a match.
 | Bots ignore the new toys | Any match | They never use machines, Mobile TNT, chisel or pantograph. They do raid and defend vaults. |
 | Bots treat carved blocks as solid | Carve a low tunnel | They dig through rather than use it. |
 | Crane ball is hard to read from some angles | Man a crane | Hits show cracks and thuds, but the ball itself is small. |
+| Online movement is trusted within a speed limit | A modified client | Digging, building, scores and inventories are server-validated; see docs/MULTIPLAYER.md "Limits". |
+| Internet play from a player's PC needs port forwarding | Host behind a home router | UDP 24565. No relay or NAT punch-through yet; dedicated servers avoid this. |
+| Server list has no player counts or ping | Play Online | It lists name, address and region from servers.json. |
 | Unverified by a person | - | See "Not executed" in TEST_RESULTS.md: feel, audio levels, real-GPU frame rate. |

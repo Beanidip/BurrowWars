@@ -10,6 +10,7 @@ scripts/
   match/   match.gd (THE AUTHORITY)  class_defs.gd (classes, shop)  match_view.gd (fx/audio)
            game_session.gd (composition root for one session)
   ui/      ui_kit.gd  main_menu.gd  hud.gd  settings_panel.gd
+  net/     net.gd (autoload: connection + RPCs)  net_server.gd  net_client.gd  dedicated_server.gd
 tests/     test_runner (gameplay suite)  smoke_runner (real app flow)  dev/bot_debug
 ```
 
@@ -22,9 +23,11 @@ tests/     test_runner (gameplay suite)  smoke_runner (real app flow)  dev/bot_d
 and protection zones, then applies the change and emits signals (`fx`, `toast`,
 `score_changed`, `won`). The human controller and the bots call exactly the same methods.
 
-This is the multiplayer seam. A listen server keeps `Match` as is; clients send these
-requests as RPCs and replay `block_changed` / `fx` events. Nothing in the UI or controller
-writes scores, wallets, terrain or inventories directly.
+This is the multiplayer seam, and it is now used: on an online client the Match is a
+*replica* and each of these methods forwards the request to the server through
+`Match.remote`; the server runs the same method for that player's rat and streams the
+results back. Nothing in the UI or controller writes scores, wallets, terrain or
+inventories directly. See `docs/MULTIPLAYER.md`.
 
 ## State vs presentation
 
