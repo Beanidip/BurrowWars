@@ -37,7 +37,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 					_micro_block(world, ov, oc, Vector3i(x, y, z), id, tint * depth)
 					continue
 				if opaque[id] == 1:
-					var glow := id == Blocks.CHEESE or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED or Blocks.is_team_block(id)
+					var glow := id == Blocks.CHEESE or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED or Blocks.is_team_block(id) or Blocks.is_paint(id)
 					var base := col * (tint if glow else tint * depth)
 					for f in 6:
 						var ax: int = x + NX[f]
@@ -104,6 +104,12 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 						_box(ov, oc, mn + Vector3(0.1, 0, 0.1), mn + Vector3(0.9, 0.2, 0.9), Color(0.35, 0.3, 0.28))
 						_box(ov, oc, mn + Vector3(0.35, 0.2, 0.35), mn + Vector3(0.65, 0.78, 0.65), Color(0.75, 0.75, 0.8))
 						_box(ov, oc, mn + Vector3(0.04, 0.78, 0.04), mn + Vector3(0.96, 1.0, 0.96), col)
+					Blocks.HIGHWAY:
+						# a plank road lying on the face of the block below
+						_box(ov, oc, mn + Vector3(0.0, 0.0, 0.0), mn + Vector3(1.0, 0.06, 1.0), col * depth)
+						for pl in 3:
+							var px := 0.06 + 0.32 * pl
+							_box(ov, oc, mn + Vector3(px, 0.06, 0.03), mn + Vector3(px + 0.24, 0.085, 0.97), col * depth * (1.12 if pl != 1 else 0.92))
 					Blocks.STICKY_BLUE, Blocks.STICKY_RED:
 						_box(ov, oc, mn + Vector3(0.05, 0, 0.05), mn + Vector3(0.95, 0.05, 0.95), Color(0.62, 0.72, 0.2))
 						_box(ov, oc, mn + Vector3(0.25, 0.05, 0.3), mn + Vector3(0.6, 0.1, 0.7), Color(0.75, 0.85, 0.3))
@@ -215,7 +221,8 @@ static func _micro_block(world: VoxelWorld, v: PackedVector3Array, c: PackedColo
 	for my in m:
 		for mz in m:
 			for mx in m:
-				if mask[mx + m * (mz + m * my)] == 0:
+				var mv := mask[mx + m * (mz + m * my)]
+				if mv == 0:
 					continue
 				var mn := base + Vector3(mx, my, mz) * s
 				var k := 0.94 + 0.12 * float((mx * 7 + my * 3 + mz * 5) % 4) / 3.0
@@ -226,7 +233,9 @@ static func _micro_block(world: VoxelWorld, v: PackedVector3Array, c: PackedColo
 					if ax < 0 or ay < 0 or az < 0 or ax >= m or ay >= m or az >= m:
 						if open_side[f] == 0:
 							continue
-					elif mask[ax + m * (az + m * ay)] == 1:
+					elif mask[ax + m * (az + m * ay)] != 0:
 						continue
 					var fc := col if (f == 2 or id != Blocks.GRASS) else side
+					if mv > 1:
+						fc = Blocks.paint_color(mv - 2)
 					_face(v, c, mn, mn + Vector3(s, s, s), f, _shade(fc, SHADE[f] * k))

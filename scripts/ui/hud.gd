@@ -33,6 +33,7 @@ var _hint: Label
 var _target: Label
 var _toasts: VBoxContainer
 var _marker_labels: Array[Label] = []
+var _paint_chip: ColorRect
 var _dialog: Control
 var _dialog_kind := ""
 var _dialog_notice: Label
@@ -145,7 +146,7 @@ func _build_bottom() -> void:
 	# Q gadget slot
 	var q := PanelContainer.new()
 	q.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.BRASS, 8, 2, 6))
-	q.custom_minimum_size = Vector2(120, 62)
+	q.custom_minimum_size = Vector2(104, 62)
 	var qv := VBoxContainer.new()
 	qv.add_theme_constant_override("separation", 0)
 	q.add_child(qv)
@@ -155,20 +156,23 @@ func _build_bottom() -> void:
 	qv.add_child(_q_name)
 	qv.add_child(_q_count)
 	bar.add_child(q)
-	for i in ClassDefs.MATS.size():
+	for i in ClassDefs.MATS.size() + 1:
+		var paint := i == ClassDefs.MATS.size()
 		var slot := PanelContainer.new()
-		slot.custom_minimum_size = Vector2(70, 62)
+		slot.custom_minimum_size = Vector2(60, 62)
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 0)
 		slot.add_child(v)
 		var head := HBoxContainer.new()
 		head.add_child(UiKit.label(str(i + 1), 12, UiKit.BRASS))
 		var chip := ColorRect.new()
-		chip.color = MAT_ICON_COLORS[i]
+		chip.color = Blocks.paint_color(0) if paint else MAT_ICON_COLORS[i]
+		if paint:
+			_paint_chip = chip
 		chip.custom_minimum_size = Vector2(16, 16)
 		head.add_child(chip)
 		v.add_child(head)
-		v.add_child(UiKit.label(MAT_SHORT[i], 14))
+		v.add_child(UiKit.label("Paint" if paint else MAT_SHORT[i], 14))
 		var count := UiKit.label("0", 13, UiKit.PAPER.darkened(0.15))
 		v.add_child(count)
 		_slots.append(slot)
@@ -251,7 +255,11 @@ func _process(_delta: float) -> void:
 		_tool_slots[i].add_theme_stylebox_override("panel", _style_slot_on if int(ctl.tool) == i + 1 else _style_slot)
 	for i in _slots.size():
 		_slots[i].add_theme_stylebox_override("panel", _style_slot_on if (i == ctl.selected_mat and ctl.tool != PlayerController.Tool.PANTOGRAPH) else _style_slot)
-		_slot_counts[i].text = "inf" if m.free_mode else "x%d" % int(rat.mats[ClassDefs.MATS[i]])
+		if i >= ClassDefs.MATS.size():
+			_paint_chip.color = Blocks.paint_color(ctl.selected_color)
+			_slot_counts[i].text = "[%s] colour" % Inputs.key_name("color_picker")
+		else:
+			_slot_counts[i].text = "inf" if m.free_mode else "x%d" % int(rat.mats[ClassDefs.MATS[i]])
 	if rat.equipped != "":
 		_q_name.text = ClassDefs.GADGET_NAME[rat.equipped]
 		_q_count.text = "unlimited" if m.free_mode else "x%d   (T: next)" % int(rat.gadgets.get(rat.equipped, 0))
@@ -392,6 +400,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_toggle("workshop")
 	elif event.is_action_pressed("inventory"):
 		_toggle("inventory")
+	elif event.is_action_pressed("color_picker"):
+		_toggle("colors")
 	elif m.free_mode and event.is_action_pressed("save_map"):
 		var ok := m.world.save_to("user://maps/free_build.bwmap", {"machines": m.siege.to_save()})
 		_push_toast("Map saved to %s" % ProjectSettings.globalize_path("user://maps/free_build.bwmap") if ok else "Map save failed - see log", UiKit.BRASS)
@@ -441,6 +451,9 @@ func open_dialog(kind: String) -> void:
 		"inventory":
 			v = UiKit.center_panel(_root, 560, 480)
 			_fill_inventory(v)
+		"colors":
+			v = UiKit.center_panel(_root, 520, 330)
+			_fill_colors(v)
 		"pause":
 			v = UiKit.center_panel(_root, 720, 640)
 			_fill_pause(v)
@@ -510,6 +523,40 @@ func _say(text: String, is_error: bool) -> void:
 	if _dialog_notice != null:
 		_dialog_notice.text = text
 		_dialog_notice.add_theme_color_override("font_color", UiKit.TEAM[1].lightened(0.2) if is_error else Color(0.6, 0.95, 0.55))
+
+
+func _fill_colors(v: VBoxContainer) -> void:
+	_dialog_header(v, "Paint Pots", Inputs.key_name("color_picker"))
+	v.add_child(UiKit.wrapped("Pick a colour. Slot 6 then places full painted blocks with right mouse; with the chisel (9) right mouse adds painted microvoxels. Painted blocks are dyed stone.", 14, UiKit.PAPER.darkened(0.15)))
+	var grid := GridContainer.new()
+	grid.columns = 6
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	for k in Blocks.PALETTE_SIZE:
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(68, 68)
+		b.tooltip_text = Blocks.PALETTE_NAMES[k]
+		var col := Blocks.paint_color(k)
+		var chosen := k == ctl.selected_color
+		b.add_theme_stylebox_override("normal", UiKit.box(col, UiKit.PAPER if chosen else UiKit.WOOD_DARK, 10, 5 if chosen else 2, 4))
+		b.add_theme_stylebox_override("hover", UiKit.box(col.lightened(0.15), UiKit.BRASS, 10, 4, 4))
+		b.add_theme_stylebox_override("pressed", UiKit.box(col.darkened(0.15), UiKit.BRASS, 10, 5, 4))
+		b.pressed.connect(pick_color.bind(k))
+		grid.add_child(b)
+	v.add_child(grid)
+	var name_label := UiKit.label("Current: %s" % Blocks.PALETTE_NAMES[ctl.selected_color], 16, UiKit.BRASS)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(name_label)
+
+
+func pick_color(k: int) -> void:
+	ctl.selected_color = clampi(k, 0, Blocks.PALETTE_SIZE - 1)
+	ctl.selected_mat = ClassDefs.MATS.size()      # switch the build slot to Paint
+	if ctl.tool == PlayerController.Tool.PANTOGRAPH:
+		ctl.tool = PlayerController.Tool.DIG
+	close_dialog()
+	_push_toast("Painting in %s: right mouse places a block; with the chisel it adds a microvoxel" % Blocks.PALETTE_NAMES[k], Blocks.paint_color(k).lightened(0.2))
 
 
 func _fill_inventory(v: VBoxContainer) -> void:

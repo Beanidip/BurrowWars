@@ -7,7 +7,8 @@ enum {
 	BEDROCK, BASE_BLUE, BASE_RED, BRICK, LEAVES, SHROOM_CAP, SHROOM_STEM, GLOW,
 	HIGHWAY, LADDER, SPRING, TNT, TRAP_BLUE, TRAP_RED,
 	CONV_XP, CONV_XN, CONV_ZP, CONV_ZN, GATE_BLUE, GATE_RED,
-	STICKY_BLUE, STICKY_RED, PIT_BLUE, PIT_RED, WALL_SPRING, CANNON, CRANE, DOZER, TEAM_BLUE, TEAM_RED, COUNT
+	STICKY_BLUE, STICKY_RED, PIT_BLUE, PIT_RED, WALL_SPRING, CANNON, CRANE, DOZER, TEAM_BLUE, TEAM_RED,
+	PAINT_0, PAINT_1, PAINT_2, PAINT_3, PAINT_4, PAINT_5, PAINT_6, PAINT_7, PAINT_8, PAINT_9, PAINT_10, PAINT_11, COUNT
 }
 
 const OBSIDIAN_HITS := 12   # balance knob: ordinary dig hits to break obsidian
@@ -36,7 +37,7 @@ const DEFS := [
 	["Mushroom Cap", 1, Color(0.82, 0.22, 0.26), true, true, ""],
 	["Mushroom Stem", 1, Color(0.92, 0.88, 0.78), true, true, ""],
 	["Glow Crystal", 3, Color(0.35, 0.95, 0.90), true, true, ""],
-	["Highway", 2, Color(0.80, 0.63, 0.36), true, true, "item:highway"],
+	["Highway", 2, Color(0.80, 0.63, 0.36), false, false, "item:highway"],
 	["Ladder", 1, Color(0.70, 0.50, 0.26), false, false, "item:ladder"],
 	["Spring", 2, Color(0.55, 0.78, 0.35), true, false, "item:spring"],
 	["TNT", 1, Color(0.85, 0.16, 0.14), true, true, ""],
@@ -59,9 +60,26 @@ const DEFS := [
 	# Team blocks: a floor/wall only their own team can stand on or touch.
 	["Team Block", 1, Color(0.42, 0.66, 1.0), false, true, ""],
 	["Team Block", 1, Color(1.0, 0.50, 0.45), false, true, ""],
+	# Painted blocks: dyed stone in the 12 palette colours (place with slot 6, pick with C).
+	["Red Block", 4, Color(0.86, 0.22, 0.22), true, true, "mat:stone"],
+	["Orange Block", 4, Color(0.95, 0.52, 0.16), true, true, "mat:stone"],
+	["Yellow Block", 4, Color(0.97, 0.84, 0.25), true, true, "mat:stone"],
+	["Lime Block", 4, Color(0.58, 0.85, 0.28), true, true, "mat:stone"],
+	["Green Block", 4, Color(0.18, 0.58, 0.30), true, true, "mat:stone"],
+	["Teal Block", 4, Color(0.15, 0.66, 0.66), true, true, "mat:stone"],
+	["Sky Block", 4, Color(0.45, 0.76, 0.98), true, true, "mat:stone"],
+	["Blue Block", 4, Color(0.20, 0.36, 0.86), true, true, "mat:stone"],
+	["Purple Block", 4, Color(0.56, 0.32, 0.82), true, true, "mat:stone"],
+	["Pink Block", 4, Color(0.96, 0.52, 0.76), true, true, "mat:stone"],
+	["White Block", 4, Color(0.95, 0.95, 0.93), true, true, "mat:stone"],
+	["Charcoal Block", 4, Color(0.20, 0.20, 0.23), true, true, "mat:stone"],
 ]
 
-const CHISELABLE := [DIRT, GRASS, STONE, OBSIDIAN, WOOD, ICE, BRICK]
+const PALETTE_SIZE := 12
+const PALETTE_NAMES := ["Red", "Orange", "Yellow", "Lime", "Green", "Teal", "Sky", "Blue", "Purple", "Pink", "White", "Charcoal"]
+
+const CHISELABLE := [DIRT, GRASS, STONE, OBSIDIAN, WOOD, ICE, BRICK,
+	PAINT_0, PAINT_1, PAINT_2, PAINT_3, PAINT_4, PAINT_5, PAINT_6, PAINT_7, PAINT_8, PAINT_9, PAINT_10, PAINT_11]
 
 static var SOLID := PackedByteArray()
 static var OPAQUE := PackedByteArray()
@@ -129,6 +147,14 @@ static func mat_of(id: int) -> String:
 	## Building material a block is made of ("" if it is not a material block).
 	var d: String = DEFS[id][5]
 	return d.substr(4) if d.begins_with("mat:") else ""
+
+
+static func is_paint(id: int) -> bool:
+	return id >= PAINT_0 and id < PAINT_0 + PALETTE_SIZE
+
+
+static func paint_color(k: int) -> Color:
+	return COLOR[PAINT_0 + clampi(k, 0, PALETTE_SIZE - 1)]
 
 
 static func is_team_block(id: int) -> bool:

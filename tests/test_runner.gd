@@ -19,7 +19,8 @@ func _ready() -> void:
 		"bonk_rules", "respawn_conserves_cheese", "economy_multiplier", "workshop_rules",
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "ladder_stack_and_floor_gadgets",
-		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance", "save_load", "free_build",
+		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
+		"painted_blocks", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -618,7 +619,7 @@ func test_class_abilities() -> void:
 			if m.world.get_cell(ARENA + Vector3i(dx, 0, dz)) == Blocks.DIRT:
 				filled += 1
 	check(filled == 9, "Patch fills a 3x3 (%d)" % filled)
-	m.world.set_block(ARENA + Vector3i(0, -1, 0), Blocks.HIGHWAY)
+	m.world.set_block(ARENA, Blocks.HIGHWAY)    # a highway is a layer on top of the floor
 	run(m, 0.1)
 	var base_speed := Config.BASE_SPEED * float(builder.cls["speed"])
 	check(builder.move_speed() > base_speed * 1.5, "highway boosts speed")
@@ -918,7 +919,8 @@ func test_ladder_stack_and_floor_gadgets() -> void:
 	m.try_use_equipped(r, {"cell": floor_cell + Vector3i(2, 0, 0), "normal": Vector3i(0, 1, 0)}, look, false)
 	check(m.world.get_cell(floor_cell + Vector3i(2, 0, 0)) == Blocks.CONV_ZP, "with no edge given it falls back to the rat's facing")
 	r.equipped = "highway"
-	check(m.try_use_equipped(r, {"cell": ARENA + Vector3i(-1, -1, 0), "normal": Vector3i(0, 1, 0)}, look, false) == "" and m.world.get_cell(ARENA + Vector3i(-1, -1, 0)) == Blocks.HIGHWAY, "highway is laid into the floor too")
+	check(m.try_use_equipped(r, {"cell": ARENA + Vector3i(-1, -1, 0), "normal": Vector3i(0, 1, 0)}, look, false) == "", "highway placed")
+	check(m.world.get_cell(ARENA + Vector3i(-1, 0, 0)) == Blocks.HIGHWAY and m.world.get_cell(ARENA + Vector3i(-1, -1, 0)) == Blocks.STONE, "a highway lies on top of the block's face; the block itself stays")
 	# aimed at a wall face it still goes in the free cell next to it
 	m.world.set_block(ARENA + Vector3i(3, 0, 3), Blocks.STONE)
 	check(m.try_use_equipped(r, {"cell": ARENA + Vector3i(3, 0, 3), "normal": Vector3i(-1, 0, 0)}, look, false) == "" and m.world.get_cell(ARENA + Vector3i(2, 0, 3)) == Blocks.HIGHWAY, "on a side face the gadget goes beside the block")
@@ -1011,6 +1013,192 @@ func test_ice_slides_off_the_end() -> void:
 	pk.mats = {"dirt": 1}
 	run(m, 2.5)
 	check(pk.pos.x > ARENA.x + 1.0, "a sliding object leaves the end of the ice (x=%.1f)" % (pk.pos.x - ARENA.x))
+	end(m)
+
+
+func test_painted_blocks() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "scout")
+	var cell := ARENA + Vector3i(2, 0, 0)
+	check(m.try_place_paint(r, cell, 3) != "", "painted blocks need stone")
+	r.mats["stone"] = 3
+	check(m.try_place_paint(r, cell, 3) == "" and m.world.get_cell(cell) == Blocks.PAINT_0 + 3, "places a full block in the chosen colour")
+	check(int(r.mats["stone"]) == 2, "it costs one stone")
+	check(m.try_place_paint(r, cell + Vector3i(0, 1, 0), 99) != "" and m.try_place_paint(r, cell + Vector3i(0, 1, 0), -1) != "", "colours outside the palette are refused")
+	var distinct := {}
+	for k in Blocks.PALETTE_SIZE:
+		distinct[Blocks.paint_color(k).to_html()] = true
+	check(distinct.size() == 12, "twelve distinct palette colours")
+	check(r.blocked_at(Vector3(cell) + Vector3(0.5, 0, 0.5)), "painted blocks are solid")
+	var n := 0
+	while m.world.get_cell(cell) != Blocks.AIR and n < 20:
+		r.dig_cd = 0.0
+		m.try_dig(r, cell)
+		n += 1
+	check(n == 4 and int(r.mats["stone"]) == 3, "digging one takes 4 hits and returns the stone (no free material)")
+	# chisel: a painted microvoxel on a block of another material
+	var stone := ARENA + Vector3i(2, 0, 2)
+	m.world.set_block(stone, Blocks.STONE)
+	r.position = Vector3(ARENA) + Vector3(1.5, 0, 1.5)
+	r.chisel_cd = 0.0
+	check(m.try_chisel_remove(r, stone, Vector3i(0, 6, 0)) == "", "carve a corner")
+	r.chisel_cd = 0.0
+	check(m.try_chisel_add(r, stone, Vector3i(0, 6, 0), "stone", 7) == "", "refill it in blue")
+	var mask: PackedByteArray = m.world.micro[stone]
+	check(mask[0 + 7 * (0 + 7 * 6)] == 2 + 7 and m.world.micro_count(stone) == 343, "the microvoxel remembers its colour; the block stays carved-with-colour")
+	check(m.world.get_cell(stone) == Blocks.STONE, "the parent block is still stone")
+	check(r.blocked_at(Vector3(stone) + Vector3(0.5, 0, 0.5)), "coloured microvoxels collide like any other")
+	# chisel into empty air creates a painted block
+	var air := ARENA + Vector3i(2, 0, -2)
+	r.position = Vector3(ARENA) + Vector3(1.5, 0, -1.5)
+	r.chisel_cd = 0.0
+	check(m.try_chisel_add(r, air, Vector3i(0, 0, 0), "stone", 1) == "" and m.world.get_cell(air) == Blocks.PAINT_0 + 1 and m.world.micro_count(air) == 1, "chiselling colour into thin air starts a painted block")
+	# colours survive save/load and the pantograph
+	check(m.world.save_to("user://test_maps/paint.bwmap"), "save")
+	m.world.set_block(stone, Blocks.AIR)
+	check(m.world.load_from("user://test_maps/paint.bwmap") and (m.world.micro[stone] as PackedByteArray)[0 + 7 * (0 + 7 * 6)] == 9, "painted microvoxels persist through save and load")
+	r.position = Vector3(ARENA) + Vector3(1.5, 0, 1.5)
+	var res := m.copy_region(r, stone, stone)
+	check(res.has("blueprint"), "pantograph copies the painted block")
+	if res.has("blueprint"):
+		r.mats["stone"] = 5
+		var dest := ARENA + Vector3i(0, 0, 3)
+		check(m.try_paste(r, res["blueprint"], dest) == "" and (m.world.micro[dest] as PackedByteArray)[0 + 7 * (0 + 7 * 6)] == 9, "and pastes it with its colours")
+	end(m)
+
+
+func test_highway_layer() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "builder")
+	r.gadgets["highway"] = 4
+	r.equipped = "highway"
+	run(m, 0.2)
+	var top := ARENA + Vector3i(2, 0, 0)
+	check(m.try_use_equipped(r, {"cell": top + Vector3i(0, -1, 0), "normal": Vector3i(0, 1, 0)}, Vector3(1, 0, 0), false) == "", "placed on a floor")
+	check(m.world.get_cell(top) == Blocks.HIGHWAY and m.world.get_cell(top + Vector3i(0, -1, 0)) == Blocks.STONE, "highway sits on the face; the block under it is untouched")
+	check(Blocks.SOLID[Blocks.HIGHWAY] == 0 and not r.blocked_at(Vector3(top) + Vector3(0.5, 0, 0.5)), "it is a thin layer you walk on, not a block you bump into")
+	r.position = Vector3(top) + Vector3(0.5, 0, 0.5)
+	run(m, 0.2)
+	check(r.on_floor and absf(r.position.y - ARENA.y) < 0.02, "a rat stands on the floor through it")
+	check(r.move_speed() > Config.BASE_SPEED * 1.5, "and gets the highway speed boost")
+	check(m.try_place_gadget(r, ARENA + Vector3i(0, 3, 0), "highway") != "" and int(r.gadgets["highway"]) == 3, "a highway needs a floor under it")
+	m.world.set_block(top + Vector3i(0, -1, 0), Blocks.AIR)
+	check(m.world.get_cell(top) == Blocks.AIR, "dig the floor away and the highway on it goes too")
+	end(m)
+
+
+func test_siege_floor_conveyor() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var r := arena_rat(m, 0, "builder", Vector3(-1.5, 0, 0))
+	r.gadgets["cannon"] = 1
+	r.gadgets["conveyor"] = 3
+	run(m, 0.2)
+	check(m.try_place_gadget(r, ARENA, "cannon") == "", "cannon placed")
+	run(m, 1.0)
+	check(m.world.get_cell(ARENA) == Blocks.CANNON, "it stays put with no conveyor near")
+	# lay a conveyor into the floor NEXT to it (not under it), the way Q places them, facing +X
+	r.equipped = "conveyor"
+	var beside := ARENA + Vector3i(0, -1, 1)
+	check(m.try_use_equipped(r, {"cell": beside, "normal": Vector3i(0, 1, 0)}, Vector3(1, 0, 0), false, Vector3(1, 0, 0)) == "" and m.world.get_cell(beside) == Blocks.CONV_XP, "conveyor laid into the floor beside the machine")
+	run(m, 0.7)
+	check(m.world.get_cell(ARENA + Vector3i(1, 0, 0)) == Blocks.CANNON, "the machine moves the way that conveyor faces")
+	run(m, 1.5)
+	check(m.world.get_cell(ARENA + Vector3i(1, 0, 0)) == Blocks.CANNON, "and stops once it has left the conveyor behind")
+	# a different facing sends it a different way
+	var c2 := ARENA + Vector3i(2, -1, 0)
+	m.try_use_equipped(r, {"cell": c2, "normal": Vector3i(0, 1, 0)}, Vector3(1, 0, 0), false, Vector3(0, 0, -1))
+	check(m.world.get_cell(c2) == Blocks.CONV_ZN, "second conveyor faces -Z")
+	run(m, 0.7)
+	check(m.world.get_cell(ARENA + Vector3i(1, 0, -1)) == Blocks.CANNON, "direction always follows the conveyor's facing")
+	# rolling over a highway layer puts the highway back behind it
+	var road := ARENA + Vector3i(1, 0, -2)
+	m.world.set_block(road, Blocks.HIGHWAY)
+	m.world.set_block(ARENA + Vector3i(1, -1, -1), Blocks.CONV_ZN)   # under the machine: push it across the road tile
+	var seen_on_road := false
+	for i in 120:
+		m.step(DT)
+		seen_on_road = seen_on_road or m.world.get_cell(road) == Blocks.CANNON
+	check(seen_on_road, "a conveyor can push a machine across a highway tile")
+	check(m.world.get_cell(road) == Blocks.HIGHWAY and m.world.get_cell(road + Vector3i(0, 0, -1)) == Blocks.CANNON, "and the highway is still there after it rolls on")
+	check(m.siege.machines.size() == 1, "still exactly one machine")
+	end(m)
+
+
+func test_wrecking_ball_table() -> void:
+	check(SiegeSystem.ball_power(Blocks.DIRT) >= Blocks.HITS[Blocks.DIRT] and SiegeSystem.ball_power(Blocks.GRASS) >= Blocks.HITS[Blocks.GRASS], "dirt breaks in one ball hit")
+	for pair: Array in [[Blocks.STONE, 2], [Blocks.BRICK, 2], [Blocks.OBSIDIAN, 4]]:
+		var need := ceili(float(Blocks.HITS[pair[0]]) / float(SiegeSystem.ball_power(pair[0])))
+		check(need == int(pair[1]), "%s takes %d ball hits (%d)" % [Blocks.block_name(pair[0]), pair[1], need])
+	check(SiegeSystem.ball_power(Blocks.BEDROCK) == 0 and SiegeSystem.ball_power(Blocks.BASE_BLUE) == 0, "bedrock and bases are immune")
+	# count real impacts in the simulation, per material
+	for row: Array in [[Blocks.DIRT, 1], [Blocks.STONE, 2], [Blocks.OBSIDIAN, 4], [Blocks.GATE_RED, 10]]:
+		var m := new_match()
+		flat_arena(m, ARENA, 8)
+		var r := arena_rat(m, 0, "builder", Vector3(-1.5, 0, 0))
+		r.gadgets["crane"] = 1
+		r.yaw = -PI / 2.0
+		run(m, 0.2)
+		m.try_place_gadget(r, ARENA, "crane")
+		var mc: SiegeSystem.Machine = m.siege.machines[ARENA]
+		mc.yaw = -PI / 2.0
+		m.siege.try_operate(r, ARENA)
+		var target := Vector3i(-99, 0, 0)
+		var thuds := [0]
+		m.fx.connect(func(kind: String, _pos: Vector3, data: Variant) -> void:
+			if kind == "thud" and float(data) >= Config.CRANE_MIN_SPEED:
+				thuds[0] += 1
+		)
+		# put the target where the ball first strikes
+		var probe_cell := Vector3i(floori(SiegeSystem.ball_pos(mc).x + 1.6), ARENA.y, ARENA.z)
+		target = probe_cell
+		m.world.set_block(target, int(row[0]))
+		var t := 0.0
+		while m.world.get_cell(target) == int(row[0]) and t < 90.0:
+			m.siege.fire(r)
+			m.step(DT)
+			t += DT
+		check(m.world.get_cell(target) == Blocks.AIR, "%s gives way to the wrecking ball" % Blocks.block_name(int(row[0])))
+		check(thuds[0] == int(row[1]), "%s: %d solid hits (counted %d)" % [Blocks.block_name(int(row[0])), int(row[1]), thuds[0]])
+		end(m)
+	# gates: two TNT blasts still do it
+	var g := new_match()
+	flat_arena(g, ARENA)
+	g.world.set_block(ARENA + Vector3i(2, 0, 0), Blocks.GATE_RED)
+	g.blast(Vector3(ARENA) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)
+	check(g.world.get_cell(ARENA + Vector3i(2, 0, 0)) == Blocks.GATE_RED, "one blast: gate holds")
+	g.blast(Vector3(ARENA) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)
+	check(g.world.get_cell(ARENA + Vector3i(2, 0, 0)) == Blocks.AIR, "two blasts: gate falls")
+	end(g)
+
+
+func test_bonked_pilot() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var pilot := arena_rat(m, 0, "builder", Vector3(-1.2, 0, 0))
+	var foe := arena_rat(m, 1, "scout", Vector3(-2.3, 0, 0))
+	var mate := arena_rat(m, 0, "scout", Vector3(-1.2, 0, 1.2))
+	pilot.gadgets["cannon"] = 1
+	run(m, 0.2)
+	m.try_place_gadget(pilot, ARENA, "cannon")
+	for kind: String in ["bonk"]:
+		check(m.siege.try_operate(pilot, ARENA) == "" and pilot.operating != -1, "pilot at the controls")
+		check(not m.try_bonk(mate, pilot) and pilot.operating != -1, "a teammate cannot knock you off")
+		var x0 := pilot.position.x
+		check(m.try_bonk(foe, pilot), "enemy bonks the pilot")
+		run(m, 0.3)
+		check(pilot.operating == -1 and m.siege.machines[ARENA].operator == -1, "the pilot is thrown off the machine")
+		check(pilot.position.x > x0 + 0.5 or absf(pilot.position.z - 0.5 - ARENA.z) > 0.5 or pilot.position.y > ARENA.y + 0.2, "and pushed back (moved %.2f)" % (pilot.position.x - x0))
+		check(m.siege.fire(pilot) != "", "the machine no longer answers to them")
+		run(m, 1.0)
+		pilot.wish = Vector3(0, 0, 1)
+		var z0 := pilot.position.z
+		run(m, 0.4)
+		pilot.wish = Vector3.ZERO
+		check(pilot.position.z > z0 + 0.8, "they can walk normally afterwards")
+		check(m.world.get_cell(ARENA) == Blocks.CANNON, "the machine itself is unharmed and can be re-manned")
 	end(m)
 
 
@@ -1691,7 +1879,9 @@ func test_machine_transport() -> void:
 	check(mc.cell == ARENA + Vector3i(4, 0, 0), "stays put while obstructed")
 	m.world.set_block(ARENA + Vector3i(5, 0, 0), Blocks.AIR)
 	run(m, 1.0)
-	check(mc.cell.x == ARENA.x + 5, "moves on once the way is clear")
+	check(mc.cell.x == ARENA.x + 6, "moves on once the way is clear, and the last belt tile shoves it one block past the end (+%d)" % (mc.cell.x - ARENA.x))
+	run(m, 2.0)
+	check(mc.cell.x == ARENA.x + 6, "then rests: no conveyor is next to it any more")
 	end(m)
 	# ice: keeps sliding after the conveyor ends
 	setup = siege_setup("dozer")

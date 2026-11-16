@@ -27,6 +27,7 @@ class Machine:
 	var cd := 0.0
 	var move_cd := 0.0
 	var slide := Vector3i.ZERO
+	var under := Blocks.AIR          # what the machine is parked on top of (AIR or a HIGHWAY layer)
 	var theta := 0.0      # crane swing angle (0 = hanging straight down)
 	var omega := 0.0
 	var recoil := 0.0     # presentation hint
@@ -92,7 +93,10 @@ func try_pickup(rat: Rat, cell: Vector3i) -> String:
 	var item: String = {Blocks.CANNON: "cannon", Blocks.CRANE: "crane", Blocks.DOZER: "dozer"}[mc.kind]
 	if int(rat.gadgets.get(item, 0)) >= 2 and not m.free_mode:
 		return "You can't carry another one"
+	var under := mc.under
 	m.world.set_block(cell, Blocks.AIR)
+	if under == Blocks.HIGHWAY:
+		m.world.set_block(cell, Blocks.HIGHWAY)
 	rat.gadgets[item] = int(rat.gadgets.get(item, 0)) + 1
 	m.fx.emit("break", Vector3(cell), mc.kind)
 	return ""
@@ -149,6 +153,20 @@ func aim(rat: Rat, yaw: float, pitch: float) -> void:
 		return
 	mc.yaw = yaw
 	mc.pitch = clampf(pitch, -0.15, 1.2)
+
+
+static func ball_power(id: int) -> int:
+	## Dig-hit damage of one solid wrecking-ball impact, by material:
+	## dirt and other soft stuff go in one, stone-like blocks in two,
+	## obsidian in four. (Gates are handled separately: Config.GATE_HP hits.)
+	var h := int(Blocks.HITS[id])
+	if h <= 0:
+		return 0
+	if id == Blocks.OBSIDIAN:
+		return (h + 3) / 4
+	if h <= 3:
+		return h
+	return (h + 1) / 2
 
 
 func fire(rat: Rat) -> String:
@@ -272,7 +290,10 @@ func _transport(mc: Machine) -> void:
 	if Blocks.is_conveyor(below):
 		dir = Vector3i(Blocks.conveyor_dir(below))
 	else:
-		for n: Vector3i in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]:
+		# a conveyor beside the machine also drives it: either standing next to
+		# it, or laid into the floor next to it (the usual way conveyors are placed)
+		for n: Vector3i in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1),
+				Vector3i(1, -1, 0), Vector3i(-1, -1, 0), Vector3i(0, -1, 1), Vector3i(0, -1, -1)]:
 			var id := w.get_cell(mc.cell + n)
 			if Blocks.is_conveyor(id):
 				dir = Vector3i(Blocks.conveyor_dir(id))
@@ -289,7 +310,8 @@ func _relocate(mc: Machine, dest: Vector3i, time: float) -> bool:
 	## Moves a machine one cell if the destination is clear. Ownership, aim,
 	## swing state and operator all travel with it.
 	var w := m.world
-	if not VoxelWorld.in_bounds(dest) or dest.y < 1 or w.get_cell(dest) != Blocks.AIR:
+	var onto := w.get_cell(dest)
+	if not VoxelWorld.in_bounds(dest) or dest.y < 1 or (onto != Blocks.AIR and onto != Blocks.HIGHWAY):
 		return false
 	for t in 2:
 		if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(dest) + Vector3(0.5, 0.5, 0.5)):
@@ -300,7 +322,8 @@ func _relocate(mc: Machine, dest: Vector3i, time: float) -> bool:
 			return false
 	var delta := Vector3(dest - mc.cell)
 	_moving = true
-	w.set_block(mc.cell, Blocks.AIR)
+	w.set_block(mc.cell, mc.under)     # a highway it was parked on reappears behind it
+	mc.under = onto
 	machines.erase(mc.cell)
 	mc.cell = dest
 	machines[dest] = mc
@@ -331,8 +354,11 @@ func _swing(mc: Machine, dt: float) -> void:
 		if m.world.solid_point(probe):
 			var cell := Vector3i(floori(probe.x), floori(probe.y), floori(probe.z))
 			if cell != mc.cell:
-				var hits := clampi(int(speed / 2.4), 0, Config.CRANE_MAX_HIT)
 				var id := m.world.get_cell(cell)
+				var hits := ball_power(id) if speed >= Config.CRANE_MIN_SPEED else 0
+				if speed >= Config.CRANE_MIN_SPEED and Blocks.is_gate(id):
+					m.hit_gate(cell, 1)
+					m.fx.emit("clang", Vector3(cell), id)
 				if hits > 0 and not m._damage(m.rat_by_id(mc.owner), cell, hits, true):
 					m.fx.emit("hit", Vector3(cell), {"id": id, "ratio": float(m.world.damage.get(cell, 0)) / maxf(1.0, float(Blocks.HITS[id]))})
 				elif hits > 0:

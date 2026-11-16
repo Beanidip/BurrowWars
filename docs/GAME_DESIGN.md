@@ -107,3 +107,12 @@ wall spring (flings back whatever runs into it).
 - **Team gate** is a plain see-through coloured block (centre rod removed).
 - **Ice:** rats keep sliding for a moment after the ice ends; dropped cheese and stashes slide across and off it.
 - **Scrap:** 15 deposits per side instead of 8 - about 870 scrap blocks per map.
+
+## v1.3 changes
+
+- **Painted blocks.** Twelve colours. Press C for the picker, 6 for the Paint slot; right mouse places a full painted block. A painted block is dyed stone: it costs one stone, takes 4 hits, and gives the stone back.
+- **Painted microvoxels.** With the chisel out and Paint selected, right mouse adds a microvoxel in the picked colour, onto any chiselable block or into thin air. It is charged to the block's own material like any other chisel add.
+- **Highway** is a plank layer lying on the face of the block under it. Rats walk through it on the real floor and get the +60% speed. It needs a floor, goes when that floor is dug out, and can be picked up by digging it.
+- **Conveyors and siege.** A machine is moved by a conveyor under it, beside it at the same level, or laid into the floor beside it.
+- **Wrecking ball** (must be moving at 2.4 or faster to count): dirt and other soft blocks 1 hit, stone / brick / scrap 2, obsidian 4, team gates 10 (`Config.GATE_HP`). A TNT blast is worth 5 gate hits.
+- **Bonked pilots** are thrown off their machine and knocked back; teammates cannot knock you off.

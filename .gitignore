@@ -2,3 +2,4 @@
 *.translation
 export/
 build/
+*.import

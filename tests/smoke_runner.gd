@@ -446,6 +446,68 @@ func _run() -> void:
 	look_at(s, Vector3(pad) + Vector3(0.0, 1.2, 3.5))
 	await frames(12)
 	await shot("24c_gates_closeup")
+	# --- v1.3: colour picker, painted blocks, painted microvoxels, highway layer ---
+	s.ctl.first_person = true
+	s.ctl.tool = PlayerController.Tool.DIG
+	s.player.position = Vector3(pad) + Vector3(-4.5, 0, -1.5)
+	s.player.vel = Vector3.ZERO
+	await press("color_picker")
+	check(s.hud._dialog_kind == "colors", "C opens the colour picker")
+	await frames(4)
+	if s.hud._dialog != null:
+		check(fits((s.hud._dialog as Control).get_child(1) as Control), "colour picker fits the viewport")
+	await shot("27_colour_picker")
+	s.hud.pick_color(5)
+	await frames(3)
+	check(s.hud._dialog == null and s.ctl.selected_color == 5 and s.ctl.painting(), "picking a colour closes the picker and switches to the Paint slot")
+	var paint_floor := pad + Vector3i(-3, -1, -3)
+	for k in 3:
+		s.ctl.selected_color = k * 2
+		look_at(s, Vector3(paint_floor + Vector3i(0, 0, k)) + Vector3(0.5, 1.0, 0.5))    # top face of three floor blocks
+		await frames(5)
+		await press("place")
+	var stacked := 0
+	for k in 3:
+		if w.get_cell(paint_floor + Vector3i(0, 1, k)) == Blocks.PAINT_0 + k * 2:
+			stacked += 1
+	check(stacked == 3, "right mouse places painted blocks in whichever colour is picked (%d of 3)" % stacked)
+	await press("slot_6")
+	check(s.ctl.painting(), "6 selects the Paint slot")
+	# chisel a dab of colour onto plain stone
+	var plain := pad + Vector3i(-3, 0, 0)
+	w.set_block(plain, Blocks.STONE)
+	await press("chisel")
+	s.ctl.selected_color = 0
+	look_at(s, Vector3(plain) + Vector3(0.0, 0.5, 0.5))
+	await frames(6)
+	for i in 5:
+		await wait(0.15)
+		await press("place")
+	var dabs := 0
+	for cc: Vector3i in [plain, plain + Vector3i(-1, 0, 0)]:
+		if w.has_micro(cc):
+			for b in (w.micro[cc] as PackedByteArray):
+				if b >= 2 or (b == 1 and Blocks.is_paint(w.get_cell(cc))):
+					dabs += 1
+	check(dabs >= 1, "with the chisel, right mouse adds painted microvoxels (%d)" % dabs)
+	await press("chisel")
+	s.player.equipped = "highway"
+	var road_floor := pad + Vector3i(-5, -1, -3)
+	look_at(s, Vector3(road_floor) + Vector3(0.5, 1.0, 0.5))
+	await frames(6)
+	await press("gadget")
+	check(w.get_cell(road_floor + Vector3i(0, 1, 0)) == Blocks.HIGHWAY and w.get_cell(road_floor) == Blocks.STONE, "Q lays a highway on top of the floor block, which stays")
+	w.set_block(road_floor + Vector3i(1, 1, 0), Blocks.HIGHWAY)
+	w.set_block(road_floor + Vector3i(2, 1, 0), Blocks.HIGHWAY)
+	for k in Blocks.PALETTE_SIZE:      # the whole palette as a little wall, for the camera
+		w.set_block(pad + Vector3i(-6 + k % 6, 1 + k / 6, -6), Blocks.PAINT_0 + k)
+	s.player.flying = false
+	s.player.position = Vector3(pad) + Vector3(-3.5, 0.0, 1.5)
+	s.player.vel = Vector3.ZERO
+	await frames(10)
+	look_at(s, Vector3(pad) + Vector3(-3.5, 0.6, -4.0))
+	await frames(12)
+	await shot("28_painted_blocks_and_highway")
 	var pool := Vector3i(-1, -1, -1)
 	for cy in range(6, 16):
 		for cz in range(4, 44):

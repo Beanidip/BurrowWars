@@ -16,7 +16,8 @@ var yaw := 0.0
 var pitch := -0.25
 var first_person := false
 var cam_dist := 4.0
-var selected_mat := 0
+var selected_mat := 0            # 0..4 = stash materials, 5 = painted block
+var selected_color := 0          # palette index for painted blocks / chisel dabs
 var tool := Tool.DIG
 var ui_open := false
 var aim: Dictionary = {}
@@ -179,11 +180,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		if tool == Tool.PANTOGRAPH and blueprint != null:
 			blueprint = blueprint.rotated()
 	else:
-		for i in ClassDefs.MATS.size():
+		for i in ClassDefs.MATS.size() + 1:
 			if event.is_action_pressed("slot_%d" % (i + 1)):
 				selected_mat = i
 				if tool == Tool.PANTOGRAPH:
 					tool = Tool.DIG
+
+
+func painting() -> bool:
+	return selected_mat >= ClassDefs.MATS.size()
 
 
 func _interact() -> void:
@@ -208,11 +213,17 @@ func _secondary() -> void:
 	match tool:
 		Tool.DIG:
 			if not aim.is_empty():
-				_say(m.try_place_mat(rat, _place_cell(), ClassDefs.MATS[selected_mat]))
+				if painting():
+					_say(m.try_place_paint(rat, _place_cell(), selected_color))
+				else:
+					_say(m.try_place_mat(rat, _place_cell(), ClassDefs.MATS[selected_mat]))
 		Tool.CHISEL:
 			if not aim.is_empty():
 				var t := _micro_neighbor()
-				_say(m.try_chisel_add(rat, t[0], t[1], ClassDefs.MATS[selected_mat]))
+				if painting():
+					_say(m.try_chisel_add(rat, t[0], t[1], "stone", selected_color))
+				else:
+					_say(m.try_chisel_add(rat, t[0], t[1], ClassDefs.MATS[selected_mat]))
 		Tool.PANTOGRAPH:
 			if blueprint == null:
 				_say("Copy something first: left-click two corners")
@@ -406,7 +417,7 @@ func _update_tool_visuals() -> void:
 	if tool == Tool.PANTOGRAPH:
 		_update_pantograph()
 	elif tool == Tool.CHISEL:
-		var mat := String(ClassDefs.MATS[selected_mat])
+		var mat := "stone" if painting() else String(ClassDefs.MATS[selected_mat])
 		tool_text = "Chisel  -  LMB carve, RMB add %s  (%.2f blocks of it spare)" % [mat, float(m._micro_available(rat, mat)) / 343.0]
 	if aim.is_empty():
 		return

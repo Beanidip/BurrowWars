@@ -18,7 +18,8 @@ const M := Blocks.MICRO
 var data := PackedByteArray()
 var damage: Dictionary = {}        # Vector3i -> accumulated hits
 var cheese_cells: Dictionary = {}  # Vector3i -> true (kept in sync by set_block)
-# Microvoxels: only chiseled blocks carry a 343-entry mask (1 = present).
+# Microvoxels: only chiseled blocks carry a 343-entry mask.
+# 0 = empty, 1 = the block's own material, 2 + k = painted in palette colour k.
 # Untouched blocks cost nothing; micro_flag gives hot loops an O(1) test.
 var micro: Dictionary = {}         # Vector3i -> PackedByteArray(343)
 var micro_flag := PackedByteArray()
@@ -175,16 +176,16 @@ func micro_count(c: Vector3i) -> int:
 	## Microvoxels present in a block: 343 for an uncarved solid block.
 	if not has_micro(c):
 		return Blocks.MICRO_COUNT if get_cell(c) != Blocks.AIR else 0
-	return (micro[c] as PackedByteArray).count(1)
+	return Blocks.MICRO_COUNT - (micro[c] as PackedByteArray).count(0)
 
 
 func micro_at(c: Vector3i, mv: Vector3i) -> bool:
 	if not has_micro(c):
 		return Blocks.TARGETABLE[get_cell(c)] == 1
-	return (micro[c] as PackedByteArray)[mv.x + M * (mv.z + M * mv.y)] == 1
+	return (micro[c] as PackedByteArray)[mv.x + M * (mv.z + M * mv.y)] != 0
 
 
-func set_micro(c: Vector3i, mv: Vector3i, on: bool, new_block := Blocks.AIR) -> void:
+func set_micro(c: Vector3i, mv: Vector3i, on: bool, new_block := Blocks.AIR, value := 1) -> void:
 	## Sets one microvoxel. Carving the last one removes the parent block;
 	## filling the last gap turns it back into a plain block. `new_block` is
 	## the material used when adding into an empty cell.
@@ -204,12 +205,11 @@ func set_micro(c: Vector3i, mv: Vector3i, on: bool, new_block := Blocks.AIR) -> 
 		mask = PackedByteArray()
 		mask.resize(Blocks.MICRO_COUNT)
 		mask.fill(1)
-	mask[mv.x + M * (mv.z + M * mv.y)] = 1 if on else 0
-	var n := mask.count(1)
-	if n == 0:
+	mask[mv.x + M * (mv.z + M * mv.y)] = clampi(value, 1, 1 + Blocks.PALETTE_SIZE) if on else 0
+	if mask.count(0) == Blocks.MICRO_COUNT:
 		set_block(c, Blocks.AIR)
 		return
-	if n == Blocks.MICRO_COUNT:
+	if mask.count(1) == Blocks.MICRO_COUNT:
 		micro.erase(c)
 		micro_flag[i] = 0
 	else:
@@ -225,7 +225,7 @@ func set_mask(c: Vector3i, block: int, mask: PackedByteArray) -> void:
 	set_block(c, block)
 	if mask.size() != Blocks.MICRO_COUNT or mask.count(1) == Blocks.MICRO_COUNT:
 		return
-	if mask.count(1) == 0:
+	if mask.count(0) == Blocks.MICRO_COUNT:
 		set_block(c, Blocks.AIR)
 		return
 	micro[c] = mask.duplicate()
@@ -260,7 +260,7 @@ func micro_box_hit(c: Vector3i, mn: Vector3, mx: Vector3) -> bool:
 	for y in range(y0, y1 + 1):
 		for z in range(z0, z1 + 1):
 			for x in range(x0, x1 + 1):
-				if mask[x + M * (z + M * y)] == 1:
+				if mask[x + M * (z + M * y)] != 0:
 					return true
 	return false
 

@@ -18,6 +18,8 @@ const KEYS := {
 	"slot_3": [KEY_3, "Material: wood"],
 	"slot_4": [KEY_4, "Material: ice"],
 	"slot_5": [KEY_5, "Material: obsidian"],
+	"slot_6": [KEY_6, "Painted block (colour)"],
+	"color_picker": [KEY_C, "Colour picker"],
 	"chisel": [KEY_9, "Chisel (microvoxel carving)"],
 	"pantograph": [KEY_0, "Pantograph (copy / paste)"],
 	"rotate_blueprint": [KEY_X, "Pantograph: rotate blueprint"],

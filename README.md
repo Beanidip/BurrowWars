@@ -38,7 +38,7 @@ From a terminal: `godot --path .`
 | N, F5, F9 | Free Build: fly, save map, load map | Mouse wheel | Camera distance |
 | 9 | Chisel: LMB carve, RMB add a microvoxel | 0 | Pantograph: click 2 corners, RMB paste, X rotate |
 | T | Pilot / leave a siege machine | Ctrl+Q | Set Mobile TNT down gently |
-| 5 | Obsidian | | |
+| 5 | Obsidian | 6 / C | Painted block / colour picker |
 
 ## Verify
 

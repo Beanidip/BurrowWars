@@ -1,6 +1,6 @@
 # Test results
 
-Only tests that were actually executed are listed. Last full run: 2026-11-16 (v1.2).
+Only tests that were actually executed are listed. Last full run: 2026-11-16 (v1.3).
 Engine: Godot 4.7.2.stable.official.ed1daf0bf, Linux x86_64.
 
 ## Executed and passing
@@ -9,8 +9,8 @@ Engine: Godot 4.7.2.stable.official.ed1daf0bf, Linux x86_64.
 |---|---|---|
 | Import + editor validation | `godot --headless --path . --editor --quit` | Pass, no script or resource errors |
 | Boot main scene | `godot --headless --path . --quit-after 120` | Pass |
-| App-flow smoke test (headless) | `godot --headless --path . res://tests/smoke_runner.tscn` | 73 checks pass, 3 skipped (mouse capture needs a display) |
-| Gameplay regression suite | `godot --headless --path . res://tests/test_runner.tscn` | 43 tests, 467 assertions, 0 failed |
+| App-flow smoke test (headless) | `godot --headless --path . res://tests/smoke_runner.tscn` | 80 checks pass, 3 skipped (mouse capture needs a display) |
+| Gameplay regression suite | `godot --headless --path . res://tests/test_runner.tscn` | 48 tests, 526 assertions, 0 failed |
 | App-flow smoke test on a virtual display (Xvfb, Mesa llvmpipe, OpenGL Compatibility) | same scene with `--rendering-driver opengl3` | 67 checks pass, 0 skipped, at 1280x720, 1920x1080 and 5120x1440 (v1.1) |
 | UI fit at each target resolution | smoke test at 1280x720, 1920x1080, 2560x1440, 3440x1440, 5120x1440 | Pass at all five for v1.0; v1.1 re-run at 1280x720, 1920x1080 and 5120x1440 only |
 | Gate self-test | made a bonk drop 2 cheese; added a parse error | `tools/check.sh` exited non-zero both times |
@@ -83,6 +83,19 @@ machine visibly chews a stone wall. Screenshots: `docs/screenshots/chisel.jpg`,
 | More scrap | `scrap_abundance` (about 870 blocks per map) | - |
 
 The display smoke run for v1.2 was at 1280x720 only (76 steps, 0 failed).
+
+## v1.3 changes and how each was checked
+
+| Change | Automated test | Also seen in the running game |
+|---|---|---|
+| Painted blocks, palette limits, cost and refund | `painted_blocks` | C opens the picker, a pick switches to slot 6, right mouse places three colours (`colour_picker`, `painted_blocks_and_highway`) |
+| Painted microvoxels: solid, saved, copied, pasted | `painted_blocks` | chisel + right mouse adds a coloured microvoxel |
+| Highway as a surface layer | `highway_layer` | Q lays it on the floor block, which stays |
+| Flush conveyor beside a machine moves it | `siege_floor_conveyor` | - |
+| Wrecking-ball hit counts and 10-hit gates | `wrecking_ball_table` | - |
+| Bonk throws the pilot off | `bonked_pilot` | - |
+
+The display smoke run for v1.3 was at 1280x720 only (83 steps, 0 failed).
 
 ## Not executed
 

@@ -67,12 +67,21 @@ func setup(match_settings: Dictionary, with_visuals := true) -> void:
 	lava = LavaFlow.new(self)
 	world.block_changed.connect(lava.on_block_changed)
 	lava.wake_all()
+	world.block_changed.connect(_on_block_changed)
 	world.block_changed.connect(siege.on_block_changed)
 	MapGenerator.generate(world, map_seed)
 	for cell: Vector3i in _find_blocks(Blocks.TNT):
 		tnt[cell] = {"owner": -1, "fuse": -1.0}
 	Log.info("match setup: mode=%s seed=%d goal=%d cheese_on_map=%d" % [
 		settings.get("mode", "race"), map_seed, goal, world.cheese_cells.size()])
+
+
+func _on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
+	# a highway is only a surface layer: it goes when the block under it goes
+	var above := cell + Vector3i(0, 1, 0)
+	if Blocks.SOLID[new_id] == 0 and world.get_cell(above) == Blocks.HIGHWAY:
+		world.set_block(above, Blocks.AIR)
+	gate_damage.erase(cell)
 
 
 func _find_blocks(id: int) -> Array[Vector3i]:
@@ -377,6 +386,35 @@ func try_place_mat(rat: Rat, cell: Vector3i, mat: String) -> String:
 	return ""
 
 
+func try_place_paint(rat: Rat, cell: Vector3i, color: int) -> String:
+	## A full block in one of the palette colours. Painted blocks are dyed
+	## stone: each costs one stone, and gives it back when dug.
+	if color < 0 or color >= Blocks.PALETTE_SIZE:
+		return "Unknown colour"
+	if not free_mode and int(rat.mats["stone"]) <= 0:
+		return "Painted blocks are made from stone - dig some first"
+	var block := Blocks.PAINT_0 + color
+	var why := can_place_at(rat, cell, block)
+	if why != "":
+		return why
+	if not free_mode:
+		rat.mats["stone"] = int(rat.mats["stone"]) - 1
+	world.set_block(cell, block)
+	rat.play_action("build", 0.3)
+	fx.emit("place", Vector3(cell), block)
+	return ""
+
+
+func hit_gate(cell: Vector3i, amount: int) -> void:
+	## Gates have their own toughness: Config.GATE_HP wrecking-ball hits, or two TNT blasts.
+	gate_damage[cell] = int(gate_damage.get(cell, 0)) + amount
+	if int(gate_damage[cell]) >= Config.GATE_HP:
+		gate_damage.erase(cell)
+		var id := world.get_cell(cell)
+		world.set_block(cell, Blocks.AIR)
+		fx.emit("break", Vector3(cell), id)
+
+
 func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vector3.ZERO, reach := -1.0, replace := false) -> String:
 	## `dir` (optional) is the direction a conveyor should run; default is the
 	## rat's facing. `replace` lays the gadget into the block at `cell`.
@@ -392,6 +430,8 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 		facing = Vector3(dir.x, 0, dir.z)
 	var block := ClassDefs.gadget_block(g, rat.team, facing)
 	var old := world.get_cell(cell)
+	if block == Blocks.HIGHWAY and Blocks.SOLID[world.get_cell(cell + Vector3i(0, -1, 0))] == 0:
+		return "A highway needs a floor to lie on"
 	if replace and not _is_floor_material(cell):
 		return "Can't lay that into %s" % Blocks.block_name(old)
 	var why := can_place_at(rat, cell, block, reach, replace)
@@ -437,8 +477,9 @@ func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, di
 		if why == "Space is occupied":
 			return "The ladder stack is blocked %s" % ("above" if up else "below")
 		return why
-	# Highways and conveyors are laid INTO the floor block you point at.
-	if (g == "highway" or g == "conveyor") and normal.y == 1 and _is_floor_material(aimed):
+	# Conveyors are laid INTO the floor block you point at. (Highways are a
+	# thin layer that lies on top of the face instead.)
+	if g == "conveyor" and normal.y == 1 and _is_floor_material(aimed):
 		return try_place_gadget(rat, aimed, g, dir, -1.0, true)
 	return try_place_gadget(rat, aimed + normal, g, dir)
 
@@ -512,16 +553,25 @@ func try_chisel_remove(rat: Rat, cell: Vector3i, mv: Vector3i) -> String:
 	return ""
 
 
-func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String) -> String:
+func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String, color := -1) -> String:
+	## `color` >= 0 adds a painted microvoxel in that palette colour.
 	var why := _chisel_gate(rat, cell, mv)
 	if why != "":
 		return why
 	var id := world.get_cell(cell)
 	var block := id
+	var value := 1
+	if color >= Blocks.PALETTE_SIZE:
+		return "Unknown colour"
+	if color >= 0 and id != Blocks.AIR and id != Blocks.PAINT_0 + color:
+		value = 2 + color      # a dab of colour on a block of another material
 	if id == Blocks.AIR:
-		if not ClassDefs.MAT_BLOCK.has(mat):
-			return "Pick a material (1-5) first"
-		block = ClassDefs.MAT_BLOCK[mat]
+		if color >= 0:
+			block = Blocks.PAINT_0 + color
+		elif not ClassDefs.MAT_BLOCK.has(mat):
+			return "Pick a material (1-6) first"
+		else:
+			block = ClassDefs.MAT_BLOCK[mat]
 		for t in 2:
 			if MapGenerator.base_zone(t).grow(0.5).has_point(Vector3(cell) + Vector3(0.5, 0.5, 0.5)):
 				return "Bases are protected"
@@ -540,7 +590,7 @@ func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String) -> Stri
 	if not _pay_micro(rat, use_mat, 1):
 		return "No %s left to chisel with" % use_mat
 	rat.chisel_cd = 1.0 / Config.CHISEL_RATE
-	world.set_micro(cell, mv, true, block)
+	world.set_micro(cell, mv, true, block, value)
 	rat.play_action("build", 0.2)
 	fx.emit("chip", mn, block)
 	return ""
@@ -798,10 +848,7 @@ func blast(origin: Vector3, radius: float, power: float) -> void:
 				if id == Blocks.TNT:
 					light_tnt(c, 0.25)   # chain reaction
 				elif Blocks.is_gate(id):
-					gate_damage[c] = int(gate_damage.get(c, 0)) + 1
-					if int(gate_damage[c]) >= 2:
-						gate_damage.erase(c)
-						world.set_block(c, Blocks.AIR)
+					hit_gate(c, (Config.GATE_HP + 1) / 2)
 				else:
 					# breaking goes through set_block, which also discards any carving
 					_damage(null, c, int(power * (1.0 - d / radius)), true)

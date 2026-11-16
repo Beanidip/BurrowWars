@@ -125,7 +125,7 @@ func move_speed() -> float:
 		s *= 0.5
 	if in_water:
 		s *= float(cls["water"])
-	if on_floor and _world.block_at(position - Vector3(0, 0.1, 0)) == Blocks.HIGHWAY:
+	if on_floor and _world.block_at(position + Vector3(0, 0.05, 0)) == Blocks.HIGHWAY:
 		s *= 1.6
 	return s
 

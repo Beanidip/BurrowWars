@@ -14,6 +14,8 @@ BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a chee
 
 SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Conveyors and highways are laid into the floor you aim at; a conveyor runs toward the bright edge of your target square. Aim at a ladder and press Q to extend it up or down. Q places the equipped gadget, R changes it, I opens your pack.
 
+COLOUR  Press C to pick one of 12 colours. Slot 6 places painted blocks with right mouse; with the chisel (9) right mouse adds painted microvoxels.
+
 RAIDS  Stand inside the ENEMY base for 3 seconds to steal a cheese they already banked. Everyone hears the alarm, and any defender standing in their own base locks the vault - so guard it, gate it, trap it.
 
 CLASSES  Digger: carries 3, Super Dig (E) smashes a 3x3x3. Scout: fast, sniffs out cheese. Builder: patches walls, free team gates, Team Blocks (F) only your team can stand on, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.

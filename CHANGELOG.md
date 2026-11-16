@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.0 - Colours, highway layer, wrecking-ball table (2026-11-16)
+
+| Change | Files |
+|---|---|
+| Painted blocks in 12 colours: slot 6 places full blocks, C opens the colour picker | `world/blocks.gd`, `match/match.gd`, `ui/hud.gd`, `actors/player_controller.gd`, `core/inputs.gd` |
+| Chisel adds painted microvoxels in the picked colour (each microvoxel remembers its own colour; saved, copied and pasted with it) | `world/voxel_world.gd`, `world/chunk_mesher.gd`, `match/blueprint.gd` |
+| Highway is a thin layer on top of a block's face; the block stays | `world/blocks.gd`, `world/chunk_mesher.gd`, `actors/rat.gd`, `match/match.gd` |
+| A conveyor laid into the floor beside a siege machine moves it the way the conveyor faces | `match/siege.gd` |
+| Wrecking ball: dirt 1 hit, stone 2, obsidian 4, team gate 10 (TNT still needs 2 blasts for a gate) | `match/siege.gd`, `match/match.gd`, `core/config.gd` |
+| Hotbar slots narrowed so seven slots fit at 1280x720 | `ui/hud.gd` |
+
+Already true and now covered by a test: an enemy bonk throws a pilot off their machine and
+knocks them back. Tests: 526 assertions in 48 tests; smoke test 83 steps.
+
 ## 1.2.0 - Playtest changes (2026-11-16)
 
 | Change | Files |

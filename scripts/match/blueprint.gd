@@ -58,7 +58,7 @@ func cost() -> Dictionary:
 	var need := {}
 	for e in cells:
 		var mat := Blocks.mat_of(int(e["id"]))
-		var n := Blocks.MICRO_COUNT if e["mask"] == null else (e["mask"] as PackedByteArray).count(1)
+		var n := Blocks.MICRO_COUNT if e["mask"] == null else (Blocks.MICRO_COUNT - (e["mask"] as PackedByteArray).count(0))
 		need[mat] = int(need.get(mat, 0)) + n
 	return need
 
@@ -92,6 +92,6 @@ func validate() -> String:
 			return "Blueprint contains something that cannot be copied"
 		var mask: Variant = e.get("mask")
 		if mask != null and (not (mask is PackedByteArray) or (mask as PackedByteArray).size() != Blocks.MICRO_COUNT \
-				or (mask as PackedByteArray).count(1) == 0):
+				or (mask as PackedByteArray).count(0) == Blocks.MICRO_COUNT):
 			return "Blueprint is malformed"
 	return ""
