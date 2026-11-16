@@ -8,8 +8,8 @@ extends CanvasLayer
 signal exit_requested
 signal rematch_requested
 
-const MAT_ICON_COLORS := [Color(0.47, 0.31, 0.20), Color(0.50, 0.50, 0.54), Color(0.62, 0.44, 0.24), Color(0.70, 0.88, 0.96), Color(0.30, 0.20, 0.42)]
-const MAT_SHORT := ["Dirt", "Stone", "Wood", "Ice", "Obsid."]
+const MAT_ICON_COLORS := [Color(0.47, 0.31, 0.20), Color(0.50, 0.50, 0.54), Color(0.70, 0.88, 0.96), Color(0.30, 0.20, 0.42)]
+const MAT_SHORT := ["Dirt", "Stone", "Ice", "Obsid."]
 
 var m: Match
 var rat: Rat
@@ -262,7 +262,7 @@ func _process(_delta: float) -> void:
 			_slot_counts[i].text = "inf" if m.free_mode else "x%d" % int(rat.mats[ClassDefs.MATS[i]])
 	if rat.equipped != "":
 		_q_name.text = ClassDefs.GADGET_NAME[rat.equipped]
-		_q_count.text = "unlimited" if m.free_mode else "x%d   (T: next)" % int(rat.gadgets.get(rat.equipped, 0))
+		_q_count.text = "unlimited" if m.free_mode else "x%d   (%s: next)" % [int(rat.gadgets.get(rat.equipped, 0)), Inputs.key_name("cycle_gadget")]
 	else:
 		_q_name.text = "empty"
 		_q_count.text = "buy at workshop"
@@ -454,7 +454,7 @@ func open_dialog(kind: String) -> void:
 			v = UiKit.center_panel(_root, 560, 480)
 			_fill_inventory(v)
 		"colors":
-			v = UiKit.center_panel(_root, 520, 330)
+			v = UiKit.center_panel(_root, 600, 450)
 			_fill_colors(v)
 		"pause":
 			v = UiKit.center_panel(_root, 720, 640)
@@ -529,17 +529,35 @@ func _say(text: String, is_error: bool) -> void:
 
 func _fill_colors(v: VBoxContainer) -> void:
 	_dialog_header(v, "Paint Pots", Inputs.key_name("color_picker"))
-	v.add_child(UiKit.wrapped("Pick a colour. Slot 6 then places full painted blocks with right mouse; with the chisel (9) right mouse adds painted microvoxels. Painted blocks are dyed stone.", 14, UiKit.PAPER.darkened(0.15)))
+	v.add_child(UiKit.wrapped("Pick a colour, then slot %s places painted blocks with right mouse (one dirt each, or stone when you have no dirt). With the chisel (%s) right mouse adds painted microvoxels. The bottom row is see-through glass (whole blocks only)." % [
+		Inputs.key_name("slot_%d" % (ClassDefs.MATS.size() + 1)), Inputs.key_name("chisel")], 14, UiKit.PAPER.darkened(0.15)))
 	var grid := GridContainer.new()
-	grid.columns = 6
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.columns = 10
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
 	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	for k in Blocks.PALETTE_SIZE:
+	var order: Array[int] = []
+	for k in Blocks.PALETTE_SOLID:
+		order.append(k)
+	while order.size() % 10 != 0:
+		order.append(-1)   # glass starts on its own row
+	for k in range(Blocks.PALETTE_SOLID, Blocks.PALETTE_SIZE):
+		order.append(k)
+	for k in order:
+		if k < 0:
+			var gap := Control.new()
+			gap.custom_minimum_size = Vector2(46, 46)
+			grid.add_child(gap)
+			continue
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(68, 68)
+		b.custom_minimum_size = Vector2(46, 46)
 		b.tooltip_text = Blocks.PALETTE_NAMES[k]
 		var col := Blocks.paint_color(k)
+		if k >= Blocks.PALETTE_SOLID:
+			b.text = "glass"
+			b.add_theme_font_size_override("font_size", 11)
+			b.add_theme_color_override("font_color", UiKit.INK)
+			col = Color(col.r, col.g, col.b, 0.55)
 		var chosen := k == ctl.selected_color
 		b.add_theme_stylebox_override("normal", UiKit.box(col, UiKit.PAPER if chosen else UiKit.WOOD_DARK, 10, 5 if chosen else 2, 4))
 		b.add_theme_stylebox_override("hover", UiKit.box(col.lightened(0.15), UiKit.BRASS, 10, 4, 4))

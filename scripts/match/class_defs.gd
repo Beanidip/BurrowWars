@@ -77,13 +77,13 @@ const SHOP := [
 	{"id": "dozer", "name": "Bulldozer", "kind": "gadget", "qty": 1, "cost": 28, "max": 2, "cat": "Siege",
 		"desc": "T to pilot it, left mouse to ram the blade: 3 wide, 2 high. Has no engine - feed it conveyors."},
 	{"id": "ice", "name": "Ice x4", "kind": "mat", "qty": 4, "cost": 3, "cat": "Construction",
-		"desc": "Slippery block. Slot 4, place with right mouse."},
-	{"id": "wood", "name": "Wood x6", "kind": "mat", "qty": 6, "cost": 3, "cat": "Construction",
-		"desc": "Sturdy building block. Slot 3."},
+		"desc": "Slippery block. Slot 3, place with right mouse."},
 ]
 
-const MATS := ["dirt", "stone", "wood", "ice", "obsidian"]
-const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "wood": Blocks.WOOD, "ice": Blocks.ICE, "obsidian": Blocks.OBSIDIAN}
+const MATS := ["dirt", "stone", "ice", "obsidian"]
+const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "ice": Blocks.ICE, "obsidian": Blocks.OBSIDIAN}
+## Gadgets that can go inside your own team gate (see Blocks.GATE_GADGETS).
+const GATE_GADGETS := ["ladder", "spring", "highway", "conveyor", "wallspring"]
 const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "gate", "cannon", "crane", "dozer"]
 const GADGET_NAME := {
 	"ladder": "Ladder", "spring": "Spring", "highway": "Highway", "conveyor": "Conveyor",

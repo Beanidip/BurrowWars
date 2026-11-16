@@ -33,7 +33,7 @@ var flying := false
 var stamina := 100.0
 var carried := 0
 var scrap := 0
-var mats := {"dirt": 0, "stone": 0, "wood": 0, "ice": 0, "obsidian": 0}
+var mats := {"dirt": 0, "stone": 0, "ice": 0, "obsidian": 0}
 var gadgets: Dictionary = {}
 var equipped := ""
 var raid_t := 0.0
@@ -342,9 +342,12 @@ func blocked() -> bool:
 func blocked_at(p: Vector3) -> bool:
 	var mn := Vector3(p.x - RADIUS, p.y + 0.001, p.z - RADIUS)
 	var mx := Vector3(p.x + RADIUS, p.y + HEIGHT - 0.001, p.z + RADIUS)
+	var layered := not _world.gates.is_empty()
 	for y in range(floori(mn.y), floori(mx.y) + 1):
 		for z in range(floori(mn.z), floori(mx.z) + 1):
 			for x in range(floori(mn.x), floori(mx.x) + 1):
+				if layered and int(_world.gates.get(Vector3i(x, y, z), team)) != team:
+					return true   # the other team's gate, with a gadget inside it
 				if not Blocks.solid_for(_world.get_block(x, y, z), team):
 					continue
 				var c := Vector3i(x, y, z)

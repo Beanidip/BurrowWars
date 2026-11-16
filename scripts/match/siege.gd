@@ -366,7 +366,10 @@ func _swing(mc: Machine, dt: float) -> void:
 			if cell != mc.cell:
 				var id := m.world.get_cell(cell)
 				var hits := ball_power(id) if speed >= Config.CRANE_MIN_SPEED else 0
-				if speed >= Config.CRANE_MIN_SPEED and Blocks.is_gate(id):
+				var gated := m.world.gate_at(cell) >= 0
+				if gated:
+					hits = 0   # the gate takes the blow, not whatever is inside it
+				if speed >= Config.CRANE_MIN_SPEED and gated:
 					m.hit_gate(cell, 1)
 					m.fx.emit("clang", Vector3(cell), id)
 				if hits > 0 and not m._damage(m.rat_by_id(mc.owner), cell, hits, true):

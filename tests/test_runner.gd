@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -691,7 +691,7 @@ func test_free_build() -> void:
 	var r := m.spawn_rat(0, "maestro", false)
 	check(r.class_id == "maestro", "Free Build hands out the creative class")
 	r.position = Vector3(40, 40, 10)
-	check(m.try_place_mat(r, Vector3i(41, 40, 10), "wood") == "", "unlimited materials")
+	check(m.try_place_mat(r, Vector3i(41, 40, 10), "obsidian") == "", "unlimited materials")
 	check(m.try_place_gadget(r, Vector3i(42, 40, 10), "tnt") == "", "unlimited gadgets")
 	check(m.try_buy(r, "gate") == "", "workshop is free and remote")
 	r.flying = true
@@ -1089,22 +1089,30 @@ func test_painted_blocks() -> void:
 	flat_arena(m, ARENA)
 	var r := arena_rat(m, 0, "scout")
 	var cell := ARENA + Vector3i(2, 0, 0)
-	check(m.try_place_paint(r, cell, 3) != "", "painted blocks need stone")
+	r.mats["dirt"] = 0
+	check(m.try_place_paint(r, cell, 3) != "", "painted blocks need dirt or stone")
 	r.mats["stone"] = 3
 	check(m.try_place_paint(r, cell, 3) == "" and m.world.get_cell(cell) == Blocks.PAINT_0 + 3, "places a full block in the chosen colour")
-	check(int(r.mats["stone"]) == 2, "it costs one stone")
-	check(m.try_place_paint(r, cell + Vector3i(0, 1, 0), 99) != "" and m.try_place_paint(r, cell + Vector3i(0, 1, 0), -1) != "", "colours outside the palette are refused")
+	check(int(r.mats["stone"]) == 2, "with no dirt it costs one stone")
+	r.mats["dirt"] = 2
+	var pane := cell + Vector3i(0, 0, 2)
+	check(m.try_place_paint(r, pane, Blocks.PALETTE_SOLID) == "" and int(r.mats["dirt"]) == 1 and int(r.mats["stone"]) == 2, "dirt is used first")
+	check(Blocks.is_glass(m.world.get_cell(pane)) and Blocks.OPAQUE[m.world.get_cell(pane)] == 0 and r.blocked_at(Vector3(pane) + Vector3(0.5, 0, 0.5)), "glass is see-through but solid")
+	check(m.try_place_paint(r, cell + Vector3i(0, 1, 0), Blocks.PALETTE_SIZE) != "" and m.try_place_paint(r, cell + Vector3i(0, 1, 0), -1) != "", "colours outside the palette are refused")
 	var distinct := {}
 	for k in Blocks.PALETTE_SIZE:
 		distinct[Blocks.paint_color(k).to_html()] = true
-	check(distinct.size() == 12, "twelve distinct palette colours")
+	check(distinct.size() == Blocks.PALETTE_SIZE and Blocks.PALETTE_SIZE >= 36, "%d distinct palette colours" % distinct.size())
+	check(Blocks.PALETTE_NAMES.has("Grey") and Blocks.PALETTE_NAMES.has("Light Grey") and Blocks.PALETTE_NAMES.has("Clear Glass"), "greys and clear glass are on the palette")
 	check(r.blocked_at(Vector3(cell) + Vector3(0.5, 0, 0.5)), "painted blocks are solid")
 	var n := 0
 	while m.world.get_cell(cell) != Blocks.AIR and n < 20:
 		r.dig_cd = 0.0
 		m.try_dig(r, cell)
 		n += 1
-	check(n == 4 and int(r.mats["stone"]) == 3, "digging one takes 4 hits and returns the stone (no free material)")
+	check(n == 3 and int(r.mats["dirt"]) == 2 and int(r.mats["stone"]) == 2, "digging one takes 3 hits and gives a dirt back")
+	r.chisel_cd = 0.0
+	check(m.try_chisel_add(r, cell, Vector3i(0, 0, 0), "stone", Blocks.PALETTE_SOLID + 2) != "" and m.world.get_cell(cell) == Blocks.AIR, "glass is whole blocks only (no glass microvoxels)")
 	# chisel: a painted microvoxel on a block of another material
 	var stone := ARENA + Vector3i(2, 0, 2)
 	m.world.set_block(stone, Blocks.STONE)
@@ -1133,6 +1141,92 @@ func test_painted_blocks() -> void:
 		r.mats["stone"] = 5
 		var dest := ARENA + Vector3i(0, 0, 3)
 		check(m.try_paste(r, res["blueprint"], dest) == "" and (m.world.micro[dest] as PackedByteArray)[0 + 7 * (0 + 7 * 6)] == 9, "and pastes it with its colours")
+	end(m)
+
+
+func test_gate_holds_gadgets() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var r := arena_rat(m, 0, "builder")
+	var e := arena_rat(m, 1, "digger", Vector3(5, 0, 3))
+	run(m, 0.2)
+	r.gadgets["gate"] = 5
+	r.gadgets["spring"] = 2
+	r.gadgets["ladder"] = 2
+	r.gadgets["highway"] = 2
+	r.gadgets["conveyor"] = 2
+	var look := Vector3(1, 0, 0)
+	var g := ARENA + Vector3i(3, 0, 0)
+	var g2 := ARENA + Vector3i(3, 0, 2)
+	var g3 := ARENA + Vector3i(3, 0, -2)
+	for c in [g, g2, g3]:
+		check(m.try_place_gadget(r, c, "gate") == "" and m.world.get_cell(c) == Blocks.GATE_BLUE, "a blue gate")
+	r.equipped = "spring"
+	check(m.try_use_equipped(r, {"cell": g, "normal": Vector3i(-1, 0, 0)}, look, false) == "", "Q at your own gate puts the spring inside it")
+	check(m.world.get_cell(g) == Blocks.SPRING and m.world.layered_gate(g) == 0 and m.world.gate_at(g) == 0, "the cell holds the spring and the gate")
+	check(int(r.gadgets["spring"]) == 1 and m.world.get_cell(g + Vector3i(-1, 0, 0)) == Blocks.AIR, "it costs one spring and nothing lands beside the gate")
+	r.equipped = "ladder"
+	check(m.try_use_equipped(r, {"cell": g2, "normal": Vector3i(-1, 0, 0)}, look, false) == "" and m.world.get_cell(g2) == Blocks.LADDER, "a ladder inside a gate")
+	var inside := Vector3(g2) + Vector3(0.5, 0, 0.5)
+	check(not r.blocked_at(inside) and e.blocked_at(inside), "your team climbs through it; the enemy still bumps into the gate")
+	check(m.world.solid_for_at(g2, 1) and not m.world.solid_for_at(g2, 0), "bots see the same rule")
+	check(m.world.solid_point(inside + Vector3(0, 0.5, 0)), "loose cheese and TNT still stop at the gate")
+	# the other team can neither fill nor empty it
+	e.gadgets["spring"] = 1
+	e.equipped = "spring"
+	e.position = Vector3(ARENA) + Vector3(4.5, 0, -1.5)
+	m.try_use_equipped(e, {"cell": g3, "normal": Vector3i(1, 0, 0)}, -look, false)
+	check(m.world.get_cell(g3) == Blocks.GATE_BLUE and m.world.layered_gate(g3) == -1, "an enemy cannot put a gadget in your gate")
+	e.position = Vector3(ARENA) + Vector3(4.5, 0, 0.5)
+	for i in 6:
+		e.dig_cd = 0.0
+		m.try_dig(e, g)
+	check(m.world.get_cell(g) == Blocks.SPRING and m.world.layered_gate(g) == 0, "an enemy cannot dig the gadget out of your gate")
+	# your team digs the gadget out: the gate stays
+	var n := 0
+	while m.world.get_cell(g) == Blocks.SPRING and n < 10:
+		r.dig_cd = 0.0
+		m.try_dig(r, g)
+		n += 1
+	check(m.world.get_cell(g) == Blocks.GATE_BLUE and m.world.layered_gate(g) == -1 and int(r.gadgets["spring"]) == 2, "digging the spring out returns it and leaves the gate")
+	# highway on top of a gate lies on top; a conveyor goes in, facing the bright edge
+	r.equipped = "highway"
+	check(m.try_use_equipped(r, {"cell": g3, "normal": Vector3i(0, 1, 0)}, look, false) == "" and m.world.get_cell(g3 + Vector3i(0, 1, 0)) == Blocks.HIGHWAY and m.world.get_cell(g3) == Blocks.GATE_BLUE, "a highway aimed at the top of a gate lies on top of it")
+	r.equipped = "conveyor"
+	check(m.try_use_equipped(r, {"cell": g, "normal": Vector3i(-1, 0, 0)}, look, false, Vector3(0, 0, 1)) == "" and m.world.get_cell(g) == Blocks.CONV_ZP and m.world.layered_gate(g) == 0, "a conveyor inside a gate keeps its direction")
+	# save and load keep it
+	check(m.world.save_to("user://test_maps/gates.bwmap"), "save")
+	m.world.set_gate_layer(g2, -1)
+	m.world.set_block(g2, Blocks.AIR)
+	check(m.world.load_from("user://test_maps/gates.bwmap") and m.world.get_cell(g2) == Blocks.LADDER and m.world.layered_gate(g2) == 0, "gates holding gadgets survive save and load")
+	var snap := m.world.snapshot()
+	var copy := VoxelWorld.new()
+	copy.visual = false
+	check(copy.apply_snapshot(snap) and copy.layered_gate(g2) == 0 and copy.layered_gate(g) == 0, "and a joining player's world snapshot")
+	copy.free()
+	# two TNT blasts break the gate and whatever it held
+	m.blast(Vector3(g) + Vector3(0.5, 0.5, 0.5), 0.8, 1.0)
+	check(m.world.get_cell(g) == Blocks.CONV_ZP, "one blast only cracks the gate")
+	m.blast(Vector3(g) + Vector3(0.5, 0.5, 0.5), 0.8, 1.0)
+	check(m.world.get_cell(g) == Blocks.AIR and m.world.layered_gate(g) == -1, "the second blast breaks the gate and its conveyor")
+	end(m)
+
+
+func test_wood_is_scenery() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "scout")
+	check(not ClassDefs.MATS.has("wood") and not r.mats.has("wood") and ClassDefs.shop_item("wood").is_empty(), "wood is not a material, stash slot or shop item")
+	var c := ARENA + Vector3i(2, 0, 0)
+	m.world.set_block(c, Blocks.WOOD)
+	var before := r.mats.duplicate()
+	var n := 0
+	while m.world.get_cell(c) == Blocks.WOOD and n < 10:
+		r.dig_cd = 0.0
+		m.try_dig(r, c)
+		n += 1
+	check(m.world.get_cell(c) == Blocks.AIR and r.mats == before, "wood still breaks, and gives nothing")
+	check(not Blocks.CHISELABLE.has(Blocks.WOOD) and not Blocks.COPYABLE.has(Blocks.WOOD), "it is neither carved nor copied")
 	end(m)
 
 
@@ -1499,20 +1593,20 @@ func test_pantograph() -> void:
 	var r := arena_rat(m, 0, "builder")
 	var a := ARENA + Vector3i(2, 0, 0)
 	m.world.set_block(a, Blocks.STONE)
-	m.world.set_block(a + Vector3i(1, 0, 0), Blocks.WOOD)
+	m.world.set_block(a + Vector3i(1, 0, 0), Blocks.ICE)
 	m.world.set_block(a + Vector3i(0, 1, 0), Blocks.CHEESE)
 	m.world.set_block(a + Vector3i(1, 1, 0), Blocks.TNT)
 	m.world.set_block(a + Vector3i(0, 0, 1), Blocks.SCRAP)
 	var carved := mask_layers(3)
 	carved[0] = 0   # an asymmetric notch so rotation is observable
-	m.world.set_mask(a + Vector3i(1, 0, 1), Blocks.WOOD, carved)
+	m.world.set_mask(a + Vector3i(1, 0, 1), Blocks.ICE, carved)
 	var res := m.copy_region(r, a, a + Vector3i(1, 1, 1))
 	check(res.has("blueprint"), "copies a region")
 	var bp: Blueprint = res["blueprint"]
 	check(bp.size == Vector3i(2, 2, 2) and bp.cells.size() == 3, "captures the 3 material blocks (%d)" % bp.cells.size())
 	check(bp.skipped == 3, "cheese, TNT and scrap are never captured (%d skipped)" % bp.skipped)
 	var need := bp.cost()
-	check(int(need["stone"]) == 343 and int(need["wood"]) == 343 + 146, "material estimate counts carvings exactly")
+	check(int(need["stone"]) == 343 and int(need["ice"]) == 343 + 146, "material estimate counts carvings exactly")
 	check(m.copy_region(r, a, a + Vector3i(12, 0, 0)).has("error"), "oversized selections are refused")
 	# rotation
 	var rot := bp.rotated()
@@ -1538,19 +1632,19 @@ func test_pantograph() -> void:
 	check(m.try_paste(r, bp, dest) != "", "refused without materials")
 	check(m.world.get_cell(dest) == Blocks.AIR, "a refused paste builds nothing")
 	r.mats["stone"] = 1
-	r.mats["wood"] = 1
-	check(m.try_paste(r, bp, dest).begins_with("Not enough wood"), "refused when one material is short")
-	check(int(r.mats["stone"]) == 1 and int(r.mats["wood"]) == 1, "a refused paste costs nothing")
-	r.mats["wood"] = 2
+	r.mats["ice"] = 1
+	check(m.try_paste(r, bp, dest).begins_with("Not enough ice"), "refused when one material is short")
+	check(int(r.mats["stone"]) == 1 and int(r.mats["ice"]) == 1, "a refused paste costs nothing")
+	r.mats["ice"] = 2
 	check(m.paste_check(r, bp, dest) == "" and m.try_paste(r, bp, dest) == "", "pastes when affordable")
-	check(m.world.get_cell(dest) == Blocks.STONE and m.world.get_cell(dest + Vector3i(1, 0, 0)) == Blocks.WOOD, "blocks reproduced")
+	check(m.world.get_cell(dest) == Blocks.STONE and m.world.get_cell(dest + Vector3i(1, 0, 0)) == Blocks.ICE, "blocks reproduced")
 	check(m.world.get_cell(dest + Vector3i(0, 1, 0)) == Blocks.AIR and m.world.get_cell(dest + Vector3i(1, 1, 0)) == Blocks.AIR, "no cheese or TNT was duplicated")
 	var pasted := dest + Vector3i(1, 0, 1)
 	check(m.world.has_micro(pasted) and (m.world.micro[pasted] as PackedByteArray) == carved, "carved block reproduced microvoxel for microvoxel")
-	check(int(r.mats["stone"]) == 0 and int(r.mats["wood"]) * 343 + int(r.micro_bank.get("wood", 0)) == 686 - 489, "exact materials deducted")
+	check(int(r.mats["stone"]) == 0 and int(r.mats["ice"]) * 343 + int(r.micro_bank.get("ice", 0)) == 686 - 489, "exact materials deducted")
 	check(m.try_paste(r, bp, dest) != "", "cannot paste into occupied space")
 	r.mats["stone"] = 9
-	r.mats["wood"] = 9
+	r.mats["ice"] = 9
 	check(m.try_paste(r, bp, r.feet_cell() - Vector3i(0, 0, 0)) != "", "cannot paste on top of a rat")
 	r.position = Vector3(12.0, MapGenerator.GROUND, 24.5)
 	check(m.try_paste(r, bp, Vector3i(8, MapGenerator.GROUND, 24)) == "Bases are protected", "cannot paste into a base")

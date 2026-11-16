@@ -16,7 +16,7 @@ var yaw := 0.0
 var pitch := -0.25
 var first_person := false
 var cam_dist := 4.0
-var selected_mat := 0            # 0..4 = stash materials, 5 = painted block
+var selected_mat := 0            # 0..3 = stash materials, 4 = painted block
 var selected_color := 0          # palette index for painted blocks / chisel dabs
 var tool := Tool.DIG
 var ui_open := false
@@ -417,8 +417,11 @@ func _update_tool_visuals() -> void:
 	if tool == Tool.PANTOGRAPH:
 		_update_pantograph()
 	elif tool == Tool.CHISEL:
-		var mat := "stone" if painting() else String(ClassDefs.MATS[selected_mat])
-		tool_text = "Chisel  -  LMB carve, RMB add %s  (%.2f blocks of it spare)" % [mat, float(m._micro_available(rat, mat)) / 343.0]
+		if painting():
+			tool_text = "Chisel  -  LMB carve, RMB add %s paint  (made from dirt, else stone)" % Blocks.PALETTE_NAMES[selected_color]
+		else:
+			var mat := String(ClassDefs.MATS[selected_mat])
+			tool_text = "Chisel  -  LMB carve, RMB add %s  (%.2f blocks of it spare)" % [mat, float(m._micro_available(rat, mat)) / 343.0]
 	if aim.is_empty():
 		return
 	# thin team-coloured square on the targeted face (microvoxel-sized for the chisel)

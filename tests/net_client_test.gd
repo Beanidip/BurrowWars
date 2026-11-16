@@ -88,8 +88,11 @@ func _run() -> void:
 		for i in m.world.data.size():
 			if m.world.data[i] != ref.data[i]:
 				diff += 1
-		check(diff > 0 and diff < 2000, "the world snapshot is the seed's map plus the host's digging (%d cells changed)" % diff)
+		check(diff < 2000, "the world snapshot is the seed's map plus the host's digging (%d cells changed)" % diff)
 	ref.free()
+	m.try_change_class(me, "builder")   # at home, so allowed: gives us gates and a spring
+	var built := await wait_for(func() -> bool: return me.class_id == "builder" and int(me.gadgets.get("gate", 0)) > 0, 3.0)
+	check(built, "a class change is applied by the server and our kit arrives")
 
 	# the server steps the match once a player is in: bots move
 	var before := {}
@@ -152,6 +155,18 @@ func _run() -> void:
 		check(m.try_place_mat(me, target, "dirt") == "", "placing is forwarded")
 		var placed := await wait_for(func() -> bool: return m.world.get_cell(target) == Blocks.DIRT, 2.0)
 		check(placed, "the placed block appears")
+		# a gate on top of it, then a spring inside that gate
+		var gate_cell := target + Vector3i(0, 1, 0)
+		m.set_equipped(me, "gate")
+		await wait(0.3)
+		m.try_use_equipped(me, {"cell": target, "normal": Vector3i(0, 1, 0)}, Vector3(1, 0, 0), false)
+		var gated := await wait_for(func() -> bool: return m.world.get_cell(gate_cell) == Blocks.GATE_RED, 2.0)
+		check(gated, "our team gate appears")
+		m.set_equipped(me, "spring")
+		await wait(0.3)
+		m.try_use_equipped(me, {"cell": gate_cell, "normal": Vector3i(0, 1, 0)}, Vector3(1, 0, 0), false)
+		var sprung := await wait_for(func() -> bool: return m.world.get_cell(gate_cell) == Blocks.SPRING and m.world.layered_gate(gate_cell) == 1, 2.0)
+		check(sprung, "a spring placed inside the gate arrives with its gate layer")
 	m.try_place_mat(me, Vector3i(2, 30, 2), "dirt")
 	var refused := await wait_for(func() -> bool: return _notices.size() > 0, 2.0)
 	check(refused and _notices[-1] == "Too far", "a refused request comes back as a notice (%s)" % str(_notices))

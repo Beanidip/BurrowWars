@@ -255,7 +255,7 @@ func _face(v: Vector3) -> void:
 
 
 func _solid(c: Vector3i) -> bool:
-	return Blocks.solid_for(m.world.get_cell(c), rat.team)
+	return m.world.solid_for_at(c, rat.team)
 
 
 func _is_lava(c: Vector3i) -> bool:

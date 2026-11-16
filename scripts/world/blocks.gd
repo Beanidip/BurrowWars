@@ -8,7 +8,9 @@ enum {
 	HIGHWAY, LADDER, SPRING, TNT, TRAP_BLUE, TRAP_RED,
 	CONV_XP, CONV_XN, CONV_ZP, CONV_ZN, GATE_BLUE, GATE_RED,
 	STICKY_BLUE, STICKY_RED, PIT_BLUE, PIT_RED, WALL_SPRING, CANNON, CRANE, DOZER, TEAM_BLUE, TEAM_RED,
-	PAINT_0, PAINT_1, PAINT_2, PAINT_3, PAINT_4, PAINT_5, PAINT_6, PAINT_7, PAINT_8, PAINT_9, PAINT_10, PAINT_11, COUNT
+	PAINT_0, PAINT_1, PAINT_2, PAINT_3, PAINT_4, PAINT_5, PAINT_6, PAINT_7, PAINT_8, PAINT_9, PAINT_10, PAINT_11,
+	PAINT_12, PAINT_13, PAINT_14, PAINT_15, PAINT_16, PAINT_17, PAINT_18, PAINT_19, PAINT_20, PAINT_21, PAINT_22, PAINT_23,
+	PAINT_24, PAINT_25, PAINT_26, PAINT_27, PAINT_28, PAINT_29, PAINT_30, PAINT_31, PAINT_32, PAINT_33, PAINT_34, PAINT_35, COUNT
 }
 
 const OBSIDIAN_HITS := 12   # balance knob: ordinary dig hits to break obsidian
@@ -24,7 +26,7 @@ const DEFS := [
 	["Stone", 4, Color(0.50, 0.50, 0.54), true, true, "mat:stone"],
 	["Scrap", 5, Color(0.72, 0.46, 0.22), true, true, "scrap"],
 	["Obsidian", OBSIDIAN_HITS, Color(0.17, 0.12, 0.24), true, true, "mat:obsidian"],
-	["Wood", 3, Color(0.62, 0.44, 0.24), true, true, "mat:wood"],
+	["Wood", 3, Color(0.62, 0.44, 0.24), true, true, ""],   # scenery: breaks, gives nothing
 	["Ice", 2, Color(0.70, 0.88, 0.96), true, true, "mat:ice"],
 	["Water", 0, Color(0.22, 0.52, 0.90, 0.46), false, false, ""],
 	["Lava", 0, Color(1.0, 0.42, 0.08), false, false, ""],
@@ -60,26 +62,56 @@ const DEFS := [
 	# Team blocks: a floor/wall only their own team can stand on or touch.
 	["Team Block", 1, Color(0.42, 0.66, 1.0), false, true, ""],
 	["Team Block", 1, Color(1.0, 0.50, 0.45), false, true, ""],
-	# Painted blocks: dyed stone in the 12 palette colours (place with slot 6, pick with C).
-	["Red Block", 4, Color(0.86, 0.22, 0.22), true, true, "mat:stone"],
-	["Orange Block", 4, Color(0.95, 0.52, 0.16), true, true, "mat:stone"],
-	["Yellow Block", 4, Color(0.97, 0.84, 0.25), true, true, "mat:stone"],
-	["Lime Block", 4, Color(0.58, 0.85, 0.28), true, true, "mat:stone"],
-	["Green Block", 4, Color(0.18, 0.58, 0.30), true, true, "mat:stone"],
-	["Teal Block", 4, Color(0.15, 0.66, 0.66), true, true, "mat:stone"],
-	["Sky Block", 4, Color(0.45, 0.76, 0.98), true, true, "mat:stone"],
-	["Blue Block", 4, Color(0.20, 0.36, 0.86), true, true, "mat:stone"],
-	["Purple Block", 4, Color(0.56, 0.32, 0.82), true, true, "mat:stone"],
-	["Pink Block", 4, Color(0.96, 0.52, 0.76), true, true, "mat:stone"],
-	["White Block", 4, Color(0.95, 0.95, 0.93), true, true, "mat:stone"],
-	["Charcoal Block", 4, Color(0.20, 0.20, 0.23), true, true, "mat:stone"],
+	# Painted blocks: dyed dirt (or stone), placed with the Paint slot, colour picked with C.
+	# Hits 3. The last 10 are see-through glass.
+	["Red Block", 3, Color(0.86, 0.22, 0.22), true, true, "mat:dirt"],
+	["Orange Block", 3, Color(0.95, 0.52, 0.16), true, true, "mat:dirt"],
+	["Yellow Block", 3, Color(0.97, 0.84, 0.25), true, true, "mat:dirt"],
+	["Lime Block", 3, Color(0.58, 0.85, 0.28), true, true, "mat:dirt"],
+	["Green Block", 3, Color(0.18, 0.58, 0.30), true, true, "mat:dirt"],
+	["Teal Block", 3, Color(0.15, 0.66, 0.66), true, true, "mat:dirt"],
+	["Sky Block", 3, Color(0.45, 0.76, 0.98), true, true, "mat:dirt"],
+	["Blue Block", 3, Color(0.20, 0.36, 0.86), true, true, "mat:dirt"],
+	["Purple Block", 3, Color(0.56, 0.32, 0.82), true, true, "mat:dirt"],
+	["Pink Block", 3, Color(0.96, 0.52, 0.76), true, true, "mat:dirt"],
+	["White Block", 3, Color(0.95, 0.95, 0.93), true, true, "mat:dirt"],
+	["Charcoal Block", 3, Color(0.20, 0.20, 0.23), true, true, "mat:dirt"],
+	["Light Grey Block", 3, Color(0.76, 0.76, 0.78), true, true, "mat:dirt"],
+	["Grey Block", 3, Color(0.55, 0.55, 0.58), true, true, "mat:dirt"],
+	["Dark Grey Block", 3, Color(0.36, 0.36, 0.39), true, true, "mat:dirt"],
+	["Black Block", 3, Color(0.08, 0.08, 0.09), true, true, "mat:dirt"],
+	["Maroon Block", 3, Color(0.50, 0.12, 0.16), true, true, "mat:dirt"],
+	["Coral Block", 3, Color(0.98, 0.45, 0.40), true, true, "mat:dirt"],
+	["Peach Block", 3, Color(0.99, 0.76, 0.60), true, true, "mat:dirt"],
+	["Gold Block", 3, Color(0.85, 0.65, 0.13), true, true, "mat:dirt"],
+	["Olive Block", 3, Color(0.45, 0.48, 0.18), true, true, "mat:dirt"],
+	["Mint Block", 3, Color(0.60, 0.92, 0.76), true, true, "mat:dirt"],
+	["Navy Block", 3, Color(0.12, 0.17, 0.45), true, true, "mat:dirt"],
+	["Lavender Block", 3, Color(0.74, 0.66, 0.94), true, true, "mat:dirt"],
+	["Magenta Block", 3, Color(0.85, 0.20, 0.62), true, true, "mat:dirt"],
+	["Brown Block", 3, Color(0.45, 0.29, 0.16), true, true, "mat:dirt"],
+	["Clear Glass", 3, Color(0.85, 0.95, 1.00, 0.28), true, false, "mat:dirt"],
+	["Smoke Glass", 3, Color(0.30, 0.30, 0.34, 0.45), true, false, "mat:dirt"],
+	["Red Glass", 3, Color(0.95, 0.25, 0.25, 0.42), true, false, "mat:dirt"],
+	["Orange Glass", 3, Color(1.00, 0.60, 0.20, 0.42), true, false, "mat:dirt"],
+	["Yellow Glass", 3, Color(1.00, 0.92, 0.30, 0.40), true, false, "mat:dirt"],
+	["Green Glass", 3, Color(0.30, 0.85, 0.40, 0.40), true, false, "mat:dirt"],
+	["Cyan Glass", 3, Color(0.30, 0.90, 0.95, 0.40), true, false, "mat:dirt"],
+	["Blue Glass", 3, Color(0.30, 0.45, 1.00, 0.42), true, false, "mat:dirt"],
+	["Purple Glass", 3, Color(0.65, 0.40, 0.95, 0.42), true, false, "mat:dirt"],
+	["Pink Glass", 3, Color(1.00, 0.55, 0.80, 0.40), true, false, "mat:dirt"],
 ]
 
-const PALETTE_SIZE := 12
-const PALETTE_NAMES := ["Red", "Orange", "Yellow", "Lime", "Green", "Teal", "Sky", "Blue", "Purple", "Pink", "White", "Charcoal"]
+const PALETTE_SIZE := 36
+const PALETTE_SOLID := 26          # palette entries before this are opaque; the rest are glass
+const PALETTE_NAMES := ["Red", "Orange", "Yellow", "Lime", "Green", "Teal", "Sky", "Blue", "Purple", "Pink", "White", "Charcoal", "Light Grey", "Grey", "Dark Grey", "Black", "Maroon", "Coral", "Peach", "Gold", "Olive", "Mint", "Navy", "Lavender", "Magenta", "Brown", "Clear Glass", "Smoke Glass", "Red Glass", "Orange Glass", "Yellow Glass", "Green Glass", "Cyan Glass", "Blue Glass", "Purple Glass", "Pink Glass"]
 
-const CHISELABLE := [DIRT, GRASS, STONE, OBSIDIAN, WOOD, ICE, BRICK,
-	PAINT_0, PAINT_1, PAINT_2, PAINT_3, PAINT_4, PAINT_5, PAINT_6, PAINT_7, PAINT_8, PAINT_9, PAINT_10, PAINT_11]
+## Gadgets that can be placed INSIDE your own team gate: the gate still keeps
+## enemies out, and your team gets the gadget (see VoxelWorld.gates).
+const GATE_GADGETS := [LADDER, SPRING, HIGHWAY, CONV_XP, CONV_XN, CONV_ZP, CONV_ZN, WALL_SPRING]
+
+static var CHISELABLE: Array[int] = []   # can be carved into microvoxels
+static var COPYABLE: Array[int] = []     # the pantograph may copy it
 
 static var SOLID := PackedByteArray()
 static var OPAQUE := PackedByteArray()
@@ -96,6 +128,12 @@ static func _static_init() -> void:
 		TARGETABLE.append(0 if (id == AIR or id == WATER or id == LAVA) else 1)
 		HITS.append(int(d[1]))
 		COLOR.append(d[2])
+	CHISELABLE.assign([DIRT, GRASS, STONE, OBSIDIAN, ICE, BRICK])
+	for k in PALETTE_SOLID:
+		CHISELABLE.append(PAINT_0 + k)
+	COPYABLE.assign(CHISELABLE)
+	for k in range(PALETTE_SOLID, PALETTE_SIZE):
+		COPYABLE.append(PAINT_0 + k)
 
 
 static func block_name(id: int) -> String:
@@ -151,6 +189,10 @@ static func mat_of(id: int) -> String:
 
 static func is_paint(id: int) -> bool:
 	return id >= PAINT_0 and id < PAINT_0 + PALETTE_SIZE
+
+
+static func is_glass(id: int) -> bool:
+	return id >= PAINT_0 + PALETTE_SOLID and id < PAINT_0 + PALETTE_SIZE
 
 
 static func paint_color(k: int) -> Color:

@@ -280,7 +280,7 @@ func _run() -> void:
 	s.player.vel = Vector3.ZERO
 	var block := pad + Vector3i(2, 0, 0)
 	w.set_block(block, Blocks.STONE)
-	w.set_block(block + Vector3i(0, 1, 0), Blocks.WOOD)
+	w.set_block(block + Vector3i(0, 1, 0), Blocks.ICE)
 	s.ctl.first_person = true
 	look_at(s, Vector3(block) + Vector3(0.0, 0.6, 0.5))
 	await frames(8)
@@ -303,12 +303,12 @@ func _run() -> void:
 	check(w.micro_count(block) + w.micro_count(block + Vector3i(-1, 0, 0)) == before_add + 1 or w.micro_count(block) == before_add + 1, "right mouse adds one microvoxel")
 	await frames(6)
 	await shot("16_chisel")
-	# pantograph: copy the carved block and the wood on top of it, rotate, preview, paste
+	# pantograph: copy the carved block and the ice on top of it, rotate, preview, paste
 	await press("pantograph")
 	check(s.ctl.tool == PlayerController.Tool.PANTOGRAPH, "0 equips the pantograph")
 	s.ctl.corner = block
 	s.ctl.corner_set = true
-	look_at(s, Vector3(block) + Vector3(0.0, 1.5, 0.5))   # second corner: the wood block on top
+	look_at(s, Vector3(block) + Vector3(0.0, 1.5, 0.5))   # second corner: the ice block on top
 	await frames(6)
 	s.ctl._pantograph_click()
 	check(s.ctl.blueprint != null and s.ctl.blueprint.size == Vector3i(1, 2, 1), "two corners copy the region")
@@ -320,7 +320,7 @@ func _run() -> void:
 	await shot("17_pantograph_preview")
 	var origin: Vector3i = s.ctl.paste_origin() if not s.ctl.aim.is_empty() else Vector3i.ZERO
 	await press("place")
-	check(w.has_micro(origin) and w.get_cell(origin + Vector3i(0, 1, 0)) == Blocks.WOOD, "paste rebuilds the carved block and the block above it")
+	check(w.has_micro(origin) and w.get_cell(origin + Vector3i(0, 1, 0)) == Blocks.ICE, "paste rebuilds the carved block and the block above it")
 	check(w.micro_count(origin) == w.micro_count(block), "pasted copy has the same microvoxel count")
 	await press("slot_1")
 	check(s.ctl.tool == PlayerController.Tool.DIG, "1 goes back to the dig tool")
@@ -471,8 +471,8 @@ func _run() -> void:
 		if w.get_cell(paint_floor + Vector3i(0, 1, k)) == Blocks.PAINT_0 + k * 2:
 			stacked += 1
 	check(stacked == 3, "right mouse places painted blocks in whichever colour is picked (%d of 3)" % stacked)
-	await press("slot_6")
-	check(s.ctl.painting(), "6 selects the Paint slot")
+	await press("slot_5")
+	check(s.ctl.painting(), "5 selects the Paint slot")
 	# chisel a dab of colour onto plain stone
 	var plain := pad + Vector3i(-3, 0, 0)
 	w.set_block(plain, Blocks.STONE)

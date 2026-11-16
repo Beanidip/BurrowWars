@@ -23,6 +23,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 	var z0 := k.z * VoxelWorld.CHUNK
 	var opaque := Blocks.OPAQUE
 	var mf := world.micro_flag
+	var layered := not world.gates.is_empty()
 	for y in range(y0, y0 + VoxelWorld.CHUNK):
 		var depth := clampf(0.58 + 0.42 * float(y) / 28.0, 0.58, 1.0)
 		for z in range(z0, z0 + VoxelWorld.CHUNK):
@@ -33,6 +34,24 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 				var mn := Vector3(x, y, z)
 				var col: Color = Blocks.COLOR[id]
 				var tint: float = 0.93 + 0.14 * float((x * 73856093 ^ y * 19349663 ^ z * 83492791) & 255) / 255.0
+				if layered and world.gates.has(Vector3i(x, y, z)):
+					# a gate holding a gadget: the see-through gate box wraps the gadget
+					var gcol: Color = Blocks.COLOR[Blocks.GATE_BLUE if int(world.gates[Vector3i(x, y, z)]) == 0 else Blocks.GATE_RED]
+					_box(tv, tc, mn - Vector3(0.012, 0.012, 0.012), mn + Vector3(1.012, 1.012, 1.012), gcol)
+				if Blocks.is_glass(id):
+					# glass: one see-through face wherever it meets something it can be seen through
+					for f in 6:
+						var gx: int = x + NX[f]
+						var gy: int = y + NY[f]
+						var gz: int = z + NZ[f]
+						if gy < 0 or gx < 0 or gz < 0 or gx >= sx or gz >= sz:
+							continue
+						if gy < sy:
+							var gn := d[gx + sx * (gz + sz * gy)]
+							if gn == id or (opaque[gn] == 1 and mf[gx + sx * (gz + sz * gy)] == 0):
+								continue
+						_face(tv, tc, mn, mn + Vector3.ONE, f, _shade(col, 0.85 + 0.15 * SHADE[f]))
+					continue
 				if opaque[id] == 1 and mf[x + sx * (z + sz * y)] == 1:
 					_micro_block(world, ov, oc, Vector3i(x, y, z), id, tint * depth)
 					continue

@@ -240,6 +240,8 @@ func on_events(e: Dictionary) -> void:
 			m.world.set_mask(cell, int(entry[1]), entry[2])
 		else:
 			m.world.set_block(cell, int(entry[1]))
+	for g: Array in e.get("g", []):
+		m.world.set_gate_layer(g[0], int(g[1]))
 	for f: Array in e.get("fx", []):
 		m.fx.emit(String(f[0]), f[1], f[2])
 	for t: Array in e.get("to", []):

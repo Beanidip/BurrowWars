@@ -21,7 +21,7 @@ static func capture(world: VoxelWorld, a: Vector3i, b: Vector3i) -> Blueprint:
 				var id := world.get_cell(c)
 				if id == Blocks.AIR or id == Blocks.WATER or id == Blocks.LAVA:
 					continue
-				if not Blocks.CHISELABLE.has(id) or not VoxelWorld.in_bounds(c):
+				if not Blocks.COPYABLE.has(id) or not VoxelWorld.in_bounds(c):
 					bp.skipped += 1
 					continue
 				var mask: Variant = null
@@ -88,7 +88,7 @@ func validate() -> String:
 		if o.x < 0 or o.y < 0 or o.z < 0 or o.x >= size.x or o.y >= size.y or o.z >= size.z or seen.has(o):
 			return "Blueprint is malformed"
 		seen[o] = true
-		if not Blocks.CHISELABLE.has(int(e["id"])):
+		if not Blocks.COPYABLE.has(int(e["id"])):
 			return "Blueprint contains something that cannot be copied"
 		var mask: Variant = e.get("mask")
 		if mask != null and (not (mask is PackedByteArray) or (mask as PackedByteArray).size() != Blocks.MICRO_COUNT \

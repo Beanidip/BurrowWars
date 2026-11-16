@@ -20,6 +20,7 @@ var m: Match
 var seats: Dictionary = {}     # peer id -> Rat
 var _blocks := PackedInt32Array()
 var _micro: Dictionary = {}    # Vector3i -> true
+var _gates: Dictionary = {}    # Vector3i -> true (gate layers that changed)
 var _fx: Array = []
 var _toasts: Array = []
 var _won := -1
@@ -33,6 +34,7 @@ func _ready() -> void:
 	m.networked = true
 	m.world.block_changed.connect(_on_block)
 	m.world.micro_changed.connect(_on_micro)
+	m.world.gate_layer_changed.connect(func(c: Vector3i) -> void: _gates[c] = true)
 	m.fx.connect(func(kind: String, pos: Vector3, data: Variant) -> void: _fx.append([kind, pos, data]))
 	m.toast.connect(func(text: String, team: int) -> void: _toasts.append([text, team]))
 	m.won.connect(func(team: int) -> void: _won = team)
@@ -328,23 +330,28 @@ func _physics_process(_delta: float) -> void:
 func _clear_events() -> void:
 	_blocks = PackedInt32Array()
 	_micro.clear()
+	_gates.clear()
 	_fx.clear()
 	_toasts.clear()
 	_won = -1
 
 
 func _flush_events() -> void:
-	if _blocks.is_empty() and _micro.is_empty() and _fx.is_empty() and _toasts.is_empty() and _won < 0:
+	if _blocks.is_empty() and _micro.is_empty() and _gates.is_empty() and _fx.is_empty() and _toasts.is_empty() and _won < 0:
 		return
 	var mi: Array = []
 	for c: Vector3i in _micro:
 		mi.append([c, m.world.get_cell(c), m.world.micro_mask(c)])
-	var pkt := {"b": _blocks, "mi": mi, "fx": _fx, "to": _toasts, "won": _won}
+	var gl: Array = []
+	for c: Vector3i in _gates:
+		gl.append([c, m.world.layered_gate(c)])
+	var pkt := {"b": _blocks, "mi": mi, "g": gl, "fx": _fx, "to": _toasts, "won": _won}
 	for id: int in seats:
 		if multiplayer.get_peers().has(id):
 			Net._s_events.rpc_id(id, pkt)
 	_blocks = PackedInt32Array()
 	_micro = {}
+	_gates = {}
 	_fx = []
 	_toasts = []
 	_won = -1

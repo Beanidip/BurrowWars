@@ -6,7 +6,7 @@ signal start_requested(settings: Dictionary)
 
 const HELP := """GOAL  Dig up golden cheese and carry it home. First team to the cheese goal wins.
 
-DIG  Hold left mouse. Dirt takes 2 hits, stone 4, scrap 5. Mined dirt, stone and wood go into your stash; place them with right mouse (1-4 picks the material).
+DIG  Hold left mouse. Dirt takes 2 hits, stone 4, scrap 5. Mined dirt, stone, ice and obsidian go into your stash; place them with right mouse (1-4 picks the material). Wood is scenery: it breaks but gives nothing.
 
 CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying cheese slows you down, more for every extra piece (45% / 34% / 25% speed) - dash (Shift), build highways or get an escort. Walk into your base to bank it. G drops one.
 
@@ -14,9 +14,11 @@ BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a chee
 
 SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Conveyors and highways are laid into the floor you aim at; a conveyor runs toward the bright edge of your target square. Aim at a ladder and press Q to extend it up or down. Q places the equipped gadget, R changes it, I opens your pack.
 
-COLOUR  Press C to pick one of 12 colours. Slot 6 places painted blocks with right mouse; with the chisel (9) right mouse adds painted microvoxels.
+COLOUR  Press C to pick one of 36 colours, including greys and see-through glass. Slot 5 places painted blocks with right mouse (each costs one dirt, or stone when you have no dirt; digging one gives a dirt back); with the chisel (9) right mouse adds painted microvoxels (glass is full blocks only).
 
 RAIDS  Stand inside the ENEMY base for 3 seconds to steal a cheese they already banked. Everyone hears the alarm, and any defender standing in their own base locks the vault - so guard it, gate it, trap it.
+
+GATES  Aim at your own Team Gate and press Q to put a ladder, spring, conveyor, wall spring or highway INSIDE it: your team uses the gadget, enemies still bump into the gate. (A highway aimed at the top of a gate lies on top instead.)
 
 CLASSES  Digger: carries 3, Super Dig (E) smashes a 3x3x3. Scout: fast, sniffs out cheese. Builder: patches walls, free team gates, Team Blocks (F) only your team can stand on, shops anywhere. Saboteur: TNT and traps. E and F are class abilities.
 

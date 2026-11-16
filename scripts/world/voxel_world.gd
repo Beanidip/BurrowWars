@@ -7,6 +7,7 @@ extends Node3D
 
 signal block_changed(cell: Vector3i, old_id: int, new_id: int)
 signal micro_changed(cell: Vector3i)
+signal gate_layer_changed(cell: Vector3i)
 
 const SX := 96
 const SY := 48
@@ -23,6 +24,10 @@ var cheese_cells: Dictionary = {}  # Vector3i -> true (kept in sync by set_block
 # Untouched blocks cost nothing; micro_flag gives hot loops an O(1) test.
 var micro: Dictionary = {}         # Vector3i -> PackedByteArray(343)
 var micro_flag := PackedByteArray()
+## Team gates that also hold a gadget: cell -> team. The block id in such a
+## cell is the gadget (a spring, ladder, conveyor...); the gate is a layer
+## that keeps the other team out. Removing the gadget leaves the plain gate.
+var gates: Dictionary = {}
 var loaded_extra: Dictionary = {}  # non-terrain data from the last load (machines...)
 var points_of_interest: Array[Vector3] = []
 var visual := true
@@ -79,6 +84,13 @@ func set_raw(x: int, y: int, z: int, id: int) -> void:
 func set_block(c: Vector3i, id: int) -> void:
 	if not in_bounds(c):
 		return
+	if not gates.is_empty() and gates.has(c):
+		var team := int(gates[c])
+		if id == Blocks.AIR:
+			id = Blocks.GATE_BLUE if team == 0 else Blocks.GATE_RED   # the gadget goes, the gate stays
+		if not Blocks.GATE_GADGETS.has(id):
+			gates.erase(c)
+			gate_layer_changed.emit(c)
 	var i := c.x + SX * (c.z + SZ * c.y)
 	var old := data[i]
 	if old == id:
@@ -148,7 +160,7 @@ func raycast(origin: Vector3, dir: Vector3, max_dist: float, solid_only := false
 	for i in 200:
 		if i > 0:
 			var id := get_cell(cell)
-			var hit := (Blocks.SOLID[id] == 1) if solid_only else (Blocks.TARGETABLE[id] == 1)
+			var hit := (Blocks.SOLID[id] == 1 or (not gates.is_empty() and gates.has(cell))) if solid_only else (Blocks.TARGETABLE[id] == 1)
 			if hit:
 				return {"cell": cell, "normal": normal, "id": id, "dist": t}
 		var axis := 0
@@ -239,7 +251,7 @@ func solid_point(p: Vector3) -> bool:
 	var c := Vector3i(floori(p.x), floori(p.y), floori(p.z))
 	var id := get_cell(c)
 	if Blocks.SOLID[id] == 0:
-		return false
+		return not gates.is_empty() and gates.has(c)   # a gate holding a ladder or highway is still a wall to loose things
 	if not has_micro(c):
 		return true
 	var mx := clampi(int((p.x - c.x) * M), 0, M - 1)
@@ -388,7 +400,7 @@ func save_to(path: String, extra: Dictionary = {}) -> bool:
 	var masks := {}
 	for c: Vector3i in micro:
 		masks[c.x + SX * (c.z + SZ * c.y)] = micro[c]
-	f.store_var({"micro": masks, "extra": extra}, false)
+	f.store_var({"micro": masks, "gates": _gates_by_index(), "extra": extra}, false)
 	f.close()
 	return true
 
@@ -399,7 +411,7 @@ func snapshot() -> Dictionary:
 	var masks := {}
 	for c: Vector3i in micro:
 		masks[c.x + SX * (c.z + SZ * c.y)] = micro[c]
-	return {"d": data.compress(FileAccess.COMPRESSION_ZSTD), "m": masks}
+	return {"d": data.compress(FileAccess.COMPRESSION_ZSTD), "m": masks, "g": _gates_by_index()}
 
 
 func apply_snapshot(snap: Variant) -> bool:
@@ -421,10 +433,68 @@ func apply_snapshot(snap: Variant) -> bool:
 			return false
 		var idx := int(key)
 		new_micro[Vector3i(idx % SX, idx / (SX * SZ), (idx / SX) % SZ)] = mask
+	var new_gates: Variant = _read_gates(snap.get("g", {}), raw)
+	if new_gates == null:
+		return false
 	data = raw
 	micro = new_micro
+	gates = new_gates
 	reindex()
 	return true
+
+
+func _gates_by_index() -> Dictionary:
+	var out := {}
+	for c: Vector3i in gates:
+		out[c.x + SX * (c.z + SZ * c.y)] = int(gates[c])
+	return out
+
+
+static func _read_gates(raw_gates: Variant, raw: PackedByteArray) -> Variant:
+	## Validated gate layers, or null if the data is malformed.
+	if not (raw_gates is Dictionary):
+		return null
+	var out := {}
+	for key: Variant in raw_gates:
+		var team: Variant = raw_gates[key]
+		if not (key is int) or not (team is int) or int(key) < 0 or int(key) >= raw.size() or (int(team) != 0 and int(team) != 1) \
+				or not Blocks.GATE_GADGETS.has(int(raw[int(key)])):
+			return null
+		var idx := int(key)
+		out[Vector3i(idx % SX, idx / (SX * SZ), (idx / SX) % SZ)] = int(team)
+	return out
+
+
+func gate_at(c: Vector3i) -> int:
+	## Team of the gate in this cell, plain or holding a gadget; -1 if none.
+	var id := get_cell(c)
+	if Blocks.is_gate(id):
+		return Blocks.gate_team(id)
+	return int(gates.get(c, -1))
+
+
+func layered_gate(c: Vector3i) -> int:
+	## Team of a gate that holds a gadget in this cell, or -1.
+	return int(gates.get(c, -1)) if not gates.is_empty() else -1
+
+
+func set_gate_layer(c: Vector3i, team: int) -> void:
+	## team -1 removes the layer (the block id is left as it is).
+	if team < 0:
+		if gates.erase(c):
+			_mark_dirty(c)
+			gate_layer_changed.emit(c)
+		return
+	gates[c] = team
+	_mark_dirty(c)
+	gate_layer_changed.emit(c)
+
+
+func solid_for_at(c: Vector3i, team: int) -> bool:
+	## Collision for a rat of `team`, including gates that hold gadgets.
+	if not gates.is_empty() and gates.has(c) and int(gates[c]) != team:
+		return true
+	return Blocks.solid_for(get_cell(c), team)
 
 
 func micro_mask(c: Vector3i) -> Variant:
@@ -458,6 +528,7 @@ func load_from(path: String) -> bool:
 			Log.warn("map load rejected (unknown block id): " + path)
 			return false
 	var new_micro := {}
+	var new_gates: Variant = {}
 	var extra := {}
 	if f.get_position() < f.get_length():   # older saves simply end here
 		var tail: Variant = f.get_var(false)
@@ -475,8 +546,13 @@ func load_from(path: String) -> bool:
 			new_micro[Vector3i(idx % SX, idx / (SX * SZ), (idx / SX) % SZ)] = mask
 		if tail.get("extra", {}) is Dictionary:
 			extra = tail["extra"]
+		new_gates = _read_gates(tail.get("gates", {}), raw)
+		if new_gates == null:
+			Log.warn("map load rejected (bad gate data): " + path)
+			return false
 	data = raw
 	micro = new_micro
+	gates = new_gates
 	loaded_extra = extra
 	reindex()
 	return true

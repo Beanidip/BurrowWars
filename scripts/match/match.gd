@@ -341,6 +341,10 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 		return false
 	rat.dig_cd = 1.0 / Config.DIG_RATE
 	rat.play_action("dig", 0.28)
+	var layer := world.layered_gate(cell)
+	if layer >= 0 and layer != rat.team:
+		fx.emit("clang", Vector3(cell), id)   # the gadget is behind the other team's gate
+		return false
 	if id == Blocks.TNT:
 		light_tnt(cell, 2.0)
 		return true
@@ -395,6 +399,9 @@ func _damage(rat: Rat, cell: Vector3i, power: int, quiet := false) -> bool:
 	var hits := int(Blocks.HITS[id])
 	if hits <= 0 or power <= 0 or not VoxelWorld.in_bounds(cell):
 		return false
+	var layer := world.layered_gate(cell)
+	if layer >= 0 and (rat == null or rat.team != layer):
+		return false   # only the gate's own team can take a gadget out of it
 	var total := int(world.damage.get(cell, 0)) + power
 	if total < hits:
 		world.damage[cell] = total
@@ -482,24 +489,38 @@ func try_place_mat(rat: Rat, cell: Vector3i, mat: String) -> String:
 
 
 func try_place_paint(rat: Rat, cell: Vector3i, color: int) -> String:
+	## A full block in one of the palette colours (glass included). Painted
+	## blocks are dyed dirt: each costs one dirt, or one stone when you have no
+	## dirt, and digging one gives a dirt back.
 	if remote != null:
 		return remote.act("try_place_paint", [cell, color])
-	## A full block in one of the palette colours. Painted blocks are dyed
-	## stone: each costs one stone, and gives it back when dug.
 	if color < 0 or color >= Blocks.PALETTE_SIZE:
 		return "Unknown colour"
-	if not free_mode and int(rat.mats["stone"]) <= 0:
-		return "Painted blocks are made from stone - dig some first"
+	var pay := paint_material(rat)
+	if not free_mode and pay == "":
+		return "Painted blocks are made from dirt or stone - dig some first"
 	var block := Blocks.PAINT_0 + color
 	var why := can_place_at(rat, cell, block)
 	if why != "":
 		return why
 	if not free_mode:
-		rat.mats["stone"] = int(rat.mats["stone"]) - 1
+		rat.mats[pay] = int(rat.mats[pay]) - 1
 	world.set_block(cell, block)
 	rat.play_action("build", 0.3)
 	fx.emit("place", Vector3(cell), block)
 	return ""
+
+
+func paint_material(rat: Rat, micro := 0) -> String:
+	## What a painted block (or `micro` painted microvoxels) is paid with:
+	## dirt first, stone when out of dirt. "" when the rat has neither.
+	if micro > 0:
+		if _micro_available(rat, "dirt") >= micro:
+			return "dirt"
+		return "stone" if _micro_available(rat, "stone") >= micro else ""
+	if int(rat.mats.get("dirt", 0)) > 0:
+		return "dirt"
+	return "stone" if int(rat.mats.get("stone", 0)) > 0 else ""
 
 
 func hit_gate(cell: Vector3i, amount: int) -> void:
@@ -508,13 +529,16 @@ func hit_gate(cell: Vector3i, amount: int) -> void:
 	if int(gate_damage[cell]) >= Config.GATE_HP:
 		gate_damage.erase(cell)
 		var id := world.get_cell(cell)
+		world.set_gate_layer(cell, -1)   # a broken gate takes whatever it held with it
 		world.set_block(cell, Blocks.AIR)
 		fx.emit("break", Vector3(cell), id)
 
 
-func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vector3.ZERO, reach := -1.0, replace := false) -> String:
+func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vector3.ZERO, reach := -1.0, replace := false,
+		into_gate := false) -> String:
 	## `dir` (optional) is the direction a conveyor should run; default is the
-	## rat's facing. `replace` lays the gadget into the block at `cell`.
+	## rat's facing. `replace` lays the gadget into the block at `cell`;
+	## `into_gate` puts it inside your own team gate at `cell`.
 	var g := gadget if gadget != "" else rat.equipped
 	if g == "" or not ClassDefs.GADGET_NAME.has(g):
 		return "Nothing equipped - buy gadgets at the workshop (B)"
@@ -531,7 +555,12 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 		return "A highway needs a floor to lie on"
 	if replace and not _is_floor_material(cell):
 		return "Can't lay that into %s" % Blocks.block_name(old)
-	var why := can_place_at(rat, cell, block, reach, replace)
+	if into_gate:
+		if not Blocks.is_gate(old) or Blocks.gate_team(old) != rat.team:
+			return "Gadgets only go inside your own team's gate"
+		if not ClassDefs.GATE_GADGETS.has(g):
+			return "%s can't go inside a gate" % ClassDefs.GADGET_NAME[g]
+	var why := can_place_at(rat, cell, block, reach, replace or into_gate)
 	if why != "":
 		return why
 	if not free_mode:
@@ -539,6 +568,8 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 		if replace:   # the floor block you swapped out goes into your stash, as if dug
 			var mat := Blocks.mat_of(old)
 			rat.mats[mat] = mini(int(rat.mats[mat]) + 1, 99)
+	if into_gate:
+		world.set_gate_layer(cell, rat.team)
 	world.set_block(cell, block)
 	if block == Blocks.TNT:
 		tnt[cell] = {"owner": rat.id, "fuse": -1.0}
@@ -580,6 +611,12 @@ func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, di
 		if why == "Space is occupied":
 			return "The ladder stack is blocked %s" % ("above" if up else "below")
 		return why
+	# Your own team gate can hold a ladder, spring, conveyor, wall spring or
+	# highway. (A highway aimed at the top of a gate lies on top of it.)
+	var aimed_id := world.get_cell(aimed)
+	if Blocks.is_gate(aimed_id) and Blocks.gate_team(aimed_id) == rat.team and ClassDefs.GATE_GADGETS.has(g) \
+			and not (g == "highway" and normal.y == 1):
+		return try_place_gadget(rat, aimed, g, dir, -1.0, false, true)
 	# Conveyors are laid INTO the floor block you point at. (Highways are a
 	# thin layer that lies on top of the face instead.)
 	if g == "conveyor" and normal.y == 1 and _is_floor_material(aimed):
@@ -589,7 +626,7 @@ func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, di
 
 func _is_floor_material(cell: Vector3i) -> bool:
 	var id := world.get_cell(cell)
-	return (id == Blocks.DIRT or id == Blocks.GRASS or id == Blocks.STONE or id == Blocks.WOOD or id == Blocks.BRICK \
+	return (id == Blocks.DIRT or id == Blocks.GRASS or id == Blocks.STONE or id == Blocks.BRICK \
 		or id == Blocks.ICE) and not world.has_micro(cell)
 
 
@@ -652,8 +689,10 @@ func try_chisel_remove(rat: Rat, cell: Vector3i, mv: Vector3i) -> String:
 	if not world.micro_at(cell, mv):
 		return "Nothing there to carve"
 	rat.chisel_cd = 1.0 / Config.CHISEL_RATE
+	# a dab of paint was paid in dirt, so it comes back as dirt
+	var dab := world.has_micro(cell) and int((world.micro[cell] as PackedByteArray)[mv.x + Blocks.MICRO * (mv.z + Blocks.MICRO * mv.y)]) > 1
 	world.set_micro(cell, mv, false)
-	_refund_micro(rat, Blocks.mat_of(id), 1)
+	_refund_micro(rat, "dirt" if dab else Blocks.mat_of(id), 1)
 	rat.play_action("build", 0.2)
 	fx.emit("chip", Vector3(cell) + Vector3(mv) / float(Blocks.MICRO), id)
 	return ""
@@ -672,13 +711,15 @@ func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String, color :
 	var value := 1
 	if color >= Blocks.PALETTE_SIZE:
 		return "Unknown colour"
+	if color >= Blocks.PALETTE_SOLID:
+		return "Glass comes in whole blocks only - place it with the Paint slot"
 	if color >= 0 and id != Blocks.AIR and id != Blocks.PAINT_0 + color:
 		value = 2 + color      # a dab of colour on a block of another material
 	if id == Blocks.AIR:
 		if color >= 0:
 			block = Blocks.PAINT_0 + color
 		elif not ClassDefs.MAT_BLOCK.has(mat):
-			return "Pick a material (1-6) first"
+			return "Pick a material (1-5) first"
 		else:
 			block = ClassDefs.MAT_BLOCK[mat]
 		for t in 2:
@@ -696,6 +737,10 @@ func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String, color :
 				and mn.y + s > r.position.y + 0.001 and mn.y < r.position.y + Rat.HEIGHT:
 			return "A rat is in the way"
 	var use_mat := Blocks.mat_of(block)
+	if value > 1 or Blocks.is_paint(block):
+		use_mat = "dirt" if free_mode else paint_material(rat, 1)   # paint: dirt, else stone
+		if use_mat == "":
+			return "Paint is made from dirt or stone - dig some first"
 	if not _pay_micro(rat, use_mat, 1):
 		return "No %s left to chisel with" % use_mat
 	rat.chisel_cd = 1.0 / Config.CHISEL_RATE
@@ -970,7 +1015,7 @@ func blast(origin: Vector3, radius: float, power: float) -> void:
 					continue
 				if id == Blocks.TNT:
 					light_tnt(c, 0.25)   # chain reaction
-				elif Blocks.is_gate(id):
+				elif world.gate_at(c) >= 0:
 					hit_gate(c, (Config.GATE_HP + 1) / 2)
 				else:
 					# breaking goes through set_block, which also discards any carving
