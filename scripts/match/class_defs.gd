@@ -1,0 +1,97 @@
+class_name ClassDefs
+## Data-driven class and workshop definitions. Balance lives in these tables.
+
+const ORDER := ["digger", "scout", "builder", "saboteur"]
+
+# speed: multiplier on Config.BASE_SPEED. brush: dig radius in blocks (0 = single block).
+# abilities: [id, label, cooldown seconds, stamina cost]
+const CLASSES := {
+	"digger": {
+		"name": "Digger", "speed": 0.85, "stamina": 150.0, "carry": 3, "brush": 1, "water": 0.5,
+		"remote_shop": false, "fly": false,
+		"blurb": "Slow but unstoppable. Digs a 3x3x3 chunk per swing and hauls 3 cheese.",
+		"abilities": [["sense", "Burrow Sense", 8.0, 20.0]],
+		"kit": {},
+	},
+	"scout": {
+		"name": "Scout", "speed": 1.25, "stamina": 100.0, "carry": 2, "brush": 0, "water": 1.0,
+		"remote_shop": false, "fly": false,
+		"blurb": "Fast, swims at full speed, sniffs out cheese and drops team beacons.",
+		"abilities": [["sniff", "Sniff", 6.0, 15.0], ["beacon", "Beacon", 10.0, 10.0]],
+		"kit": {},
+	},
+	"builder": {
+		"name": "Builder", "speed": 1.0, "stamina": 100.0, "carry": 2, "brush": 0, "water": 0.5,
+		"remote_shop": true, "fly": false,
+		"blurb": "Patches walls, lays speed highways, shops from anywhere. Starts with ladders and a spring.",
+		"abilities": [["patch", "Patch 3x3", 3.0, 25.0], ["highway", "Highway", 5.0, 30.0]],
+		"kit": {"ladder": 6, "spring": 1},
+	},
+	"saboteur": {
+		"name": "Saboteur", "speed": 1.05, "stamina": 100.0, "carry": 2, "brush": 0, "water": 0.5,
+		"remote_shop": false, "fly": false,
+		"blurb": "Plants TNT and mouse traps, then sets the whole chain off remotely.",
+		"abilities": [["detonate", "Detonate", 1.0, 0.0], ["plant", "Plant TNT", 0.5, 0.0]],
+		"kit": {"tnt": 3, "trap": 2},
+	},
+	# Free Build only: handed out by the host/authority, never selectable by a client.
+	"maestro": {
+		"name": "Chisel Maestro", "speed": 1.3, "stamina": 1000.0, "carry": 6, "brush": 0, "water": 1.0,
+		"remote_shop": true, "fly": true,
+		"blurb": "Creative class: flight, unlimited materials and gadgets.",
+		"abilities": [["detonate", "Detonate", 0.5, 0.0], ["patch", "Patch 3x3", 0.5, 0.0]],
+		"kit": {},
+	},
+}
+
+# Workshop stock. kind "gadget" goes to the Q slot inventory, "mat" to materials.
+const SHOP := [
+	{"id": "ladder", "name": "Ladder x3", "kind": "gadget", "qty": 3, "cost": 4, "cat": "Mobility",
+		"desc": "Climb with Space, descend with Ctrl. Stack them into a shaft."},
+	{"id": "spring", "name": "Spring", "kind": "gadget", "qty": 1, "cost": 6, "cat": "Mobility",
+		"desc": "Trampoline. Launches anything that lands on it - friend or foe."},
+	{"id": "highway", "name": "Highway x4", "kind": "gadget", "qty": 4, "cost": 5, "cat": "Mobility",
+		"desc": "Plank road. Rats run 60% faster on it, even hauling cheese."},
+	{"id": "conveyor", "name": "Conveyor x3", "kind": "gadget", "qty": 3, "cost": 6, "cat": "Mobility",
+		"desc": "Carries rats and loose cheese the way you were facing when you placed it."},
+	{"id": "trap", "name": "Mouse Trap", "kind": "gadget", "qty": 1, "cost": 5, "cat": "Traps",
+		"desc": "Snaps on enemy rats: short stun and they drop a cheese."},
+	{"id": "tnt", "name": "TNT", "kind": "gadget", "qty": 1, "cost": 8, "cat": "Traps",
+		"desc": "Hit it to light a 2 s fuse. Saboteurs detonate remotely. Chains."},
+	{"id": "gate", "name": "Team Gate", "kind": "gadget", "qty": 1, "cost": 7, "cat": "Construction",
+		"desc": "Your team walks through. Enemies need two TNT blasts."},
+	{"id": "ice", "name": "Ice x4", "kind": "mat", "qty": 4, "cost": 3, "cat": "Construction",
+		"desc": "Slippery block. Slot 4, place with right mouse."},
+	{"id": "wood", "name": "Wood x6", "kind": "mat", "qty": 6, "cost": 3, "cat": "Construction",
+		"desc": "Sturdy building block. Slot 3."},
+]
+
+const MATS := ["dirt", "stone", "wood", "ice"]
+const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "wood": Blocks.WOOD, "ice": Blocks.ICE}
+const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "gate"]
+const GADGET_NAME := {
+	"ladder": "Ladder", "spring": "Spring", "highway": "Highway", "conveyor": "Conveyor",
+	"trap": "Mouse Trap", "tnt": "TNT", "gate": "Team Gate",
+}
+
+
+static func shop_item(id: String) -> Dictionary:
+	for item: Dictionary in SHOP:
+		if item["id"] == id:
+			return item
+	return {}
+
+
+static func gadget_block(id: String, team: int, facing: Vector3) -> int:
+	match id:
+		"ladder": return Blocks.LADDER
+		"spring": return Blocks.SPRING
+		"highway": return Blocks.HIGHWAY
+		"tnt": return Blocks.TNT
+		"trap": return Blocks.TRAP_BLUE if team == 0 else Blocks.TRAP_RED
+		"gate": return Blocks.GATE_BLUE if team == 0 else Blocks.GATE_RED
+		"conveyor":
+			if absf(facing.x) >= absf(facing.z):
+				return Blocks.CONV_XP if facing.x >= 0.0 else Blocks.CONV_XN
+			return Blocks.CONV_ZP if facing.z >= 0.0 else Blocks.CONV_ZN
+	return Blocks.AIR
