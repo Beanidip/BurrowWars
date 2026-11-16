@@ -10,6 +10,7 @@ static var _cache: Dictionary = {}
 
 var rat: Rat
 var celebrate := false
+var tag_shown := true            # the session hides enemy names you cannot see
 var _t := 0.0
 var _anim := "idle"
 var _cheese: Array[MeshInstance3D] = []
@@ -73,6 +74,7 @@ func _process(delta: float) -> void:
 	for i in _cheese.size():
 		_cheese[i].visible = i < rat.carried
 	_tag.text = rat.display_name
+	_tag.visible = tag_shown
 	_tag.modulate = Color(0.55, 0.75, 1.0) if rat.team == 0 else Color(1.0, 0.6, 0.55)
 
 

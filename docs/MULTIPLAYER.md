@@ -121,6 +121,7 @@ The list shows name, address and region. It does not yet show live player counts
 
 ## Limits (honest list)
 
+- Hiding enemy names out of sight is done by each player's game; the server still sends every rat's position, so a modified client could show them.
 - Movement is trusted within the speed limit, so a modified client could still fly or walk
   through walls slowly. Everything else (digging, building, scores, inventories) is validated
   by the server.

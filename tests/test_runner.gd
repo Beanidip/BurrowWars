@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -1290,19 +1290,71 @@ func test_dash_with_cheese() -> void:
 	flat_arena(m, ARENA, 9)
 	var a := arena_rat(m, 0, "scout", Vector3(-7, 0, -3))
 	var b := arena_rat(m, 0, "scout", Vector3(-7, 0, 3))
+	var c := arena_rat(m, 0, "digger", Vector3(-7, 0, 0))
 	run(m, 0.3)
 	b.carried = 1
-	for r in [a, b]:
+	c.carried = 3
+	var stamina_before := [a.stamina, b.stamina, c.stamina]
+	for r in [a, b, c]:
 		r.yaw = -PI / 2.0      # face +x
 		r.dash_pressed = true
 	m.step(DT)
-	check(a.vel.x > Rat.DASH_SPEED * 0.9 and absf(b.vel.x - Rat.DASH_SPEED * 0.5) < 0.6, "carrying cheese halves the dash burst (%.1f vs %.1f)" % [a.vel.x, b.vel.x])
+	check(a.vel.x > Rat.DASH_SPEED * 0.9 and absf(b.vel.x - Rat.DASH_SPEED * 0.5) < 0.6, "one cheese halves the dash burst (%.1f vs %.1f)" % [a.vel.x, b.vel.x])
+	check(absf(c.vel.x - Rat.DASH_SPEED * 0.3) < 0.6, "a full load of 3 weakens it further (%.1f)" % c.vel.x)
+	check(is_equal_approx(stamina_before[0] - a.stamina, Config.DASH_COST) and is_equal_approx(stamina_before[1] - b.stamina, Config.DASH_CARRY_COST) \
+		and Config.DASH_CARRY_COST > Config.DASH_COST, "and costs more stamina (%.0f vs %.0f)" % [stamina_before[1] - b.stamina, stamina_before[0] - a.stamina])
 	var a0 := a.position.x
 	var b0 := b.position.x
 	run(m, 0.4)
 	var da := a.position.x - a0
 	var db := b.position.x - b0
 	check(db < da * 0.65, "and the dash covers much less ground (%.2f vs %.2f blocks)" % [db, da])
+	# not enough stamina for a loaded dash: nothing happens
+	run(m, 1.0)
+	b.stamina = Config.DASH_CARRY_COST - 5.0
+	b.vel = Vector3.ZERO
+	b.dash_cd = 0.0
+	b.dash_pressed = true
+	m.step(DT)
+	check(absf(b.vel.x) < 1.0 and b.stamina >= Config.DASH_CARRY_COST - 5.0, "a loaded dash needs the full %.0f stamina" % Config.DASH_CARRY_COST)
+	end(m)
+
+
+func test_enemy_names_need_sight() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var me := arena_rat(m, 0, "scout")
+	var friend := arena_rat(m, 0, "scout", Vector3(5, 0, 0))
+	var foe := arena_rat(m, 1, "scout", Vector3(5, 0, 2))
+	run(m, 0.3)
+	var eye := me.eye()
+	check(GameSession.name_visible(m.world, eye, 0, foe), "an enemy in plain view shows their name")
+	for dy in range(0, 3):
+		for dz in range(-2, 5):
+			m.world.set_block(ARENA + Vector3i(3, dy, dz), Blocks.STONE)
+	check(not GameSession.name_visible(m.world, eye, 0, foe), "an enemy behind a wall does not")
+	check(GameSession.name_visible(m.world, eye, 0, friend), "teammates always show, even behind a wall")
+	# glass, team gates and a chiselled window let you see through
+	for dy in range(0, 3):
+		for dz in range(-2, 5):
+			m.world.set_block(ARENA + Vector3i(3, dy, dz), Blocks.PAINT_0 + Blocks.PALETTE_SOLID)
+	check(GameSession.name_visible(m.world, eye, 0, foe), "through glass you see them")
+	for dy in range(0, 3):
+		for dz in range(-2, 5):
+			m.world.set_block(ARENA + Vector3i(3, dy, dz), Blocks.STONE)
+	var hole := PackedByteArray()
+	hole.resize(Blocks.MICRO_COUNT)
+	hole.fill(1)
+	for my in Blocks.MICRO:
+		for mz in Blocks.MICRO:
+			for mx in Blocks.MICRO:
+				if mz >= 1 and mz <= 5 and my >= 1:
+					hole[mx + Blocks.MICRO * (mz + Blocks.MICRO * my)] = 0   # a window cut right through
+	var win := ARENA + Vector3i(3, 0, 1)
+	m.world.set_mask(win, Blocks.STONE, hole)
+	var target := Vector3(win) + Vector3(2.5, 0.5, 0.5)
+	check(m.world.line_of_sight(Vector3(win) + Vector3(-1.5, 0.5, 0.5), target), "and through a window chiselled into the wall")
+	check(not m.world.line_of_sight(Vector3(win) + Vector3(-1.5, 0.5, -1.5), Vector3(win) + Vector3(2.5, 0.5, -1.5)), "but not through the solid stone beside it")
 	end(m)
 
 

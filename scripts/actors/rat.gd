@@ -248,13 +248,15 @@ func _step_motion(dt: float) -> void:
 		vel.y = maxf(vel.y, -30.0)
 
 	# dash: a burst along the wish direction (or facing when standing still)
-	if dash_pressed and dash_cd <= 0.0 and stamina >= Config.DASH_COST:
+	var dash_cost := Config.DASH_CARRY_COST if carried > 0 else Config.DASH_COST
+	if dash_pressed and dash_cd <= 0.0 and stamina >= dash_cost:
 		var dir := w.normalized() if w.length() > 0.1 else Vector3(-sin(yaw), 0, -cos(yaw))
-		var burst := DASH_SPEED * (0.5 if carried > 0 else 1.0)   # hauling cheese: half the dash
+		# hauling cheese: a weaker burst the more you carry, and it costs more
+		var burst := DASH_SPEED * float(Config.DASH_CARRY[mini(carried, Config.DASH_CARRY.size() - 1)])
 		vel.x = dir.x * burst
 		vel.z = dir.z * burst
 		vel.y = maxf(vel.y, 2.5)
-		stamina -= Config.DASH_COST
+		stamina -= dash_cost
 		dash_t = 0.16
 		dash_cd = 0.6
 	elif dash_t <= 0.0:

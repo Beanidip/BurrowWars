@@ -474,6 +474,52 @@ static func _read_gates(raw_gates: Variant, raw: PackedByteArray) -> Variant:
 	return out
 
 
+func line_of_sight(a: Vector3, b: Vector3) -> bool:
+	## True when nothing opaque lies between two points. Glass, water, team
+	## gates, gadgets and holes chiselled through a block do not block sight.
+	var d := b - a
+	var length := d.length()
+	if length < 0.001:
+		return true
+	var dir := d / length
+	var cell := Vector3i(floori(a.x), floori(a.y), floori(a.z))
+	var goal := Vector3i(floori(b.x), floori(b.y), floori(b.z))
+	var step := Vector3i.ZERO
+	var t_max := Vector3.ZERO
+	var t_delta := Vector3.ZERO
+	for k in 3:
+		if absf(dir[k]) < 0.0000001:
+			t_max[k] = INF
+			t_delta[k] = INF
+		else:
+			step[k] = 1 if dir[k] > 0.0 else -1
+			t_max[k] = (float(cell[k] + (1 if dir[k] > 0.0 else 0)) - a[k]) / dir[k]
+			t_delta[k] = absf(1.0 / dir[k])
+	var t := 0.0
+	for i in 400:
+		if cell == goal:
+			return true
+		var axis := 0
+		if t_max.y < t_max.x and t_max.y <= t_max.z:
+			axis = 1
+		elif t_max.z < t_max.x and t_max.z < t_max.y:
+			axis = 2
+		var t_next: float = minf(t_max[axis], length)
+		if cell != Vector3i(floori(a.x), floori(a.y), floori(a.z)) and Blocks.OPAQUE[get_cell(cell)] == 1:
+			if not has_micro(cell):
+				return false
+			# a carved block: blocked only if the line actually meets a microvoxel
+			for s in 4:
+				if solid_point(a + dir * lerpf(t, t_next, (float(s) + 0.5) / 4.0)):
+					return false
+		t = t_max[axis]
+		if t > length:
+			return true
+		cell[axis] += step[axis]
+		t_max[axis] += t_delta[axis]
+	return true
+
+
 func gate_at(c: Vector3i) -> int:
 	## Team of the gate in this cell, plain or holding a gadget; -1 if none.
 	var id := get_cell(c)

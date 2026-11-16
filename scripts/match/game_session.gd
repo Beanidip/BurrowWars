@@ -115,6 +115,29 @@ func _ready() -> void:
 	m.world.rebuild_near(player.position, 56.0)   # the rest of this big map streams in over the next frames
 
 
+var _tag_t := 0.0
+
+
+func _process(delta: float) -> void:
+	_tag_t -= delta
+	if _tag_t > 0.0 or player == null or ctl == null or ctl.cam == null:
+		return
+	_tag_t = 0.1
+	var eye := ctl.cam.global_position
+	for r in m.rats:
+		var s := r.get_node_or_null("Sprite") as RatSprite
+		if s != null:
+			s.tag_shown = name_visible(m.world, eye, player.team, r)
+
+
+static func name_visible(world: VoxelWorld, eye: Vector3, viewer_team: int, r: Rat) -> bool:
+	## Teammates' names always show; an enemy's only while you can see them
+	## (their head or their middle), so names never give away hidden rats.
+	if r.team == viewer_team:
+		return true
+	return world.line_of_sight(eye, r.position + Vector3(0, Rat.HEIGHT * 0.9, 0)) or world.line_of_sight(eye, r.center())
+
+
 func _attach_sprite(rat: Rat) -> void:
 	var sprite := RatSprite.new()
 	sprite.name = "Sprite"

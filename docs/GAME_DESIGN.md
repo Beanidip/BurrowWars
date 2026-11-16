@@ -61,7 +61,7 @@ at the centre. The ground is flat for about 15 blocks around each base.
 
 ## Hazards and safety valves
 
-Carrying cheese halves your dash, on top of the carry slowdown.
+Carrying cheese weakens your dash (50% / 40% / 30% of the normal burst with 1 / 2 / 3+ cheese) and makes it cost 40 stamina instead of 25, on top of the carry slowdown (`Config.DASH_CARRY`, `Config.DASH_CARRY_COST`). Enemy name tags only show while you can see that rat.
 
 
 Lava bounces a rat out on the first touch; a second touch within 8 s bounces it again, spills everything it carries right there, and sends it back to base 0.7 s later. Water slows everyone

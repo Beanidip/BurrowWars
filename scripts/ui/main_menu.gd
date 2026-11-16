@@ -10,7 +10,7 @@ MAPS  Esc > Export map saves the current map. Pick it under Map when you set up 
 
 DIG  Hold left mouse. Dirt takes 2 hits, stone 4, scrap 5. Mined dirt, stone, ice and obsidian go into your stash; place them with right mouse (1-4 picks the material). Wood is scenery: it breaks but gives nothing.
 
-CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying cheese slows you down, more for every extra piece (45% / 34% / 25% speed), and your dash (Shift) only goes half as far - build highways or get an escort. Walk into your base to bank it. G drops one.
+CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying cheese slows you down, more for every extra piece (45% / 34% / 25% speed), and your dash (Shift) is weaker (half with one cheese, less with more) and costs 40 stamina instead of 25 - build highways or get an escort. Walk into your base to bank it. G drops one.
 
 BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a cheese and can't grab it back for 2 seconds.
 
@@ -32,7 +32,7 @@ MOBILE TNT  Q throws a bouncing dynamite stick (Ctrl+Q sets it down). Springs la
 
 SIEGE  Buy a Scrap Cannon, Wrecking Crane or Bulldozer, place it with Q, look at it and press T. Mouse aims, left mouse works it, T leaves. Machines have no engines: put conveyors under or beside them. Stone shrugs off light hits; obsidian (12 hits) laughs at most things.
 
-ALSO  V toggles first/third person. Ctrl+K respawns at base (you leave your cheese and materials behind). Lava sends you home. Esc pauses."""
+ALSO  V toggles first/third person. Enemy name tags only show while you can see that rat. Ctrl+K respawns at base (you leave your cheese and materials behind). Lava sends you home. Esc pauses."""
 
 var _page: VBoxContainer
 var _team := 0
