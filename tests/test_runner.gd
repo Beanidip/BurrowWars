@@ -18,7 +18,11 @@ func _ready() -> void:
 		"carry_slowdown", "dig_durability_and_rate", "placement_rules", "cheese_loop_and_capacity",
 		"bonk_rules", "respawn_conserves_cheese", "economy_multiplier", "workshop_rules",
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
-		"class_permissions", "win_condition", "save_load", "free_build", "bots_complete_a_match",
+		"class_permissions", "win_condition", "save_load", "free_build",
+		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
+		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
+		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
+		"bots_complete_a_match",
 	]:
 		if only != "" and only != t:
 			continue
@@ -695,4 +699,737 @@ func test_bots_complete_a_match() -> void:
 	check(total_cheese(m) == before, "cheese is conserved over a full match (%d vs %d)" % [total_cheese(m), before])
 	for r in m.rats:
 		check(not r.blocked(), "bot %d is not embedded in terrain" % r.id)
+	end(m)
+
+
+# ================================================================== siege & advanced voxel tools
+
+func mask_layers(n: int) -> PackedByteArray:
+	## A block mask with only the bottom n microvoxel layers present.
+	var mask := PackedByteArray()
+	mask.resize(Blocks.MICRO_COUNT)
+	for y in n:
+		for z in 7:
+			for x in 7:
+				mask[x + 7 * (z + 7 * y)] = 1
+	return mask
+
+
+func chisel(m: Match, r: Rat, cell: Vector3i, mv: Vector3i, add := false, mat := "stone") -> String:
+	r.chisel_cd = 0.0
+	return m.try_chisel_add(r, cell, mv, mat) if add else m.try_chisel_remove(r, cell, mv)
+
+
+func test_stone_and_obsidian() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "scout")
+	var stone := ARENA + Vector3i(1, 0, 0)
+	var obs := ARENA + Vector3i(0, 0, 1)
+	m.world.set_block(stone, Blocks.STONE)
+	m.world.set_block(obs, Blocks.OBSIDIAN)
+	var n := 0
+	while m.world.get_cell(stone) == Blocks.STONE and n < 40:
+		r.dig_cd = 0.0
+		m.try_dig(r, stone)
+		n += 1
+	check(n == 4 and int(r.mats["stone"]) == 1, "stone: 4 dig hits, yields stone (%d)" % n)
+	n = 0
+	while m.world.get_cell(obs) == Blocks.OBSIDIAN and n < 40:
+		r.dig_cd = 0.0
+		m.try_dig(r, obs)
+		n += 1
+	check(n == Blocks.OBSIDIAN_HITS and n == 12, "obsidian: 12 dig hits (%d)" % n)
+	check(int(r.mats["obsidian"]) == 1, "obsidian yields its own material")
+	check(m.try_place_mat(r, obs, "obsidian") == "" and m.world.get_cell(obs) == Blocks.OBSIDIAN, "obsidian can be built with")
+	m.world.set_block(obs, Blocks.AIR)   # count only generated obsidian
+	var per_half := [0, 0]
+	for i in m.world.data.size():
+		if m.world.data[i] == Blocks.OBSIDIAN:
+			per_half[0 if (i % VoxelWorld.SX) < VoxelWorld.SX / 2 else 1] += 1
+	check(per_half[0] == per_half[1] and per_half[0] > 30, "obsidian formations are mirrored (%d per side)" % per_half[0])
+	for team in 2:
+		var sp := MapGenerator.spawn_point(team)
+		check(m.world.block_at(sp + Vector3(0, 0.5, 0)) == Blocks.AIR, "spawn %d is not buried" % team)
+	end(m)
+
+
+func test_chisel_rules() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "scout")
+	var cell := ARENA + Vector3i(1, 0, 0)
+	m.world.set_block(cell, Blocks.STONE)
+	var hit := m.world.raycast_micro(r.eye(), Vector3(1, -0.3, 0), 5.0)
+	check(not hit.is_empty() and hit["cell"] == cell and hit["normal"] == Vector3i(-1, 0, 0), "micro ray finds the block face")
+	check(not hit.is_empty() and Vector3i(hit["micro"]).x == 0, "micro ray reports the microvoxel on that face")
+	check(m.try_chisel_remove(r, cell, Vector3i(0, 3, 3)) == "", "chisel carves one microvoxel")
+	check(m.world.has_micro(cell) and m.world.micro_count(cell) == 342, "exactly one of 343 removed")
+	check(m.world.get_cell(cell) == Blocks.STONE, "the parent block is still stone")
+	check(m.try_chisel_remove(r, cell, Vector3i(0, 3, 4)) == "wait", "chisel has its own rate limit")
+	check(chisel(m, r, cell, Vector3i(0, 3, 3)) != "", "cannot carve what is already gone")
+	hit = m.world.raycast_micro(Vector3(cell) + Vector3(-0.5, 3.5 / 7.0, 3.5 / 7.0), Vector3(1, 0, 0), 5.0)
+	check(not hit.is_empty() and Vector3i(hit["micro"]) == Vector3i(1, 3, 3), "ray passes through the carved hole to the next microvoxel")
+	# ordinary digging still removes the whole block
+	var n := 0
+	while m.world.get_cell(cell) != Blocks.AIR and n < 20:
+		r.dig_cd = 0.0
+		m.try_dig(r, cell)
+		n += 1
+	check(n == 4 and not m.world.has_micro(cell) and not m.world.micro.has(cell), "Dig removes the whole carved block and its mask")
+	# carve a block away completely
+	m.world.set_block(cell, Blocks.DIRT)
+	for y in 7:
+		for z in 7:
+			for x in 7:
+				chisel(m, r, cell, Vector3i(x, y, z))
+	check(m.world.get_cell(cell) == Blocks.AIR and not m.world.micro.has(cell), "removing all 343 microvoxels removes the block")
+	for bad: int in [Blocks.CHEESE, Blocks.SCRAP, Blocks.TNT, Blocks.LADDER]:
+		m.world.set_block(cell, bad)
+		check(chisel(m, r, cell, Vector3i(0, 3, 3)) != "" and not m.world.has_micro(cell), "%s cannot be chiseled" % Blocks.block_name(bad))
+	r.position = Vector3(11.0, MapGenerator.GROUND, 24.5)
+	r.mats["stone"] = 5
+	check(chisel(m, r, Vector3i(9, MapGenerator.GROUND - 1, 24), Vector3i(6, 6, 3)) != "", "base blocks cannot be carved")
+	check(chisel(m, r, Vector3i(9, MapGenerator.GROUND, 24), Vector3i(6, 0, 3), true) != "", "cannot chisel material into a base")
+	end(m)
+
+
+func test_chisel_economy_is_zero_sum() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "scout")
+	var air := ARENA + Vector3i(1, 0, 0)
+	check(chisel(m, r, air, Vector3i(0, 0, 3), true) != "", "adding needs material")
+	r.mats["stone"] = 1
+	check(chisel(m, r, air, Vector3i(0, 0, 3), true) == "", "adds a microvoxel into empty space")
+	check(m.world.get_cell(air) == Blocks.STONE and m.world.micro_count(air) == 1, "a one-microvoxel stone block exists")
+	check(int(r.mats["stone"]) == 0 and int(r.micro_bank["stone"]) == 342, "one block was broken into 343 microvoxels, one spent")
+	# the exploit this must stop: 1 microvoxel placed, whole block dug back out
+	for i in 6:
+		r.dig_cd = 0.0
+		m.try_dig(r, air)
+	check(m.world.get_cell(air) == Blocks.AIR, "dig removes the sliver")
+	check(int(r.mats["stone"]) == 1 and int(r.micro_bank["stone"]) == 0, "digging a sliver returns a sliver, not a block")
+	# carve and refill repeatedly: totals never change
+	var solid := ARENA + Vector3i(0, 0, 1)
+	m.world.set_block(solid, Blocks.STONE)
+	for i in 20:
+		chisel(m, r, solid, Vector3i(3, 3, 0))
+		chisel(m, r, solid, Vector3i(3, 3, 0), true)
+	check(int(r.mats["stone"]) * 343 + int(r.micro_bank["stone"]) == 343, "20 carve/refill cycles create nothing")
+	check(not m.world.has_micro(solid), "a refilled block is a plain block again")
+	check(chisel(m, r, solid, Vector3i(3, 3, 3), true) != "", "cannot add into a filled spot")
+	end(m)
+
+
+func test_chisel_collision_and_steps() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var r := arena_rat(m, 0, "scout", Vector3(-3, 0, 0))
+	run(m, 0.3)
+	# a 4-microvoxel ledge is climbed automatically
+	m.world.set_mask(ARENA + Vector3i(0, 0, 0), Blocks.STONE, mask_layers(4))
+	for dz in [-1, 1]:
+		m.world.set_mask(ARENA + Vector3i(0, 0, dz), Blocks.STONE, mask_layers(4))
+	r.wish = Vector3(1, 0, 0)
+	run(m, 0.55)
+	check(absf(r.position.y - (ARENA.y + 4.0 / 7.0)) < 0.03 and r.position.x > ARENA.x, "auto-climbs a 4-microvoxel step (y=%.3f)" % (r.position.y - ARENA.y))
+	check(r.on_floor, "stands on carved geometry")
+	run(m, 0.6)
+	check(absf(r.position.y - ARENA.y) < 0.03 and r.position.x > ARENA.x + 1.3, "steps back down off it")
+	# a 5-microvoxel ledge is not
+	r.position = Vector3(ARENA) + Vector3(2.5, 0, 0.5)
+	r.vel = Vector3.ZERO
+	for dz in range(-8, 9):
+		m.world.set_mask(ARENA + Vector3i(4, 0, dz), Blocks.STONE, mask_layers(5))
+	run(m, 1.5)
+	check(r.position.x < ARENA.x + 4.0 - Rat.RADIUS + 0.02 and r.position.y < ARENA.y + 0.05, "a 5-microvoxel ledge needs a jump (x=%.3f y=%.3f)" % [r.position.x - ARENA.x, r.position.y - ARENA.y])
+	r.jump_pressed = true
+	run(m, 0.8)
+	check(r.position.x > ARENA.x + 4.0, "and a jump clears it")
+	# a carved doorway: remove the lower part of a wall block and walk through
+	r.wish = Vector3.ZERO
+	var wall := ARENA + Vector3i(-5, 0, 4)
+	var mask := PackedByteArray()
+	mask.resize(343)
+	for z in 7:
+		for x in 7:
+			mask[x + 7 * (z + 7 * 6)] = 1   # only the top layer remains: 6/7 of headroom < rat height
+	m.world.set_mask(wall, Blocks.STONE, mask)
+	r.position = Vector3(wall) + Vector3(0.5, 0, 1.5)
+	r.vel = Vector3.ZERO
+	r.wish = Vector3(0, 0, -1)
+	run(m, 0.6)
+	check(r.position.z > wall.z + 1.0, "a gap lower than the rat is still a wall")
+	m.world.set_block(wall, Blocks.AIR)
+	# stairs carved out of solid blocks: 3 rising treads
+	end(m)
+
+
+func test_chisel_persists() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA)
+	var r := arena_rat(m, 0, "scout")
+	var cell := ARENA + Vector3i(1, 0, 0)
+	m.world.set_block(cell, Blocks.OBSIDIAN)
+	for mv: Vector3i in [Vector3i(0, 0, 0), Vector3i(0, 6, 6), Vector3i(0, 3, 3), Vector3i(1, 3, 3)]:
+		check(chisel(m, r, cell, mv) == "", "obsidian can be chiseled")
+	var before: PackedByteArray = (m.world.micro[cell] as PackedByteArray).duplicate()
+	var path := "user://test_maps/carved.bwmap"
+	check(m.world.save_to(path), "carved map saves")
+	m.world.set_block(cell, Blocks.AIR)
+	check(not m.world.micro.has(cell), "carving cleared with the block")
+	check(m.world.load_from(path), "carved map loads")
+	check(m.world.get_cell(cell) == Blocks.OBSIDIAN and m.world.has_micro(cell), "carved block is back")
+	check(m.world.micro.has(cell) and (m.world.micro[cell] as PackedByteArray) == before, "every microvoxel edit survived save and reload")
+	check(m.world.micro.size() == 1, "untouched blocks carry no microvoxel data")
+	end(m)
+
+
+func test_pantograph() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var r := arena_rat(m, 0, "builder")
+	var a := ARENA + Vector3i(2, 0, 0)
+	m.world.set_block(a, Blocks.STONE)
+	m.world.set_block(a + Vector3i(1, 0, 0), Blocks.WOOD)
+	m.world.set_block(a + Vector3i(0, 1, 0), Blocks.CHEESE)
+	m.world.set_block(a + Vector3i(1, 1, 0), Blocks.TNT)
+	m.world.set_block(a + Vector3i(0, 0, 1), Blocks.SCRAP)
+	var carved := mask_layers(3)
+	carved[0] = 0   # an asymmetric notch so rotation is observable
+	m.world.set_mask(a + Vector3i(1, 0, 1), Blocks.WOOD, carved)
+	var res := m.copy_region(r, a, a + Vector3i(1, 1, 1))
+	check(res.has("blueprint"), "copies a region")
+	var bp: Blueprint = res["blueprint"]
+	check(bp.size == Vector3i(2, 2, 2) and bp.cells.size() == 3, "captures the 3 material blocks (%d)" % bp.cells.size())
+	check(bp.skipped == 3, "cheese, TNT and scrap are never captured (%d skipped)" % bp.skipped)
+	var need := bp.cost()
+	check(int(need["stone"]) == 343 and int(need["wood"]) == 343 + 146, "material estimate counts carvings exactly")
+	check(m.copy_region(r, a, a + Vector3i(12, 0, 0)).has("error"), "oversized selections are refused")
+	# rotation
+	var rot := bp.rotated()
+	check(rot.size == Vector3i(2, 2, 2) and rot.cells.size() == 3, "rotates by a quarter turn")
+	var four := bp.rotated().rotated().rotated().rotated()
+	var same := true
+	for i in bp.cells.size():
+		var found := false
+		for e in four.cells:
+			if e["o"] == bp.cells[i]["o"] and e["id"] == bp.cells[i]["id"] and e["mask"] == bp.cells[i]["mask"]:
+				found = true
+		same = same and found
+	check(same, "four quarter turns restore the original, carvings included")
+	var notch_moved := false
+	for e in rot.cells:
+		if e["mask"] != null:
+			var mk: PackedByteArray = e["mask"]
+			notch_moved = mk[0] == 1 and mk[6] == 0 and mk.count(1) == 146
+			check(e["o"] == Vector3i(0, 0, 1), "rotated block lands in the rotated position")
+	check(notch_moved, "the carving itself is rotated with its block")
+	# placement rules
+	var dest := ARENA + Vector3i(-5, 0, -2)
+	check(m.try_paste(r, bp, dest) != "", "refused without materials")
+	check(m.world.get_cell(dest) == Blocks.AIR, "a refused paste builds nothing")
+	r.mats["stone"] = 1
+	r.mats["wood"] = 1
+	check(m.try_paste(r, bp, dest).begins_with("Not enough wood"), "refused when one material is short")
+	check(int(r.mats["stone"]) == 1 and int(r.mats["wood"]) == 1, "a refused paste costs nothing")
+	r.mats["wood"] = 2
+	check(m.paste_check(r, bp, dest) == "" and m.try_paste(r, bp, dest) == "", "pastes when affordable")
+	check(m.world.get_cell(dest) == Blocks.STONE and m.world.get_cell(dest + Vector3i(1, 0, 0)) == Blocks.WOOD, "blocks reproduced")
+	check(m.world.get_cell(dest + Vector3i(0, 1, 0)) == Blocks.AIR and m.world.get_cell(dest + Vector3i(1, 1, 0)) == Blocks.AIR, "no cheese or TNT was duplicated")
+	var pasted := dest + Vector3i(1, 0, 1)
+	check(m.world.has_micro(pasted) and (m.world.micro[pasted] as PackedByteArray) == carved, "carved block reproduced microvoxel for microvoxel")
+	check(int(r.mats["stone"]) == 0 and int(r.mats["wood"]) * 343 + int(r.micro_bank.get("wood", 0)) == 686 - 489, "exact materials deducted")
+	check(m.try_paste(r, bp, dest) != "", "cannot paste into occupied space")
+	r.mats["stone"] = 9
+	r.mats["wood"] = 9
+	check(m.try_paste(r, bp, r.feet_cell() - Vector3i(0, 0, 0)) != "", "cannot paste on top of a rat")
+	r.position = Vector3(12.0, MapGenerator.GROUND, 24.5)
+	check(m.try_paste(r, bp, Vector3i(8, MapGenerator.GROUND, 24)) == "Bases are protected", "cannot paste into a base")
+	# a forged blueprint is rejected by the authority
+	var forged := Blueprint.new()
+	forged.size = Vector3i.ONE
+	forged.cells.append({"o": Vector3i.ZERO, "id": Blocks.CHEESE, "mask": null})
+	check(m.try_paste(r, forged, Vector3i(20, MapGenerator.GROUND + 6, 24)) != "", "a blueprint containing cheese is rejected")
+	end(m)
+	var f := new_match({"mode": "free"})
+	var maestro := f.spawn_rat(0, "maestro", false)
+	maestro.position = Vector3(40, 41, 10)
+	check(f.try_paste(maestro, bp, Vector3i(40, 41, 12)) == "", "Chisel Maestro pastes without materials in Free Build")
+	end(f)
+
+
+func drop_stick(m: Match, at: Vector3, vel := Vector3.ZERO, fuse := 30.0) -> DynamiteSystem.Stick:
+	return m.dynamite.spawn(at, vel, -1, fuse)
+
+
+func test_dynamite_physics() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 10)
+	for i in range(-11, 12):   # a walled yard, so a thrown stick rebounds instead of leaving the test
+		for dy in 4:
+			for edge: Vector3i in [Vector3i(i, dy, -11), Vector3i(i, dy, 11), Vector3i(-11, dy, i), Vector3i(11, dy, i)]:
+				m.world.set_block(ARENA + edge, Blocks.OBSIDIAN)
+	var r := arena_rat(m, 0, "saboteur", Vector3(-6, 0, 0))
+	run(m, 0.3)
+	var have := int(r.gadgets["dynamite"])
+	r.equipped = "dynamite"
+	check(m.try_use_equipped(r, {}, Vector3(1, 0.3, 0), false) == "", "throws Mobile TNT")
+	check(int(r.gadgets["dynamite"]) == have - 1 and m.dynamite.sticks.size() == 1, "one stick consumed, one in flight")
+	check(m.try_use_equipped(r, {}, Vector3(1, 0.3, 0), false) == "wait", "throws are rate limited")
+	var s: DynamiteSystem.Stick = m.dynamite.sticks[0]
+	var bounces := 0
+	var was_falling := false
+	var max_after_bounce := 0.0
+	var t := 0.0
+	var finite := true
+	while m.dynamite.sticks.size() > 0 and t < 6.0:
+		m.step(DT)
+		t += DT
+		finite = finite and is_finite(s.pos.x) and is_finite(s.pos.y) and absf(s.pos.x - ARENA.x) < 30.0 and s.pos.y > ARENA.y - 0.5
+		if was_falling and s.vel.y > 0.5:
+			bounces += 1
+		was_falling = s.vel.y < -0.5
+		if bounces > 0:
+			max_after_bounce = maxf(max_after_bounce, s.pos.y - ARENA.y)
+	check(bounces >= 2, "stick bounces (%d bounces)" % bounces)
+	check(max_after_bounce > 0.35, "bounce has real height (%.2f)" % max_after_bounce)
+	check(finite, "stick stays finite, above the floor and nearby")
+	check(absf(t - Config.DYNAMITE_FUSE) < 0.1, "detonates when the %.1f s fuse runs out (%.2f)" % [Config.DYNAMITE_FUSE, t])
+	check(s.pos.x > ARENA.x - 4.0, "thrown stick travelled (%.1f blocks)" % (s.pos.x - (ARENA.x - 6.0)))
+	# gentle placement stays close
+	r.throw_cd = 0.0
+	m.try_use_equipped(r, {}, Vector3(1, 0, 0), true)
+	var g: DynamiteSystem.Stick = m.dynamite.sticks[0]
+	run(m, 1.5)
+	check(absf(g.pos.x - r.position.x) < 2.0 and g.resting, "Ctrl+Q sets it down nearby (%.2f)" % absf(g.pos.x - r.position.x))
+	# ice vs stone: same shove, ice slides further
+	m.dynamite.sticks.clear()
+	for i in 14:
+		m.world.set_block(ARENA + Vector3i(-7 + i, -1, 5), Blocks.ICE)
+	var on_ice := drop_stick(m, Vector3(ARENA) + Vector3(-6.5, 0.2, 5.5), Vector3(5, 0, 0))
+	var on_stone := drop_stick(m, Vector3(ARENA) + Vector3(-6.5, 0.2, 8.5), Vector3(5, 0, 0))
+	run(m, 3.0)
+	check(on_ice.pos.x - on_stone.pos.x > 2.0, "ice: slides much further (%.1f vs %.1f)" % [on_ice.pos.x - ARENA.x + 6.5, on_stone.pos.x - ARENA.x + 6.5])
+	# rolls down carved stairs
+	m.dynamite.sticks.clear()
+	for i in 4:
+		m.world.set_mask(ARENA + Vector3i(i, 0, -5), Blocks.STONE, mask_layers(7 - i * 2 if i < 3 else 1))
+	var roller := drop_stick(m, Vector3(ARENA) + Vector3(0.5, 1.3, -4.5), Vector3(2.5, 0, 0))
+	run(m, 2.5)
+	check(roller.pos.x > ARENA.x + 2.0 and roller.pos.y < ARENA.y + 0.6, "tumbles down carved steps (x=%.1f y=%.2f)" % [roller.pos.x - ARENA.x, roller.pos.y - ARENA.y])
+	end(m)
+
+
+func test_dynamite_traps() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 10)
+	# spring launches it
+	m.world.set_block(ARENA + Vector3i(0, 0, 0), Blocks.SPRING)
+	var s := drop_stick(m, Vector3(ARENA) + Vector3(0.5, 2.0, 0.5))
+	var top := 0.0
+	for i in 150:
+		m.step(DT)
+		top = maxf(top, s.pos.y - ARENA.y)
+	check(top > 4.0, "spring launches dynamite (%.1f blocks up)" % top)
+	check(is_finite(s.pos.y) and s.pos.y < ARENA.y + 12.0 and m.dynamite.sticks.has(s), "spring bouncing stays stable")
+	m.dynamite.sticks.clear()
+	m.world.set_block(ARENA, Blocks.AIR)
+	# conveyor carries it in its direction
+	for i in 6:
+		m.world.set_block(ARENA + Vector3i(i - 2, -1, 3), Blocks.CONV_XP)
+	s = drop_stick(m, Vector3(ARENA) + Vector3(-1.5, 0.3, 3.5))
+	run(m, 1.5)
+	check(s.pos.x > ARENA.x + 1.0, "conveyor carries dynamite along (+%.1f)" % (s.pos.x - ARENA.x + 1.5))
+	m.dynamite.sticks.clear()
+	# sticky trap stops it
+	m.world.set_block(ARENA + Vector3i(2, 0, -3), Blocks.STICKY_RED)
+	s = drop_stick(m, Vector3(ARENA) + Vector3(-2.5, 0.2, -2.5), Vector3(7, 0, 0))
+	var free_roll := drop_stick(m, Vector3(ARENA) + Vector3(-2.5, 0.2, -5.5), Vector3(7, 0, 0))
+	run(m, 2.0)
+	check(floori(s.pos.x) == ARENA.x + 2 and s.vel.length() < 0.1, "sticky trap stops dynamite on the pad (x=%.2f)" % (s.pos.x - ARENA.x))
+	check(free_roll.pos.x > s.pos.x + 0.5, "without glue it would have rolled on")
+	m.dynamite.sticks.clear()
+	# mouse trap snaps and jolts it
+	var trap := ARENA + Vector3i(-4, 0, 6)
+	m.world.set_block(trap, Blocks.TRAP_BLUE)
+	s = drop_stick(m, Vector3(trap) + Vector3(0.5, 1.0, 0.5))
+	var jolt := 0.0
+	for i in 60:
+		m.step(DT)
+		jolt = maxf(jolt, s.vel.y)
+	check(m.world.get_cell(trap) == Blocks.AIR and jolt > 5.0, "mouse trap snaps shut and jolts the stick")
+	m.dynamite.sticks.clear()
+	# pitfall: falls straight through
+	var pit := ARENA + Vector3i(5, -1, 6)
+	m.world.set_block(pit, Blocks.PIT_BLUE)
+	s = drop_stick(m, Vector3(pit) + Vector3(0.5, 2.0, 0.5))
+	run(m, 1.0)
+	check(s.pos.y < ARENA.y - 1.5, "dynamite drops through a pitfall")
+	m.dynamite.sticks.clear()
+	# wall spring bats it back
+	for dy in 2:
+		m.world.set_block(ARENA + Vector3i(4, dy, -7), Blocks.WALL_SPRING)
+	s = drop_stick(m, Vector3(ARENA) + Vector3(1.5, 0.3, -6.5), Vector3(6, 0, 0))
+	var back := 0.0
+	for i in 60:
+		m.step(DT)
+		back = minf(back, s.vel.x)
+	check(back < -8.0, "wall spring deflects dynamite hard (%.1f)" % back)
+	end(m)
+
+
+func test_dynamite_blast() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var booms: Array[Vector3] = []
+	m.fx.connect(func(kind: String, pos: Vector3, _d: Variant) -> void:
+		if kind == "boom":
+			booms.append(pos))
+	var near := arena_rat(m, 1, "scout", Vector3(1.5, 0, 0))
+	near.carried = 2
+	var before := total_cheese(m)
+	var dirt := ARENA + Vector3i(0, 0, 1)
+	var far_dirt := ARENA + Vector3i(0, 0, 2)
+	var stone := ARENA + Vector3i(-1, 0, 0)
+	var far_stone := ARENA + Vector3i(-2, 0, 0)
+	var obs := ARENA + Vector3i(0, 0, -1)
+	var carved := ARENA + Vector3i(1, 0, 1)
+	var tnt := ARENA + Vector3i(-1, 0, -2)
+	var chained := ARENA + Vector3i(-3, 0, -3)
+	m.world.set_block(dirt, Blocks.DIRT)
+	m.world.set_block(far_dirt, Blocks.DIRT)
+	m.world.set_block(stone, Blocks.STONE)
+	m.world.set_block(far_stone, Blocks.STONE)
+	m.world.set_block(obs, Blocks.OBSIDIAN)
+	m.world.set_mask(carved, Blocks.DIRT, mask_layers(5))
+	m.world.set_block(tnt, Blocks.TNT)
+	m.world.set_block(chained, Blocks.STONE)
+	var s := drop_stick(m, Vector3(ARENA) + Vector3(0.5, 0.2, 0.5), Vector3.ZERO, 0.5)
+	var other := drop_stick(m, Vector3(ARENA) + Vector3(1.5, 0.2, -0.5), Vector3.ZERO, 30.0)
+	run(m, 0.55)
+	check(booms.size() == 1, "stick explodes")
+	check(m.world.get_cell(dirt) == Blocks.AIR, "adjacent dirt is destroyed")
+	check(m.world.get_cell(stone) == Blocks.STONE and int(m.world.damage.get(stone, 0)) > 0, "adjacent stone is cracked, not removed (damage %d of 4)" % int(m.world.damage.get(stone, 0)))
+	check(int(m.world.damage.get(far_stone, 0)) < int(m.world.damage.get(stone, 0)), "damage falls off with distance")
+	check(m.world.get_cell(far_dirt) == Blocks.DIRT, "dirt two blocks out survives a small charge")
+	check(m.world.get_cell(obs) == Blocks.OBSIDIAN and int(m.world.damage.get(obs, 0)) <= 4, "obsidian resists")
+	check(m.world.get_cell(carved) == Blocks.AIR and not m.world.micro.has(carved) and not m.world.has_micro(carved), "carved block removed cleanly: no leftover microvoxels")
+	check(near.knock > 0.0 and near.vel.length() > 5.0, "nearby rat is knocked back")
+	check(near.carried == 1, "and drops one cheese")
+	check(m.rats.has(near) and near.position.distance_to(MapGenerator.spawn_point(1)) > 20.0, "nobody is killed or sent home by a blast")
+	run(m, 0.6)
+	check(booms.size() >= 3, "chain reaction: the other stick and the TNT block go off (%d blasts)" % booms.size())
+	check(not m.dynamite.sticks.has(other) and m.world.get_cell(tnt) == Blocks.AIR, "chained charges are spent")
+	check(m.world.get_cell(chained) == Blocks.AIR or int(m.world.damage.get(chained, 0)) > 0, "the chained TNT damaged terrain the stick could not reach")
+	check(total_cheese(m) == before, "blasts never create or destroy cheese")
+	check(m.world.micro.is_empty(), "no stray carving data after the chain")
+	# same rule for both explosives
+	check(Config.TNT_POWER > Config.DYNAMITE_POWER and Config.TNT_RADIUS > Config.DYNAMITE_RADIUS, "stationary TNT stays the bigger charge")
+	end(m)
+
+
+func test_new_traps_vs_rats() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var owner := arena_rat(m, 0, "scout")
+	var foe := arena_rat(m, 1, "scout", Vector3(0, 0, 3))
+	# pitfall: floor for owners, hole for enemies
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			m.world.set_block(ARENA + Vector3i(dx, -1, dz), Blocks.PIT_BLUE)
+			m.world.set_block(ARENA + Vector3i(dx, -1, 3 + dz), Blocks.PIT_BLUE)
+	run(m, 0.6)
+	check(owner.on_floor and absf(owner.position.y - ARENA.y) < 0.02, "owner stands on its pitfall")
+	check(foe.position.y < ARENA.y - 1.0, "enemy falls through it")
+	# sticky trap slows enemies only
+	foe.position = Vector3(ARENA) + Vector3(5.5, 0, 5.5)
+	owner.position = Vector3(ARENA) + Vector3(5.5, 0, -5.5)
+	foe.vel = Vector3.ZERO
+	m.world.set_block(ARENA + Vector3i(5, 0, 5), Blocks.STICKY_BLUE)
+	m.world.set_block(ARENA + Vector3i(5, 0, -5), Blocks.STICKY_BLUE)
+	run(m, 0.2)
+	check(foe.slow > 0.0 and owner.slow <= 0.0, "sticky trap slows enemies, not its owners")
+	# wall spring flings a rat that runs into it
+	for dy in 2:
+		m.world.set_block(ARENA + Vector3i(-4, dy, 6), Blocks.WALL_SPRING)
+	owner.position = Vector3(ARENA) + Vector3(-1.5, 0, 6.5)
+	owner.vel = Vector3.ZERO
+	owner.wish = Vector3(-1, 0, 0)
+	var flung := 0.0
+	for i in 60:
+		m.step(DT)
+		flung = maxf(flung, owner.vel.x)
+	check(flung > 8.0, "wall spring launches a rat back the way it came (%.1f)" % flung)
+	end(m)
+
+
+func siege_setup(kind: String, extra: Dictionary = {}) -> Array:
+	## [match, operator rat, machine] with the machine at ARENA facing +X.
+	var m := new_match(extra)
+	flat_arena(m, ARENA, 9)
+	var r := arena_rat(m, 0, "builder", Vector3(-1, 0, 0))
+	r.yaw = -PI / 2.0
+	r.gadgets[kind] = 1
+	check(m.try_place_gadget(r, ARENA, kind) == "", "%s placed from the pack" % kind)
+	var mc: SiegeSystem.Machine = m.siege.machines.get(ARENA)
+	check(mc != null and mc.team == 0 and mc.owner == r.id, "%s is registered to its owner" % kind)
+	check(m.siege.try_operate(r, ARENA) == "" and r.operating == mc.uid, "owner takes the controls")
+	return [m, r, mc]
+
+
+func test_cannon() -> void:
+	var setup := siege_setup("cannon")
+	var m: Match = setup[0]
+	var r: Rat = setup[1]
+	var mc: SiegeSystem.Machine = setup[2]
+	for dz in range(-3, 4):
+		for dy in 5:
+			m.world.set_block(ARENA + Vector3i(7, dy, dz), Blocks.STONE)
+	var kinds := {}
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds[kind] = true)
+	m.siege.aim(r, -PI / 2.0, 0.06)
+	check(absf(mc.yaw + PI / 2.0) < 0.001 and absf(mc.pitch - 0.06) < 0.001, "rotation and elevation follow the operator")
+	m.siege.aim(r, 0.3, 3.0)
+	check(mc.pitch <= 1.2, "elevation is limited")
+	m.siege.aim(r, -PI / 2.0, 0.06)
+	var arc := m.siege.predict(mc)
+	check(arc.size() >= 2 and floori(arc[-1].x) == ARENA.x + 7, "aiming preview ends on the wall")
+	check(m.siege.fire(r) == "" and m.siege.shots.size() == 1, "fires a physical projectile")
+	check(m.siege.fire(r) == "wait", "cannon has a cooldown")
+	var travelled := 0
+	while m.siege.shots.size() > 0 and travelled < 200:
+		m.step(DT)
+		travelled += 1
+	check(travelled > 5 and travelled < 60, "projectile takes visible time to arrive (%d ticks)" % travelled)
+	var three := 0
+	var ones := 0
+	var struck := Vector3i.ZERO
+	for c: Vector3i in m.world.damage:
+		if int(m.world.damage[c]) == 3:
+			three += 1
+			struck = c
+		elif int(m.world.damage[c]) == 1:
+			ones += 1
+	check(three == 1 and struck.x == ARENA.x + 7, "struck block takes 3x dig damage")
+	check(ones == 4, "exactly four neighbouring blocks take excavation damage (%d)" % ones)
+	var ring_ok := true
+	for n: Vector3i in [Vector3i(0, 1, 0), Vector3i(0, -1, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]:
+		ring_ok = ring_ok and int(m.world.damage.get(struck + n, 0)) == 1
+	check(ring_ok, "the four are the blocks around the impact")
+	check(arc[-1].distance_to(Vector3(struck) + Vector3(0.5, 0.5, 0.5)) < 1.2, "shot lands where the preview said")
+	check(kinds.has("cannon") and kinds.has("impact"), "firing and impact feedback are emitted")
+	# second shot at the same spot: stone (4) breaks, neighbours are at 2
+	run(m, Config.CANNON_COOLDOWN + 0.1)
+	m.siege.fire(r)
+	run(m, 1.0)
+	check(m.world.get_cell(struck) == Blocks.AIR, "a second hit breaks the stone")
+	check(int(r.mats["stone"]) == 1, "cannon-mined stone goes to the gunner")
+	# obsidian resists by its durability
+	m.world.set_block(struck, Blocks.OBSIDIAN)
+	run(m, Config.CANNON_COOLDOWN)
+	m.siege.fire(r)
+	run(m, 1.0)
+	check(m.world.get_cell(struck) == Blocks.OBSIDIAN and int(m.world.damage.get(struck, 0)) == 3, "obsidian takes the hit and stands (3 of 12)")
+	# leaving restores normal movement
+	check(r.operating != -1, "still at the controls")
+	m.siege.release(r)
+	check(r.operating == -1 and mc.operator == -1, "leaving frees the machine")
+	var x0 := r.position.x
+	r.wish = Vector3(-1, 0, 0)
+	run(m, 0.5)
+	check(r.position.x < x0 - 1.0, "normal movement works again")
+	end(m)
+
+
+func test_crane_and_dozer() -> void:
+	var setup := siege_setup("crane")
+	var m: Match = setup[0]
+	var r: Rat = setup[1]
+	var mc: SiegeSystem.Machine = setup[2]
+	m.siege.aim(r, -PI / 2.0, 0.0)
+	var column: Array[Vector3i] = [ARENA + Vector3i(4, 0, 0), ARENA + Vector3i(4, 1, 0)]
+	for c in column:
+		m.world.set_block(c, Blocks.STONE)
+	var rest := SiegeSystem.ball_pos(mc)
+	check(absf(rest.x - (ARENA.x + 3.0)) < 0.01 and absf(rest.y - (ARENA.y + 0.6)) < 0.01, "ball hangs from the boom tip")
+	var max_speed := 0.0
+	var max_jump := 0.0
+	var last := rest
+	var damaged := false
+	var t := 0.0
+	while t < 10.0:
+		m.siege.fire(r)
+		m.step(DT)
+		t += DT
+		var ball := SiegeSystem.ball_pos(mc)
+		max_jump = maxf(max_jump, ball.distance_to(last))
+		last = ball
+		max_speed = maxf(max_speed, absf(mc.omega) * SiegeSystem.CRANE_CABLE)
+		for c in column:
+			if m.world.get_cell(c) == Blocks.AIR or int(m.world.damage.get(c, 0)) > 0:
+				damaged = true
+	check(max_speed > 4.0, "pumping builds up a real swing (%.1f blocks/s)" % max_speed)
+	check(max_speed < 12.0 and max_jump < 0.3, "swing is smooth and bounded (max %.2f per tick)" % max_jump)
+	check(damaged, "the ball damages what it hits")
+	check(m.world.get_cell(column[0]) == Blocks.AIR, "repeated blows break stone")
+	check(m.world.get_cell(ARENA) == Blocks.CRANE and m.siege.machines.has(ARENA), "the crane never damages itself")
+	check(m.world.get_cell(ARENA + Vector3i(3, -1, 0)) == Blocks.STONE, "the floor under the swing is untouched")
+	# slow contact does nothing
+	m.world.set_block(column[0], Blocks.OBSIDIAN)
+	mc.theta = 0.0
+	mc.omega = 0.3
+	m.siege.release(r)
+	run(m, 3.0)
+	check(int(m.world.damage.get(column[0], 0)) == 0, "a gentle nudge does no damage: impact depends on speed")
+	end(m)
+
+	setup = siege_setup("dozer")
+	m = setup[0]
+	r = setup[1]
+	mc = setup[2]
+	m.siege.aim(r, -PI / 2.0, 0.0)
+	var cells := SiegeSystem.dozer_cells(mc)
+	check(cells.size() == 6, "blade covers 3 wide x 2 high")
+	for c in cells:
+		check(c.x == ARENA.x + 1, "blade area is directly ahead")
+		m.world.set_block(c, Blocks.DIRT)
+	m.world.set_block(ARENA + Vector3i(2, 0, 0), Blocks.DIRT)
+	m.world.set_block(ARENA + Vector3i(1, 2, 0), Blocks.DIRT)
+	check(m.siege.fire(r) == "", "blade rams")
+	var cleared := 0
+	for c in cells:
+		if m.world.get_cell(c) == Blocks.AIR:
+			cleared += 1
+	check(cleared == 6, "dirt in the blade area is cleared in one ram (%d of 6)" % cleared)
+	check(m.world.get_cell(ARENA + Vector3i(2, 0, 0)) == Blocks.DIRT and m.world.get_cell(ARENA + Vector3i(1, 2, 0)) == Blocks.DIRT, "nothing outside the blade area is touched")
+	check(int(r.mats["dirt"]) == 6, "bulldozed dirt goes to the driver")
+	check(m.siege.fire(r) == "wait", "blade has a cooldown")
+	m.world.set_block(cells[0], Blocks.STONE)
+	run(m, Config.DOZER_COOLDOWN + 0.05)
+	m.siege.fire(r)
+	check(m.world.get_cell(cells[0]) == Blocks.STONE and int(m.world.damage[cells[0]]) == Config.DOZER_HIT, "stone needs two rams")
+	m.siege.aim(r, 0.0, 0.0)
+	check(SiegeSystem.facing(mc) == Vector3i(0, 0, -1), "blade turns to face where the driver looks")
+	end(m)
+
+
+func test_machine_transport() -> void:
+	# conveyor underneath, stops when obstructed, operator rides along
+	var setup := siege_setup("cannon")
+	var m: Match = setup[0]
+	var r: Rat = setup[1]
+	var mc: SiegeSystem.Machine = setup[2]
+	m.siege.aim(r, 0.7, 0.4)
+	var uid := mc.uid
+	for i in 5:
+		m.world.set_block(ARENA + Vector3i(i, -1, 0), Blocks.CONV_XP)
+	m.world.set_block(ARENA + Vector3i(5, 0, 0), Blocks.STONE)
+	var rx := r.position.x
+	run(m, 1.0)
+	check(mc.cell.x > ARENA.x and mc.cell.x < ARENA.x + 4, "moves a block at a time, not instantly (at +%d after 1 s)" % (mc.cell.x - ARENA.x))
+	run(m, 4.0)
+	check(mc.cell == ARENA + Vector3i(4, 0, 0), "conveyor carries the machine in its direction until obstructed (+%d)" % (mc.cell.x - ARENA.x))
+	check(m.world.get_cell(mc.cell) == Blocks.CANNON and m.world.get_cell(ARENA) == Blocks.AIR, "the grid follows the machine exactly")
+	check(m.siege.machines.size() == 1 and m.siege.machines.has(mc.cell), "no duplicate or ghost machines")
+	check(mc.uid == uid and mc.team == 0 and mc.owner == r.id, "ownership preserved")
+	check(absf(mc.yaw - 0.7) < 0.001 and absf(mc.pitch - 0.4) < 0.001, "orientation preserved")
+	check(mc.operator == r.id and r.operating == uid and r.position.x > rx + 3.5, "the operator rides along and keeps control")
+	run(m, 2.0)
+	check(mc.cell == ARENA + Vector3i(4, 0, 0), "stays put while obstructed")
+	m.world.set_block(ARENA + Vector3i(5, 0, 0), Blocks.AIR)
+	run(m, 1.0)
+	check(mc.cell.x == ARENA.x + 5, "moves on once the way is clear")
+	end(m)
+	# ice: keeps sliding after the conveyor ends
+	setup = siege_setup("dozer")
+	m = setup[0]
+	mc = setup[2]
+	m.siege.release(setup[1])
+	(setup[1] as Rat).position += Vector3(0, 0, -6)
+	m.world.set_block(ARENA + Vector3i(0, -1, 0), Blocks.CONV_XP)
+	for i in range(1, 5):
+		m.world.set_block(ARENA + Vector3i(i, -1, 0), Blocks.ICE)
+	run(m, 6.0)
+	check(mc.cell == ARENA + Vector3i(5, 0, 0), "slides across ice and stops on rough ground (+%d)" % (mc.cell.x - ARENA.x))
+	end(m)
+	# conveyor beside the machine, another machine in the way, and gravity
+	setup = siege_setup("crane")
+	m = setup[0]
+	mc = setup[2]
+	var r2: Rat = setup[1]
+	m.siege.release(r2)
+	r2.position = Vector3(ARENA) + Vector3(0.5, 0, -6.5)
+	for i in 3:
+		m.world.set_block(ARENA + Vector3i(i, 0, 1), Blocks.CONV_XP)
+	r2.gadgets["cannon"] = 1
+	r2.position = Vector3(ARENA) + Vector3(2.5, 0, -2.5)
+	check(m.try_place_gadget(r2, ARENA + Vector3i(2, 0, 0), "cannon") == "", "second machine placed in the path")
+	run(m, 3.0)
+	# both machines sit beside the belt: the cannon rides to its end (+3), the crane queues behind it (+2)
+	check(m.world.get_cell(ARENA + Vector3i(3, 0, 0)) == Blocks.CANNON, "the cannon ahead rides to the end of the belt")
+	check(mc.cell == ARENA + Vector3i(2, 0, 0), "adjacent conveyors move it; it stops behind other equipment (+%d)" % (mc.cell.x - ARENA.x))
+	check(m.siege.machines.size() == 2, "two machines, two records")
+	for i in 3:
+		m.world.set_block(ARENA + Vector3i(i, 0, 1), Blocks.AIR)
+	m.world.set_block(ARENA + Vector3i(2, -2, 0), Blocks.STONE)
+	m.world.set_block(ARENA + Vector3i(2, -1, 0), Blocks.AIR)
+	run(m, 1.0)
+	check(mc.cell == ARENA + Vector3i(2, -1, 0), "a machine with no floor under it drops")
+	end(m)
+
+
+func test_machine_rules() -> void:
+	var setup := siege_setup("cannon")
+	var m: Match = setup[0]
+	var r: Rat = setup[1]
+	var mc: SiegeSystem.Machine = setup[2]
+	var mate := arena_rat(m, 0, "scout", Vector3(0, 0, 1.2))
+	var foe := arena_rat(m, 1, "scout", Vector3(0, 0, -1.2))
+	check(m.siege.try_operate(mate, ARENA) != "" and mc.operator == r.id, "only one rat can hold the controls")
+	check(m.siege.try_operate(foe, ARENA) != "", "enemies cannot operate it")
+	check(m.siege.fire(mate) != "" and m.siege.shots.is_empty(), "a rat that is not the operator cannot fire it")
+	foe.dig_cd = 0.0
+	m.try_dig(foe, ARENA)
+	check(m.world.get_cell(ARENA) == Blocks.CANNON, "enemies cannot dig a machine up")
+	mate.dig_cd = 0.0
+	m.try_dig(mate, ARENA)
+	check(m.world.get_cell(ARENA) == Blocks.CANNON, "it cannot be packed up while in use")
+	# a bonk knocks the operator off
+	foe.position = r.position + Vector3(0, 0, -1.0)
+	check(m.try_bonk(foe, r), "operator can be bonked")
+	run(m, 0.1)
+	check(r.operating == -1 and mc.operator == -1, "a bonk knocks the operator off the controls")
+	run(m, 1.0)
+	check(m.siege.try_operate(mate, ARENA) == "", "a teammate can take over")
+	m.siege.release(mate)
+	# blasts do not destroy machines; pasting and placing cannot overlap them
+	m.blast(Vector3(ARENA) + Vector3(0.5, 2.6, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)   # overhead: floor stays
+	check(m.world.get_cell(ARENA) == Blocks.CANNON and m.siege.machines.has(ARENA), "machines survive explosions")
+	run(m, 1.5)
+	mate.position = Vector3(ARENA) + Vector3(0.5, 0, 1.5)
+	mate.vel = Vector3.ZERO
+	mate.mats["dirt"] = 3
+	check(m.try_place_mat(mate, ARENA, "dirt") != "", "cannot build inside a machine")
+	# save / load keeps machines, aim and ownership
+	mc.yaw = 1.1
+	var path := "user://test_maps/siege.bwmap"
+	check(m.world.save_to(path, {"machines": m.siege.to_save()}), "saves with machines")
+	mate.dig_cd = 0.0
+	check(m.try_dig(mate, ARENA) and int(mate.gadgets.get("cannon", 0)) == 1, "own team packs it up and gets the item back")
+	check(m.siege.machines.is_empty() and m.world.get_cell(ARENA) == Blocks.AIR, "packed machine leaves nothing behind")
+	check(m.world.load_from(path), "loads")
+	m.siege.from_save(m.world.loaded_extra.get("machines", []))
+	var back: SiegeSystem.Machine = m.siege.machines.get(ARENA)
+	check(back != null and back.kind == Blocks.CANNON and absf(back.yaw - 1.1) < 0.001 and back.team == 0, "machine, aim and team restored from the save")
+	m.siege.from_save([{"kind": Blocks.CANNON, "cell": Vector3i(1, 1, 1)}, "junk", {"cell": 5}])
+	check(m.siege.machines.is_empty() and m.world.get_cell(ARENA) == Blocks.AIR, "a save with bad machine records leaves no ghost machines")
+	# workshop
+	r.position = MapGenerator.spawn_point(0)
+	r.scrap = 500
+	for id: String in ["cannon", "crane", "dozer", "dynamite", "sticky", "pitfall", "wallspring"]:
+		check(m.try_buy(r, id) == "", "workshop sells %s" % id)
+	m.try_buy(r, "cannon")
+	check(m.try_buy(r, "cannon") != "" and int(r.gadgets["cannon"]) == 2, "at most two of a siege machine in the pack")
 	end(m)
