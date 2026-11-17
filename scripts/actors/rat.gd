@@ -83,6 +83,13 @@ var anim_action := ""
 var anim_action_t := 0.0
 var landed_on_spring := false
 var gear_fired := false           # this step started a jetpack burst
+var dashed := false               # this step started a dash
+var jumped := false               # this step left the ground (jump, double jump, leap out of water)
+var landed_hard := false          # this step hit the ground after a long fall
+var splashed_in := false          # this step dropped into water
+var splashed_out := false         # this step jumped up out of water
+var _was_wet := false
+var _splash_cd := 0.0
 
 var _world: VoxelWorld
 
@@ -181,6 +188,11 @@ func step_timers(dt: float) -> void:
 func _step_motion(dt: float) -> void:
 	landed_on_spring = false
 	gear_fired = false
+	dashed = false
+	jumped = false
+	landed_hard = false
+	splashed_in = false
+	splashed_out = false
 
 	var w := wish
 	w.y = 0.0
@@ -244,15 +256,18 @@ func _step_motion(dt: float) -> void:
 		if wading and (jump_pressed or jump_held) and vel.y < 3.7:
 			vel.y = JUMP_SPEED      # leap out of the water instead of bobbing at the surface
 			jumps_left = 1
+			jumped = true
 		elif jump_pressed:
 			if on_floor:
 				vel.y = JUMP_SPEED
 				jumps_left = 1
 				on_floor = false
+				jumped = true
 			elif jumps_left > 0 and stamina >= Config.DOUBLE_JUMP_COST:
 				vel.y = DOUBLE_JUMP_SPEED
 				jumps_left -= 1
 				stamina -= Config.DOUBLE_JUMP_COST
+				jumped = true
 		vel.y = maxf(vel.y, -30.0)
 
 	# dash: a burst along the wish direction (or facing when standing still)
@@ -279,15 +294,36 @@ func _step_motion(dt: float) -> void:
 		stamina -= dash_cost
 		dash_t = 0.16
 		dash_cd = 0.6
+		dashed = true
 	elif dash_t <= 0.0:
 		stamina = minf(max_stamina(), stamina + Config.STAMINA_REGEN * dt)
 
 	var motion := vel * dt
 	if Blocks.is_conveyor(floor_id):
 		motion += Blocks.conveyor_dir(floor_id) * 3.0 * dt
+	var was_airborne := not on_floor
+	var fall_speed := vel.y
 	_move(motion)
+	if was_airborne and on_floor and fall_speed < -11.0:
+		landed_hard = true
+	_splash_check(fall_speed, dt)
 	_spring_sides()
 	_clear_edges()
+
+
+func _splash_check(fall_speed: float, dt: float) -> void:
+	## Feet going into water from a drop, or leaping up out of it: a splash.
+	## Bobbing at the surface or wading in from the bank makes none.
+	var wet := _world.block_at(position + Vector3(0, 0.1, 0)) == Blocks.WATER
+	_splash_cd = maxf(0.0, _splash_cd - dt)
+	if wet != _was_wet and _splash_cd <= 0.0 and not flying:
+		if wet and fall_speed < -4.0:
+			splashed_in = true
+		elif not wet and vel.y > 3.0:
+			splashed_out = true
+		if splashed_in or splashed_out:
+			_splash_cd = 0.4
+	_was_wet = wet
 
 
 func _spring_sides() -> void:

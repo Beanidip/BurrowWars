@@ -74,13 +74,21 @@ All of the game's 2D art is a handful of PNGs you can paint over (Aseprite, Libr
 | `assets/icons/icons.png` | Every gadget, trap, siege, gear, material, tool, ability and menu icon: 16x16 cells, 8 columns. Which icon is where: `docs/icon_sheet_layout.png`. A separate `assets/icons/<id>.png` overrides one icon. |
 | `assets/ui/panel_frame.png` | The menu panel (wood and the blue/red frame), a 9-slice: the outer 22 px on each side are frame and corners, the middle stretches. |
 | `assets/ui/burrow_*.png` | The masthead and the original UI icons. |
+| `assets/fx/<name>.png` | Effect animations (explosion, block breaks per material, hit sparks, dust for dash/jump/landing, water and lava splashes, jetpack flame, pickup, respawn poof, deposit firework): a grid of frames each. Frame size, count, speed and the anchor point are in `scripts/match/fx_sheets.gd`; keep those in step if you redraw one at a different size. |
 
 Tools: `tools/rat_sheets.py` (`preview` shows your rats in both team colours, `pack`/`unpack`
 convert between sheets and single frames, `guide` redraws the layout picture) and
 `tools/make_icons.py` (regenerates the icon sheet; it overwrites hand edits, so only rerun it to add icons).
+`tools/import_fx.py /path/to/pixelfx` re-renders the effect sheets from the [pixelfx](https://github.com/patch-gg/pixelfx)
+library (needs Node 18+; edit its list to swap, recolour or add effects; it overwrites `assets/fx/`), and
+`tools/make_liquid_sfx.py` remakes the placeholder `splash` and `sizzle` sounds.
 Blocks, gadgets and siege machines are still drawn in code from flat colours.
 
 ## Credits
 
 Rat sprites, UI icons, sound effects and music are the project owner's own assets,
 carried over from Burrow Wars v0.15.1. All code in this repository is new.
+
+Effect animations in `assets/fx/` are rendered from [pixelfx](https://github.com/patch-gg/pixelfx)
+by Patch and Hugo Duprez, MIT License (see `assets/fx/LICENSE-pixelfx.txt`); some recoloured. The `splash` and `sizzle` sounds are
+synthesised placeholders made by `tools/make_liquid_sfx.py`.

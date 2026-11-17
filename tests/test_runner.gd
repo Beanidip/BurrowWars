@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -2756,4 +2756,127 @@ func test_machine_rules() -> void:
 		check(m.try_buy(r, id) == "", "workshop sells %s" % id)
 	m.try_buy(r, "cannon")
 	check(m.try_buy(r, "cannon") != "" and int(r.gadgets["cannon"]) == 2, "at most two of a siege machine in the pack")
+	end(m)
+
+
+func test_effect_sheets() -> void:
+	for fx_name: String in FxSheets.SHEETS:
+		var s: Dictionary = FxSheets.SHEETS[fx_name]
+		var tex: Texture2D = load("res://assets/fx/%s.png" % fx_name)
+		var rows := ceili(float(s["frames"]) / float(s["cols"]))
+		check(tex != null and tex.get_width() == int(s["w"]) * int(s["cols"]) and tex.get_height() == int(s["h"]) * rows, "%s.png matches its FxSheets entry" % fx_name)
+	var holder := Node3D.new()
+	add_child(holder)
+	check(FxSprite.play(holder, "no_such_effect", Vector3.ZERO) == null, "an unknown effect plays nothing")
+	var once := FxSprite.play(holder, "dust", Vector3(1, 2, 3), 0.5)
+	check(once != null and once.global_position.is_equal_approx(Vector3(1, 2, 3)), "an effect plays where it was asked")
+	var dust: Dictionary = FxSheets.SHEETS["dust"]
+	var life := float(dust["frames"]) / float(dust["fps"])
+	once._process(life * 0.5)
+	check(not once.is_queued_for_deletion() and once._frame > 0, "it animates")
+	once._process(life * 0.6)
+	check(once.is_queued_for_deletion(), "and frees itself after its last frame")
+	var anchor := Node3D.new()
+	holder.add_child(anchor)
+	var loop := FxSprite.play(holder, "jetpack", Vector3(0, 0.5, 0), 0.4, anchor, 0.5)
+	anchor.position = Vector3(5, 0, 0)
+	loop._process(0.2)
+	check(not loop.is_queued_for_deletion() and loop.global_position.distance_to(Vector3(5, 0, 0)) < 0.3, "a looping effect rides along with its rat")
+	var lifted := (loop.offset.y - (float(FxSheets.SHEETS["jetpack"]["pivot"].y) - float(FxSheets.SHEETS["jetpack"]["h"]) * 0.5)) * loop.pixel_size
+	check(absf(lifted - 0.5) < 0.01, "level with its feet, the picture lifted %.2f blocks up it (so it sorts behind the rat)" % lifted)
+	loop._process(0.4)
+	check(loop.is_queued_for_deletion(), "until its time is up")
+	holder.queue_free()
+	check(MatchView.break_sheet(Blocks.DIRT) == "break_dirt" and MatchView.break_sheet(Blocks.ICE) == "break_ice"
+		and MatchView.break_sheet(Blocks.OBSIDIAN) == "break_dark" and MatchView.break_sheet(Blocks.SCRAP) == "break_scrap"
+		and MatchView.break_sheet(Blocks.STONE) == "break_stone", "a broken block bursts in its own colours")
+	for kind: String in ["spring", "jetpack", "dash", "jump", "land", "splash", "splash_out"]:
+		check(NetServer.CLIENT_FX.has(kind), "online, a player's game may report '%s'" % kind)
+
+
+func test_motion_and_splash_fx() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	# a pond flush with the ground, 3 deep, 5 wide (as in water_exit)
+	for dx in range(-3, 4):
+		for dz in range(-3, 4):
+			var inside := absi(dx) <= 2 and absi(dz) <= 2
+			for dy in range(-3, 0):
+				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.WATER if inside else Blocks.STONE)
+			m.world.set_block(ARENA + Vector3i(dx, -4, dz), Blocks.STONE)
+	# a one-block lava pit in the floor
+	var pit := ARENA + Vector3i(-5, -1, 5)
+	m.world.set_block(pit, Blocks.LAVA)
+	m.world.set_block(pit + Vector3i(0, -1, 0), Blocks.STONE)
+	var kinds: Array[String] = []
+	var sizes: Array[float] = []
+	m.fx.connect(func(kind: String, _p: Vector3, d: Variant) -> void:
+		kinds.append(kind)
+		sizes.append(1.0 if d == null else float(d)))
+	var r := arena_rat(m, 0, "scout", Vector3(-5, 0, -5))
+	run(m, 0.5)
+	kinds.clear()
+	r.jump_pressed = true
+	m.step(DT)
+	r.jump_pressed = false
+	check(kinds.has("jump"), "jumping kicks up dust")
+	run(m, 1.2)
+	check(not kinds.has("land"), "an ordinary jump lands softly")
+	kinds.clear()
+	r.wish = Vector3(0, 0, 1)
+	r.dash_pressed = true
+	m.step(DT)
+	r.dash_pressed = false
+	r.wish = Vector3.ZERO
+	check(kinds.has("dash"), "dashing kicks up dust")
+	r.position = Vector3(ARENA) + Vector3(-4.5, 5, -4.5)
+	r.vel = Vector3.ZERO
+	r.on_floor = false
+	run(m, 0.3)
+	kinds.clear()
+	run(m, 1.0)
+	check(kinds.has("land"), "a long fall lands with a thump")
+	# into the pond from a height, then leap back out
+	r.position = Vector3(ARENA) + Vector3(0.5, 4, 0.5)
+	r.vel = Vector3.ZERO
+	kinds.clear()
+	run(m, 1.5)
+	check(kinds.count("splash") == 1 and not kinds.has("splash_out"), "dropping into water splashes once, and floating makes no more (%s)" % str(kinds))
+	r.jump_held = true
+	for i in 60:
+		m.step(DT)
+	r.jump_held = false
+	check(kinds.has("splash_out"), "leaping up out of the water splashes")
+	r.position = Vector3(ARENA) + Vector3(-6.5, 0, -6.5)
+	r.vel = Vector3.ZERO
+	run(m, 1.0)
+	# a walk in from the bank is quiet
+	kinds.clear()
+	r.position = Vector3(ARENA) + Vector3(3.5, 0, 0.5)
+	r.wish = Vector3(-1, 0, 0)
+	run(m, 0.6)
+	r.wish = Vector3.ZERO
+	check(not kinds.has("splash"), "wading in from the bank makes no splash (%s)" % str(kinds))
+	r.position = Vector3(ARENA) + Vector3(-6.5, 0, -6.5)
+	r.vel = Vector3.ZERO
+	run(m, 1.0)
+	# loose cheese splashes (smaller) too, and sizzles on lava
+	kinds.clear()
+	sizes.clear()
+	m.spawn_pickup("cheese", Vector3(ARENA) + Vector3(1.5, 4, 1.5), Vector3.ZERO)
+	run(m, 1.5)
+	var i := kinds.find("splash")
+	check(i >= 0 and sizes[i] < 1.0, "cheese dropped in the pond splashes, a small splash (%s)" % str(kinds))
+	kinds.clear()
+	var hot := m.spawn_pickup("cheese", Vector3(pit) + Vector3(0.5, 5, 0.5), Vector3.ZERO)
+	run(m, 1.5)
+	check(kinds.count("sizzle") == 1 and hot.pos.y > pit.y + 1.0, "cheese dropped on lava sizzles once and sits on top (%s, y=%.2f)" % [str(kinds), hot.pos.y - pit.y])
+	# a splash sits on the pond's surface, whether you are in it or just above
+	var view := MatchView.new()
+	view.m = m
+	var top := float(ARENA.y) - 1.0 + 0.88
+	check(absf(view.surface(Vector3(ARENA) + Vector3(0.5, -2.5, 0.5), Blocks.WATER).y - top) < 0.01
+		and absf(view.surface(Vector3(ARENA) + Vector3(0.5, 0.1, 0.5), Blocks.WATER).y - top) < 0.01, "splashes sit on the water's surface")
+	check(absf(view.surface(Vector3(ARENA) + Vector3(-5.5, 3, 0.5), Blocks.WATER).y - (ARENA.y + 3)) < 0.01, "and stay put away from any water")
+	view.free()
 	end(m)

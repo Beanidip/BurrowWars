@@ -28,7 +28,7 @@ var _frame := 0
 var _last_input: Dictionary = {}   # peer id -> msec of the last accepted input
 var _dirty_private: Dictionary = {}
 var _fx_t: Dictionary = {}         # "peer:kind" -> msec of the last effect that peer reported
-const CLIENT_FX := ["spring", "jetpack"]
+const CLIENT_FX := ["spring", "jetpack", "dash", "jump", "land", "splash", "splash_out"]
 
 
 func _ready() -> void:

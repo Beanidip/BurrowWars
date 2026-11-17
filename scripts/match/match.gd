@@ -24,6 +24,7 @@ class Pickup:
 	var lock_id := -1          # rat that may not collect this yet
 	var lock_t := 0.0
 	var mats: Dictionary = {}
+	var wet := false           # in water (for splashes going in and out)
 
 
 var world: VoxelWorld
@@ -224,10 +225,8 @@ func step(dt: float) -> void:
 					r.dash_pressed = false
 				r.step(dt)
 				if remote != null:   # the server plays these for everyone
-					if r.landed_on_spring:
-						remote.note_fx("spring")
-					if r.gear_fired:
-						remote.note_fx("jetpack")
+					for kind: String in _motion_fx(r):
+						remote.note_fx(kind)
 		return
 	for r in rats:
 		if r.net_peer != 0:
@@ -244,10 +243,8 @@ func step(dt: float) -> void:
 			r.dash_pressed = false
 		if r.net_peer == 0:
 			r.step(dt)
-			if r.landed_on_spring:
-				fx.emit("spring", r.position, null)
-			if r.gear_fired:
-				fx.emit("jetpack", r.position, null)
+			for kind: String in _motion_fx(r):
+				fx.emit(kind, r.position, null)
 		_check_rat_hazards(r, dt)
 		_check_raid(r, dt)
 	_step_pickups(dt)
@@ -260,6 +257,27 @@ func step(dt: float) -> void:
 		markers[i]["ttl"] = float(markers[i]["ttl"]) - dt
 		if float(markers[i]["ttl"]) <= 0.0:
 			markers.remove_at(i)
+
+
+static func _motion_fx(r: Rat) -> Array[String]:
+	## Effects a rat's own movement set off this step (springs, jetpack, dash,
+	## jumps, hard landings). Online, a player's game reports these instead.
+	var out: Array[String] = []
+	if r.landed_on_spring:
+		out.append("spring")
+	if r.gear_fired:
+		out.append("jetpack")
+	if r.dashed:
+		out.append("dash")
+	if r.jumped:
+		out.append("jump")
+	if r.landed_hard:
+		out.append("land")
+	if r.splashed_in:
+		out.append("splash")
+	if r.splashed_out:
+		out.append("splash_out")
+	return out
 
 
 static func net_state(r: Rat) -> Array:
@@ -1072,6 +1090,13 @@ func _step_pickups(dt: float) -> void:
 		p.lock_t = maxf(0.0, p.lock_t - dt)
 		# tiny point-physics: fall, rest on solids, ride conveyors, float out of lava
 		var here := world.block_at(p.pos)
+		if here == Blocks.LAVA and p.vel.y < -3.0:
+			fx.emit("sizzle", p.pos, 0.5)     # it lands in lava and pops back up on top
+		if here == Blocks.WATER and not p.wet and p.vel.y < -3.0:
+			fx.emit("splash", p.pos, 0.5)
+		elif here != Blocks.WATER and p.wet and p.vel.y > 3.0:
+			fx.emit("splash_out", p.pos, 0.5)
+		p.wet = here == Blocks.WATER
 		if here == Blocks.LAVA or world.solid_point(p.pos):
 			p.pos.y = floorf(p.pos.y) + 1.15
 			p.vel = Vector3.ZERO

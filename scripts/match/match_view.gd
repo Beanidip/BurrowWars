@@ -1,8 +1,9 @@
 class_name MatchView
 extends Node3D
-## Presentation layer for a Match: sounds, particles, cheese pickups, crack
-## overlay, floating text. Listens to Match signals and reads state; it never
-## changes gameplay. Delete this node and the match still plays identically.
+## Presentation layer for a Match: sounds, particles, effect sprites (FxSprite),
+## cheese pickups, crack overlay, floating text. Listens to Match signals and
+## reads state; it never changes gameplay. Delete this node and the match still
+## plays identically.
 
 var m: Match
 var listener: Rat
@@ -97,13 +98,71 @@ static func _material_sound(id: int) -> String:
 	return "dirt"
 
 
+static func break_sheet(id: int) -> String:
+	## Which recoloured block-break effect suits a block.
+	if id == Blocks.ICE:
+		return "break_ice"
+	match _material_sound(id):
+		"stone": return "break_stone"
+		"scrap": return "break_scrap"
+		"obsidian": return "break_dark"
+		"wood": return "break_wood"
+	return "break_dirt"
+
+
+func _sprite(fx_name: String, at: Vector3, scale_by: float, follow: Node3D = null, seconds := -1.0) -> FxSprite:
+	var where := at if follow == null else follow.position + at
+	if listener != null and listener.position.distance_to(where) > 45.0:
+		return null
+	return FxSprite.play(self, fx_name, at, scale_by, follow, seconds)
+
+
+func _facing_viewer(c: Vector3, by: float) -> Vector3:
+	## A point on the side of a block that faces the camera, so an effect on
+	## the block is not hidden inside it.
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam == null:
+		return c
+	return c + (cam.global_position - c).normalized() * by
+
+
+func surface(pos: Vector3, liquid: int) -> Vector3:
+	## The top of the pool of `liquid` that `pos` is in (or just above), where a
+	## splash belongs. Falls back to `pos` when there is no such pool.
+	if m == null or m.world == null:
+		return pos
+	var c := Vector3i(floori(pos.x), floori(pos.y), floori(pos.z))
+	if m.world.get_cell(c) != liquid:
+		c.y -= 1
+	if m.world.get_cell(c) != liquid:
+		return pos
+	for i in 4:
+		if m.world.get_cell(c + Vector3i.UP) != liquid:
+			break
+		c.y += 1
+	return Vector3(pos.x, c.y + 0.88, pos.z)   # liquid tops sit a little below the cell top
+
+
+func _nearest_rat(pos: Vector3) -> Rat:
+	var best: Rat = null
+	var best_d := 2.5
+	for r in m.rats:
+		var d := r.position.distance_to(pos)
+		if d < best_d:
+			best = r
+			best_d = d
+	return best
+
+
 func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 	var c := pos + Vector3(0.5, 0.5, 0.5)
+	var size := 1.0 if data == null or not (data is float or data is int) else float(data)
 	match kind:
 		"hit":
 			var id := int(data["id"])
 			_sound("mine_" + _material_sound(id), c)
-			_burst(c, Blocks.COLOR[id], 5, 2.5)
+			_burst(c, Blocks.COLOR[id], 3, 2.5)
+			_sprite("hit", _facing_viewer(c, 0.62), 0.3)
 			_crack.visible = true
 			_crack.position = c
 			_crack_t = 2.5
@@ -111,7 +170,8 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"break":
 			var bid := int(data)
 			_sound("break_" + _material_sound(bid), c)
-			_burst(c, Blocks.COLOR[bid], 14, 4.0)
+			_burst(c, Blocks.COLOR[bid], 6, 4.0)
+			_sprite(break_sheet(bid), c - Vector3(0, 0.45, 0), 0.7)
 			if _crack.position.distance_to(c) < 0.1:
 				_crack.visible = false
 		"clang":
@@ -120,36 +180,59 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sound("block_place", c)
 		"bonk":
 			_sound("bonk", pos, 1.0, 3.0)
-			_burst(pos + Vector3(0, 0.8, 0), Color(1, 1, 0.6), 12, 5.0)
+			_sprite("pow", pos + Vector3(0, 0.8, 0), 0.45)
 			_float_text(pos + Vector3(0, 1.4, 0), "BONK!", Color(1, 0.95, 0.5))
 		"trap":
 			_sound("bonk", pos, 1.5, 2.0)
+			_sprite("break_wood", pos, 0.6)
 			_float_text(pos + Vector3(0, 1.4, 0), "SNAP!", Color(1, 0.6, 0.5))
 		"quench":
-			_sound("break_stone", c, 0.7, 1.4)
-			_burst(c, Color(0.92, 0.94, 0.96), 8, 3.0)
+			_sound("sizzle", c, 1.2, -2.0)
+			_sprite("poof", c - Vector3(0, 0.3, 0), 0.5)
 		"jetpack":
 			_sound("jetratpack_flame", pos, 1.0, 0.0)
-			_burst(pos + Vector3(0, 0.2, 0), Color(1.0, 0.6, 0.15), 14, 3.0)
+			var flier := _nearest_rat(pos)
+			var jet := _sprite("jetpack", Vector3(0, 0.55, 0), 0.42, flier, Config.JETPACK_TIME) if flier != null else null
+			if jet != null:
+				jet.offset.x -= 0.22 / jet.pixel_size   # on the rat's back (rat sprites face right)
+			elif flier == null:
+				_burst(pos + Vector3(0, 0.2, 0), Color(1.0, 0.6, 0.15), 14, 3.0)
+		"dash":
+			_sprite("dust", pos, 0.45)
+		"jump":
+			_sprite("dust", pos, 0.3)
+		"land":
+			_sound("mine_dirt", pos, 0.6, -6.0)
+			_sprite("dust", pos, 0.7)
+		"splash":
+			_sound("splash", pos, 1.0 if size >= 1.0 else 1.4, 0.0 if size >= 1.0 else -6.0)
+			_sprite("splash", surface(pos, Blocks.WATER), 0.85 * size)
+		"splash_out":
+			_sound("splash", pos, 1.35, -5.0)
+			_sprite("splash", surface(pos, Blocks.WATER), 0.55 * size)
 		"lava":
-			_sound("tnt_pop", pos, 1.6, -4.0)
-			_burst(pos + Vector3(0, 0.3, 0), Color(1.0, 0.45, 0.1), 12, 4.0)
+			_sound("sizzle", pos, 1.0, 0.0)
+			_sound("tnt_pop", pos, 1.6, -6.0)
+			_sprite("splash_lava", surface(pos, Blocks.LAVA), 0.85)
 			_float_text(pos + Vector3(0, 1.2, 0), "HOT!", Color(1.0, 0.55, 0.2))
+		"sizzle":
+			_sound("sizzle", pos, 1.3, -6.0)
+			_sprite("splash_lava", surface(pos, Blocks.LAVA), 0.85 * size)
 		"spring":
 			_sound("block_place", pos, 1.8, 2.0)
 			_float_text(pos + Vector3(0, 0.6, 0), "BOING!", Color(0.7, 1.0, 0.6))
 		"pickup":
 			_sound("cheese_munch", pos)
-			_burst(pos, Color(1.0, 0.85, 0.3), 8, 3.0)
+			_sprite("collect", pos, 0.55)
 		"pickup_stash":
 			_sound("block_place", pos, 1.3)
+			_sprite("collect", pos, 0.45)
 		"scrap":
 			_sound("discovery_chime", c, 1.2, -4.0)
 			_float_text(c + Vector3(0, 0.4, 0), "+%d scrap" % int(data), Color(1.0, 0.75, 0.4))
 		"deposit":
 			Sfx.play("cheese_deposit_fanfare", -2.0, 1.0, 0.0)
-			for i in 3:
-				_burst(pos + Vector3(0, 0.5 + i * 0.5, 0), Color(1.0, 0.85, 0.3), 16, 6.0)
+			_sprite("firework", pos + Vector3(0, 2.4, 0), 0.6)
 			_burst(pos + Vector3(0, 1.0, 0), UiKit.TEAM[int(data)], 20, 7.0)
 		"fuse":
 			_sound("siege_grind", c, 1.6)
@@ -157,9 +240,8 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"boom":
 			_sound("tnt_pop", pos, 1.0, 6.0)
 			_sound("siege_impact", pos, 1.0, 3.0)
-			_burst(pos, Color(1.0, 0.6, 0.15), 40, 9.0)
-			_burst(pos, Color(0.3, 0.28, 0.28), 30, 6.0)
-			_smoke(pos, float(data))
+			_burst(pos, Color(0.3, 0.28, 0.28), 16, 6.0)
+			_sprite("explosion", pos - Vector3(0, 0.5, 0), clampf(size / 3.0, 0.5, 1.4))
 		"chip":
 			_sound("mine_" + _material_sound(int(data)), pos, 1.7, -8.0)
 			_burst(pos + Vector3.ONE * 0.07, Blocks.COLOR[int(data)], 2, 1.5)
@@ -169,15 +251,16 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sound("mine_wood", pos, 1.9, -6.0)
 		"cannon":
 			_sound("siege_cannon", pos, 1.0, 4.0)
-			_burst(pos, Color(0.9, 0.9, 0.85), 14, 5.0)
+			_sprite("poof", pos - Vector3(0, 0.3, 0), 0.6)
 			_smoke(pos, 1.0)
 		"impact":
 			_sound("siege_impact", pos, 1.1, 3.0)
-			_burst(pos, Blocks.COLOR[int(data)], 22, 6.0)
-			_smoke(pos, 1.2)
+			_burst(pos, Blocks.COLOR[int(data)], 12, 6.0)
+			_sprite(break_sheet(int(data)), pos - Vector3(0, 0.4, 0), 0.9)
+			_sprite("hit", _facing_viewer(pos, 0.3), 0.45)
 		"thud":
 			_sound("siege_impact", pos, 0.7, 0.0)
-			_burst(pos, Color(0.6, 0.55, 0.5), 10, 3.5)
+			_sprite("dust", pos - Vector3(0, 0.3, 0), 0.6)
 		"crane", "dozer":
 			_sound("siege_grind", pos, 0.9 if kind == "dozer" else 1.2, -2.0)
 		"ability", "buy":
@@ -186,6 +269,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			Sfx.play("siege_grind", -2.0, 1.9, 0.0)
 		"respawn":
 			_sound("block_place", pos, 0.7)
+			_sprite("poof", pos, 0.7)
 
 
 func _smoke(pos: Vector3, size: float) -> void:

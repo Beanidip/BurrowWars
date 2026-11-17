@@ -14,6 +14,10 @@
 | Rat art is one sprite sheet per class (72x72 cells, a row per animation) instead of 208 single-frame PNGs. Team colour is painted in magenta and swapped for Blue or Red when the sheet loads, so each class is drawn once. `tools/rat_sheets.py` previews the team colours, packs/unpacks sheets, and draws `docs/rat_sheet_layout.png` | `actors/rat_sprite.gd`, `ui/icons.gd`, `assets/rats/`, `tools/rat_sheets.py` |
 | Icons are one sheet, `assets/icons/icons.png` (layout in `docs/icon_sheet_layout.png`); single-icon PNGs still override. The menu panel frame is an editable image, `assets/ui/panel_frame.png` | `ui/icons.gd`, `ui/icon_sheet.gd`, `ui/ui_kit.gd`, `tools/make_icons.py` |
 | Bots heading home bridge any gap, climb out of moats near the door instead of walking away, buy and fire jetpacks, and dash on long open runs | `actors/bot_brain.gd` |
+| Pixel-art effect animations (from the MIT pixelfx library): TNT explosions, block breaks coloured per material (dirt, stone, ice, scrap, obsidian, wood), hit sparks, BONK pow, pickup sparkle, respawn and cannon puffs, a deposit firework, and a jetpack flame worn on the rat's back. Sheets live in `assets/fx/` and can be redrawn | `match/fx_sprite.gd`, `match/fx_sheets.gd`, `match/match_view.gd`, `assets/fx/`, `tools/import_fx.py` |
+| Dust puffs for dashing, jumping and hard landings (a fall of about 3 blocks or more, with a thud) | `actors/rat.gd`, `match/match.gd`, `match/match_view.gd` |
+| Water and lava splashes: a rat dropping into water or leaping out of it splashes (bobbing at the surface or wading in from the bank does not), and so does loose cheese. Lava splashes in orange with a sizzle when a rat touches it or an item lands on it | `actors/rat.gd`, `match/match.gd`, `match/match_view.gd`, `assets/sfx/splash.wav`, `assets/sfx/sizzle.wav` |
+| Online, a player's game reports its own dash, jump, landing and splash effects; the server plays them for everyone (whitelisted, rate-limited) | `match/match.gd`, `net/net_server.gd` |
 
 ## 1.9.0 - Review fixes, line-of-sight names, loaded dash (2026-11-17)
 
