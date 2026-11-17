@@ -25,13 +25,12 @@ static func tex(id: String) -> Texture2D:
 
 static func class_tex(class_id: String) -> Texture2D:
 	## A class's portrait: the first idle frame of its (blue) rat.
-	var art := class_id if class_id != "maestro" else "builder"
-	var key := "class:" + art
+	var path := RatSprite.sheet_path(class_id, 0)
+	var key := "class:" + path
 	if not _cache.has(key):
-		var path := "res://assets/rats/%s_0_idle_0.png" % art
 		var portrait: AtlasTexture = null
 		if ResourceLoader.exists(path):
-			# the rat fills the middle of its 72x72 frame: crop to it
+			# the first idle frame (top-left cell), cropped to the rat itself
 			portrait = AtlasTexture.new()
 			portrait.atlas = load(path)
 			portrait.region = Rect2(12, 10, 48, 48)

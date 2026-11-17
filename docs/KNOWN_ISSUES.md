@@ -10,7 +10,7 @@ None of these block finishing a match.
 | Bots use few tools | Any match | They dig, carry, bonk, bridge, dash, buy and fire jetpacks; they never use abilities, gadgets, stashes or other workshop items. |
 | A badly stuck bot respawns | Rare; after about 24 s without moving | It leaves its cheese where it stood. |
 | Loaded Free Build maps forget who owned TNT | F9 after placing TNT | Hitting it still lights it; remote detonate works for any charge in Free Build. |
-| First editor open takes a moment | Open the project | Godot imports about 250 sprites and sounds once. |
+| First editor open takes a moment | Open the project | Godot imports the sprite sheets, icons and sounds once. |
 | Machines are one block big | Place a crane | They read as toys rather than "heavy". Footprints larger than one cell would need multi-cell transport. |
 | Pantograph skips gadgets | Copy a room with ladders | Only dirt, grass, stone, brick, ice, obsidian, painted blocks and glass are copied; the message says how many blocks were left out. |
 | Chisel edits one microvoxel at a time | Carve a doorway | No brush sizes yet; big carvings are slow. |

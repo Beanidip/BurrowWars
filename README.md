@@ -66,6 +66,11 @@ See `docs/TEST_RESULTS.md` for what was actually executed and what was not.
 
 ## Art
 
+Rats are sprite sheets, one per class and team: `assets/rats/digger_blue.png`, `digger_red.png`, ...
+Each sheet is 4 columns of 72x72 cells, one row per animation (idle, run, jump, dig, attack, hurt,
+build, use, down); see `docs/rat_sheet_layout.png`. Draw over a sheet in Aseprite, LibreSprite or
+Pixelorama and the game picks it up. `tools/rat_sheets.py` packs loose frames into sheets and back.
+
 Icons are 16x16 PNGs in `assets/icons/`, named after the item or ability (`ladder.png`, `jetpack.png`,
 `superdig.png`...). Overwrite any of them with your own art and the game uses it. `tools/make_icons.py`
 redraws the generated set.

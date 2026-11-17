@@ -301,13 +301,13 @@ func _process(_delta: float) -> void:
 		_q_count.text = "unlimited" if m.free_mode else "x%d   (%s: next)" % [int(rat.gadgets.get(rat.equipped, 0)), Inputs.key_name("cycle_gadget")]
 	else:
 		_q_name.text = "empty"
-		_q_count.text = "buy at workshop"
+		_q_count.text = "buy: %s" % Inputs.key_name("workshop")
 	_status.text = "%s  -  %s team\nScrap: %d" % [rat.cls["name"], Match.TEAM_NAMES[rat.team], rat.scrap]
 	_q_icon.texture = Icons.tex(rat.equipped)
 	_gear_icon.texture = Icons.tex(rat.gear)
 	if rat.gear == "":
 		_gear_name.text = "none"
-		_gear_state.text = "buy at workshop"
+		_gear_state.text = "buy: %s" % Inputs.key_name("workshop")
 	else:
 		_gear_name.text = String(ClassDefs.GEAR.get(rat.gear, rat.gear))
 		_gear_state.text = ("%.0f s" % ceilf(rat.gear_cd)) if rat.gear_cd > 0.0 else "ready"

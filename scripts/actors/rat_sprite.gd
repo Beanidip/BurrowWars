@@ -3,6 +3,13 @@ extends Sprite3D
 ## Presentation only: a billboarded storybook sprite that reads its Rat's
 ## state and picks an animation. Never writes gameplay state.
 
+## Rat art lives in one sprite sheet per class and team, e.g.
+## res://assets/rats/digger_blue.png: 72x72 cells, one row per animation in
+## ANIMS order, frames left to right (see tools/rat_sheets.py and
+## docs/rat_sheet_layout.png). Change a frame count here and in that tool.
+const CELL := 72
+const ANIMS := ["idle", "run", "jump", "dig", "attack", "hurt", "build", "use", "down"]
+const TEAM_NAMES := ["blue", "red"]
 const FRAMES := {"idle": 2, "run": 4, "jump": 3, "dig": 3, "attack": 2, "hurt": 2, "build": 3, "use": 3, "down": 4}
 const FPS := {"idle": 2.5, "run": 10.0, "jump": 6.0, "dig": 12.0, "attack": 10.0, "hurt": 6.0, "build": 10.0, "use": 8.0, "down": 5.0}
 
@@ -78,15 +85,23 @@ func _process(delta: float) -> void:
 	_tag.modulate = Color(0.55, 0.75, 1.0) if rat.team == 0 else Color(1.0, 0.6, 0.55)
 
 
-static func _frame(class_id: String, team: int, anim: String, frame: int) -> Texture2D:
+static func sheet_path(class_id: String, team: int) -> String:
 	var art := class_id if class_id != "maestro" else "builder"
-	var path := "res://assets/rats/%s_%d_%s_%d.png" % [art, team, anim, frame]
-	if _cache.has(path):
-		return _cache[path]
-	var tex: Texture2D = null
+	return "res://assets/rats/%s_%s.png" % [art, TEAM_NAMES[clampi(team, 0, 1)]]
+
+
+static func _frame(class_id: String, team: int, anim: String, frame: int) -> Texture2D:
+	## One cell of a class/team sheet, cut out once and cached.
+	var path := sheet_path(class_id, team)
+	var key := "%s:%s:%d" % [path, anim, frame]
+	if _cache.has(key):
+		return _cache[key]
+	var tex: AtlasTexture = null
 	if ResourceLoader.exists(path):
-		tex = load(path)
+		tex = AtlasTexture.new()
+		tex.atlas = load(path)
+		tex.region = Rect2(frame * CELL, ANIMS.find(anim) * CELL, CELL, CELL)
 	else:
-		Log.warn("missing rat sprite: " + path)
-	_cache[path] = tex
+		Log.warn("missing rat sprite sheet: " + path)
+	_cache[key] = tex
 	return tex
