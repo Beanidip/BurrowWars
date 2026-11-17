@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - code review fixes
+## 1.9.0 - Review fixes, line-of-sight names, loaded dash (2026-11-17)
 
 | Change | Files |
 |---|---|
