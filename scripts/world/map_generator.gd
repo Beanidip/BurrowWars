@@ -12,6 +12,12 @@ class_name MapGenerator
 ## around each base. Resources are scattered by sector (the half is cut into a
 ## grid and every sector gets its share) so they are spread across the whole
 ## map instead of clumping.
+##
+## Underground, Minecraft-style "worm" caves wander through the lower third of
+## the map: tunnels that swell and narrow, fork into branches and open into
+## rooms, a few of them climbing out to the surface. Their deepest stretches
+## (and some rooms) hold lava lakes, and the lower third is richer: extra scrap
+## and cheese, much of it set into cave walls where it shows, and lava pockets.
 
 const GROUND := 32                 # base platform level; plains sit around here
 const WATER_LEVEL := GROUND - 5    # only the deepest valley floors hold lakes
@@ -21,6 +27,10 @@ const BASE_MIN := 6                # base platform corner (team 0)
 const BASE_SIZE := 8
 const FLAT_RADIUS := 22.0          # terrain is levelled this far around a base (fully flat for 70% of it)
 const SECTOR := 16                 # resource scattering grid
+const DEEP_TOP := VoxelWorld.SY / 3   # 21: the lower third, where the caves, lava and riches are
+const CAVE_SYSTEMS := 11           # tunnel networks per half
+const CAVE_ENTRANCES := 3          # tunnels per half that climb out to the surface
+const CAVE_LAVA_Y := 4             # cave cells this deep fill with lava
 
 static var _cache: Dictionary = {}   # seed -> [data, points of interest]
 
@@ -106,8 +116,10 @@ static func generate(world: VoxelWorld, map_seed: int, cheese_at_least := 0) -> 
 	world.gates.clear()
 	world.points_of_interest.clear()
 	var heights := _terrain(world, map_seed)
+	_caves(world, map_seed, heights)
 	_landmarks(world, rng, heights)
 	_resources(world, rng, heights)
+	_deep_riches(world, map_seed, heights)
 	_surface(world, rng, heights)
 	_base(world)
 	_more_cheese(world, rng, heights, (cheese_at_least + 1) / 2)
@@ -248,7 +260,7 @@ static func _terrain(world: VoxelWorld, map_seed: int) -> PackedInt32Array:
 						id = Blocks.LAVA if y <= 2 else Blocks.AIR
 					elif m > 0.18 and y <= 3:
 						id = Blocks.OBSIDIAN
-				elif y >= 6 and y < top - 6 and deep and caves.get_noise_3d(x, y * 1.4, z) > 0.42:
+				elif y >= 6 and y < top - 6 and deep and caves.get_noise_3d(x, y * 1.4, z) > 0.53:
 					id = Blocks.AIR
 				d[x + sx * (z + sz * y)] = id
 			for y in range(top, WATER_LEVEL):
@@ -259,6 +271,212 @@ static func _terrain(world: VoxelWorld, map_seed: int) -> PackedInt32Array:
 
 static func surface(heights: PackedInt32Array, x: int, z: int) -> int:
 	return heights[x * VoxelWorld.SZ + z]
+
+
+# --- caves --------------------------------------------------------------------
+
+static func _caves(world: VoxelWorld, map_seed: int, heights: PackedInt32Array) -> void:
+	## Worm caves, carved into team 0's half (the other half gets the same,
+	## turned around). Each network starts somewhere in the depths, sometimes
+	## in a room, and sends two or three tunnels off in different directions;
+	## tunnels fork as they go. A few more start at the surface and wind down.
+	## Has its own random stream, so the rest of a seed's map stays the same.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = map_seed + 505
+	var jobs: Array = []    # tunnels still to dig: [start, yaw, pitch, steps, width, forks so far, from the surface]
+	var systems := 0
+	var tries := 0
+	while systems < CAVE_SYSTEMS and tries < 200:
+		tries += 1
+		var start := Vector3(rng.randf_range(6.0, HALF - 4.0), rng.randf_range(6.0, DEEP_TOP + 2.0), rng.randf_range(6.0, VoxelWorld.SZ - 6.0))
+		if _near_base(int(start.x), int(start.z), 30.0):
+			continue
+		systems += 1
+		if rng.randf() < 0.5:
+			_room(world, heights, start, rng.randf_range(3.0, 5.0), rng.randf_range(2.0, 3.0), start.y < 13.0 and rng.randf() < 0.6)
+		var yaw := rng.randf() * TAU
+		var arms := rng.randi_range(2, 3)
+		for b in arms:
+			jobs.append([start, yaw + b * TAU / arms + rng.randf_range(-0.5, 0.5), rng.randf_range(-0.3, 0.3),
+				rng.randi_range(70, 130), rng.randf_range(1.0, 2.2), 0, false])
+	var entrances := 0
+	tries = 0
+	while entrances < CAVE_ENTRANCES and tries < 300:
+		tries += 1
+		var x := rng.randi_range(8, HALF - 8)
+		var z := rng.randi_range(8, VoxelWorld.SZ - 9)
+		var top := surface(heights, x, z)
+		if _near_base(x, z, 38.0) or top < WATER_LEVEL + 2 or top > GROUND + 14 or _water_near(world, x, top, z, 4):
+			continue
+		entrances += 1
+		jobs.append([Vector3(x + 0.5, top + 0.5, z + 0.5), rng.randf() * TAU, -0.6, rng.randi_range(70, 100), rng.randf_range(0.9, 1.5), 0, true])
+	while not jobs.is_empty():
+		var j: Array = jobs.pop_back()
+		_worm(world, rng, heights, jobs, j[0], j[1], j[2], j[3], j[4], j[5], j[6])
+
+
+static func _worm(world: VoxelWorld, rng: RandomNumberGenerator, heights: PackedInt32Array, jobs: Array,
+		pos: Vector3, yaw: float, pitch: float, steps: int, width: float, forks: int, from_surface: bool) -> void:
+	## One tunnel: a step at a time, turning and tilting smoothly, wide in the
+	## middle and narrow at the ends. Partway along it may fork in two.
+	var yaw_v := 0.0
+	var pitch_v := 0.0
+	var fork_at := rng.randi_range(steps / 4, steps * 3 / 4) if forks < 2 and rng.randf() < 0.75 else -1
+	for i in steps:
+		var r := (1.6 if from_surface else 1.3) + sin(PI * float(i) / float(steps)) * width
+		pos += Vector3(cos(yaw) * cos(pitch), sin(pitch), sin(yaw) * cos(pitch))
+		pitch *= 0.92 if from_surface else 0.7
+		pitch += pitch_v * 0.1
+		yaw += yaw_v * 0.1
+		pitch_v = pitch_v * 0.9 + (rng.randf() - rng.randf()) * rng.randf() * 2.0
+		yaw_v = yaw_v * 0.75 + (rng.randf() - rng.randf()) * rng.randf() * 4.0
+		if from_surface:
+			if pos.y > DEEP_TOP:
+				pitch = minf(pitch, -0.35)   # wind down into the depths...
+			else:
+				from_surface = false         # ...then carry on as an ordinary tunnel
+		elif pos.y > DEEP_TOP + 4.0:
+			pitch -= 0.08                    # caves keep to the lower third
+		if pos.y < 3.0:
+			pitch += 0.15
+		if pos.x < -4.0 or pos.x > HALF + 4.0 or pos.z < -4.0 or pos.z > VoxelWorld.SZ + 4.0:
+			return
+		if i == fork_at:
+			for side: float in [-1.0, 1.0]:
+				jobs.append([pos, yaw + side * (PI * 0.5 + rng.randf_range(-0.3, 0.3)), pitch / 3.0,
+					steps - i, width * rng.randf_range(0.6, 1.0), forks + 1, false])
+			return
+		if rng.randf() < 0.15:
+			continue                         # skipped steps leave the walls rough
+		_carve(world, heights, pos, r, r * 0.8, from_surface)
+
+
+static func _carve(world: VoxelWorld, heights: PackedInt32Array, c: Vector3, r: float, ry: float, open_top: bool) -> void:
+	## Hollow out an ellipsoid of natural ground. Keeps a roof of at least four
+	## blocks under the surface (so tunnels never break into lakes or the
+	## open) unless `open_top`, for the tunnels that start at the surface.
+	## Cells at the very bottom become lava instead of air.
+	for x in range(floori(c.x - r), floori(c.x + r) + 1):
+		if x < 1 or x >= HALF:
+			continue
+		for z in range(floori(c.z - r), floori(c.z + r) + 1):
+			if z < 1 or z >= VoxelWorld.SZ - 1 or _near_base(x, z, 22.0):
+				continue
+			var roof := surface(heights, x, z) - (0 if open_top else 4)
+			for y in range(maxi(1, floori(c.y - ry)), mini(roof, floori(c.y + ry) + 1)):
+				var dx := (x + 0.5 - c.x) / r
+				var dy := (y + 0.5 - c.y) / ry
+				var dz := (z + 0.5 - c.z) / r
+				if dx * dx + dy * dy + dz * dz > 1.0:
+					continue
+				var cur := world.get_block(x, y, z)
+				if cur != Blocks.STONE and cur != Blocks.DIRT and cur != Blocks.GRASS:
+					continue
+				if open_top and _water_near(world, x, y, z, 1):
+					continue
+				world.set_raw(x, y, z, Blocks.LAVA if y <= CAVE_LAVA_Y else Blocks.AIR)
+
+
+static func _room(world: VoxelWorld, heights: PackedInt32Array, c: Vector3, r: float, ry: float, lava_lake: bool) -> void:
+	## A wide chamber. A deep one may hold a lava lake across its floor.
+	_carve(world, heights, c, r, ry, false)
+	if not lava_lake:
+		return
+	var level := floori(c.y - ry * 0.35)
+	for y in range(maxi(1, floori(c.y - ry)), level + 1):
+		for x in range(floori(c.x - r), floori(c.x + r) + 1):
+			for z in range(floori(c.z - r), floori(c.z + r) + 1):
+				if x < HALF and world.get_block(x, y, z) == Blocks.AIR and world.get_block(x, y - 1, z) != Blocks.AIR:
+					world.set_raw(x, y, z, Blocks.LAVA)
+
+
+static func _water_near(world: VoxelWorld, x: int, y: int, z: int, r: int) -> bool:
+	for dx in range(-r, r + 1):
+		for dy in range(-1, 2):
+			for dz in range(-r, r + 1):
+				if world.get_block(x + dx, y + dy, z + dz) == Blocks.WATER:
+					return true
+	return false
+
+
+static func _deep_riches(world: VoxelWorld, map_seed: int, heights: PackedInt32Array) -> void:
+	## The lower third pays for the trip down: in every sector, lava pockets
+	## (sometimes), extra scrap veins, a scrap vein and a cheese set into a
+	## cave wall where they show (or buried, if the sector has no cave).
+	## Its own random stream, like the caves.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = map_seed + 606
+	for sx in HALF / SECTOR:
+		for sz in VoxelWorld.SZ / SECTOR:
+			var mid := Vector2i(sx * SECTOR + SECTOR / 2, sz * SECTOR + SECTOR / 2)
+			if not _near_base(mid.x, mid.y, 30.0) and rng.randf() < 0.5:
+				var p := _sector_spot(rng, sx, sz, 3)
+				_lava_pocket(world, rng, Vector3i(p.x, rng.randi_range(5, 15), p.y))
+			for i in (1 if _near_base(mid.x, mid.y, 20.0) else 2):
+				var p := _sector_spot(rng, sx, sz)
+				_blob(world, Vector3i(p.x, rng.randi_range(3, DEEP_TOP), p.y), rng.randi_range(2, 3), Blocks.SCRAP)
+			var wall := _wall_spot(world, rng, sx, sz)
+			if wall.y > 0:
+				_blob(world, wall, 2, Blocks.SCRAP)
+			if _near_base(mid.x, mid.y, 22.0):
+				continue
+			var spot := _wall_spot(world, rng, sx, sz)
+			for t in 20:
+				if spot.y > 0:
+					break
+				var p := _sector_spot(rng, sx, sz, 2)
+				var q := Vector3i(p.x, rng.randi_range(3, DEEP_TOP), p.y)
+				var cur := world.get_block(q.x, q.y, q.z)
+				if (cur == Blocks.STONE or cur == Blocks.DIRT) and not _near_base(q.x, q.z, 22.0):
+					spot = q
+			if spot.y > 0:
+				world.set_raw(spot.x, spot.y, spot.z, Blocks.CHEESE)
+
+
+static func _wall_spot(world: VoxelWorld, rng: RandomNumberGenerator, sx: int, sz: int) -> Vector3i:
+	## A stone or dirt cell in the lower third of this sector with open cave
+	## beside it (and no lava), or y = -1 if none was found.
+	for t in 40:
+		var p := _sector_spot(rng, sx, sz, 1)
+		var c := Vector3i(p.x, rng.randi_range(CAVE_LAVA_Y + 1, DEEP_TOP), p.y)
+		var cur := world.get_block(c.x, c.y, c.z)
+		if (cur != Blocks.STONE and cur != Blocks.DIRT) or _near_base(c.x, c.z, 22.0):
+			continue
+		var open := false
+		for n: Vector3i in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1), Vector3i(0, 1, 0)]:
+			var id := world.get_block(c.x + n.x, c.y + n.y, c.z + n.z)
+			if id == Blocks.LAVA:
+				open = false
+				break
+			if id == Blocks.AIR:
+				open = true
+		if open:
+			return c
+	return Vector3i(0, -1, 0)
+
+
+static func _lava_pocket(world: VoxelWorld, rng: RandomNumberGenerator, c: Vector3i) -> void:
+	## A small hidden pool: a layer or two of lava under a pocket of air, in
+	## plain rock (it never cuts into bricks, cheese or other structures).
+	var r := rng.randf_range(1.5, 2.6)
+	var deep := rng.randi_range(1, 2)
+	var ir := ceili(r)
+	for dx in range(-ir, ir + 1):
+		for dz in range(-ir, ir + 1):
+			if float(dx * dx + dz * dz) > r * r:
+				continue
+			for dy in range(0, deep + 1):
+				var x := c.x + dx
+				var y := c.y + dy
+				var z := c.z + dz
+				var cur := world.get_block(x, y, z)
+				if x >= HALF or (cur != Blocks.STONE and cur != Blocks.DIRT):
+					continue
+				var floor_id := world.get_block(x, y - 1, z)
+				if dy < deep and floor_id != Blocks.AIR:
+					world.set_raw(x, y, z, Blocks.LAVA)
+				elif dy == deep:
+					world.set_raw(x, y, z, Blocks.AIR)
 
 
 static func _sector_spot(rng: RandomNumberGenerator, sx: int, sz: int, margin := 2) -> Vector2i:

@@ -18,6 +18,9 @@
 | Dust puffs for dashing, jumping and hard landings (a fall of about 3 blocks or more, with a thud) | `actors/rat.gd`, `match/match.gd`, `match/match_view.gd` |
 | Water and lava splashes: a rat dropping into water or leaping out of it splashes (bobbing at the surface or wading in from the bank does not), and so does loose cheese. Lava splashes in orange with a sizzle when a rat touches it or an item lands on it | `actors/rat.gd`, `match/match.gd`, `match/match_view.gd`, `assets/sfx/splash.wav`, `assets/sfx/sizzle.wav` |
 | Online, a player's game reports its own dash, jump, landing and splash effects; the server plays them for everyone (whitelisted, rate-limited) | `match/match.gd`, `net/net_server.gd` |
+| Minecraft-style caves in the lower third of the map: winding tunnel networks that swell, narrow and fork, with rooms, and three tunnels per side that climb out to the surface. The old round noise caves are rarer | `world/map_generator.gd` |
+| More lava down deep: tunnels that reach the bottom are lava lakes, some deep rooms have lava floors, and about half the sectors hide a small lava pocket (roughly 3-4x the lava above the bottom layer). None within 20 blocks of a base | `world/map_generator.gd` |
+| The lower third is richer: about twice the scrap and 1.7x the cheese, much of it set into cave walls where it shows. Both halves still get exactly the same | `world/map_generator.gd` |
 
 ## 1.9.0 - Review fixes, line-of-sight names, loaded dash (2026-11-17)
 

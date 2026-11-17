@@ -59,6 +59,16 @@ the map has some; obsidian vaults, lava basins, ruins (one is a scrap lab) and o
 are placed by the seed. A brick sewer runs from just outside each base to the mushroom chapel
 at the centre. The ground is flat for about 15 blocks around each base.
 
+**The deep (the lower third, y 1 to 21).** Minecraft-style caves wander through it: about a
+dozen tunnel networks per side that swell, narrow and fork, some opening into rooms, plus three
+tunnels per side that start as a hole in the hillside and wind down into the depths. Tunnels
+keep at least four blocks of roof under the ground elsewhere, so they never break into lakes.
+Whatever reaches the very bottom (y 4 and below) is a lava lake, a few deep rooms have lava
+across their floor, and about half the sectors hide a small lava pocket. In return the deep is
+rich: most of the map's cheese and about twice the scrap of the rest of the underground,
+much of it set into cave walls where you can see it from the tunnel. Nothing deep is
+placed within about 20 blocks of a base.
+
 ## Stash, gear and traps
 
 - **Team Stash** (workshop, 12 scrap, up to 2): place it outside the bases. Press B beside it
@@ -122,7 +132,7 @@ wall spring (flings back whatever runs into it).
 ## v1.2 changes
 
 - **Water:** hold or tap Space at the surface to leap out. Water is drawn see-through.
-- **Lava flows.** Three molten basins per side sit in their own caverns. Open one and lava pours down any gap and creeps up to 3 blocks sideways from where it lands, then rests. Plug it with any block. 
+- **Lava flows.** Four molten basins per side sit in their own caverns, and the deep caves hold lava lakes and pockets (see The map). Open one and lava pours down any gap and creeps up to 3 blocks sideways from where it lands, then rests. Plug it with any block. 
 - **Gates hold gadgets.** Aim at your own team gate and press Q with a ladder, spring, conveyor, wall spring or highway: it goes inside the gate. Your team uses the gadget; enemies still bump into the gate and cannot dig the gadget out. Digging it out yourself leaves the gate; breaking the gate (10 wrecking-ball hits or 2 TNT blasts) destroys both.
 - **Paint and glass.** 26 opaque colours (greys and in-between shades included) and 10 see-through glass colours. A painted block costs one dirt, or one stone when you have no dirt, takes 2 hits (it is dyed dirt) and gives a dirt back. With the Paint slot, left click recolours dirt and painted blocks; stone is never painted, so paint cannot weaken a wall. Glass is whole blocks only.
 - **Wood is scenery.** It breaks but gives nothing, and is neither carved nor copied.

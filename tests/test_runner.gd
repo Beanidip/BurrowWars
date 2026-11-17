@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -2880,3 +2880,119 @@ func test_motion_and_splash_fx() -> void:
 	check(absf(view.surface(Vector3(ARENA) + Vector3(-5.5, 3, 0.5), Blocks.WATER).y - (ARENA.y + 3)) < 0.01, "and stay put away from any water")
 	view.free()
 	end(m)
+
+
+func cave_networks(w: VoxelWorld) -> Array[Dictionary]:
+	## Connected pockets of underground air in team 0's half that reach into
+	## the lower third: size, footprint, and whether they open to the sky.
+	var sx := VoxelWorld.SX
+	var sz := VoxelWorld.SZ
+	var half := sx / 2
+	var tops := PackedInt32Array()
+	tops.resize(half * sz)
+	for x in half:
+		for z in sz:
+			tops[x * sz + z] = w.surface_y(x, z)
+	var seen := PackedByteArray()
+	seen.resize(w.data.size())
+	var out: Array[Dictionary] = []
+	for y in range(MapGenerator.CAVE_LAVA_Y + 1, MapGenerator.DEEP_TOP + 1):
+		for z in sz:
+			for x in half:
+				var i := x + sx * (z + sz * y)
+				if seen[i] == 1 or w.data[i] != Blocks.AIR or y >= tops[x * sz + z]:
+					continue
+				var net := {"size": 0, "x0": x, "x1": x, "z0": z, "z1": z, "sky": false}
+				var queue := PackedInt32Array([i])
+				seen[i] = 1
+				var head := 0
+				while head < queue.size():
+					var c := queue[head]
+					head += 1
+					var cx := c % sx
+					var cz := (c / sx) % sz
+					var cy := c / (sx * sz)
+					net["size"] += 1
+					net["x0"] = mini(net["x0"], cx)
+					net["x1"] = maxi(net["x1"], cx)
+					net["z0"] = mini(net["z0"], cz)
+					net["z1"] = maxi(net["z1"], cz)
+					for d: Vector3i in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 1, 0), Vector3i(0, -1, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]:
+						var nx := cx + d.x
+						var ny := cy + d.y
+						var nz := cz + d.z
+						if nx < 0 or nx >= half or nz < 0 or nz >= sz or ny < 1 or ny >= VoxelWorld.SY:
+							continue
+						var n := nx + sx * (nz + sz * ny)
+						if seen[n] == 1 or w.data[n] != Blocks.AIR:
+							continue
+						if ny >= tops[nx * sz + nz]:
+							net["sky"] = true     # open air above the ground: this cave has a way out
+							continue
+						seen[n] = 1
+						queue.append(n)
+				out.append(net)
+	return out
+
+
+func test_deep_caves_and_riches() -> void:
+	var deep := MapGenerator.DEEP_TOP
+	var sx := VoxelWorld.SX
+	var sz := VoxelWorld.SZ
+	for seed_n: int in [4242, 7]:
+		var m := new_match({"seed": seed_n})
+		var w := m.world
+		var cheese := [0, 0]
+		var scrap := [0, 0]
+		var pools := 0
+		for i in w.data.size():
+			var id := w.data[i]
+			var y := i / (sx * sz)
+			var low := 1 if y <= deep else 0
+			if id == Blocks.CHEESE:
+				cheese[low] += 1
+			elif id == Blocks.SCRAP:
+				scrap[low] += 1
+			elif id == Blocks.LAVA and y > MapGenerator.CAVE_LAVA_Y and y <= deep:
+				pools += 1
+		var nets := cave_networks(w)
+		var big := 0
+		var widest := 0
+		var open := 0
+		for n: Dictionary in nets:
+			if int(n["size"]) >= 300:
+				big += 1
+			widest = maxi(widest, maxi(int(n["x1"]) - int(n["x0"]), int(n["z1"]) - int(n["z0"])))
+			if bool(n["sky"]) and int(n["size"]) >= 100:
+				open += 1
+		print("    seed %d: deep cheese %d (+%d higher), deep scrap %d (+%d), raised lava %d, networks %d (%d big, widest %d, %d open to the sky)" % [
+			seed_n, cheese[1], cheese[0], scrap[1], scrap[0], pools, nets.size(), big, widest, open])
+		# (before the deep caves, seed 4242 had 80 deep cheese, 1482 deep scrap, 208 raised lava, no way in from the surface)
+		check(cheese[1] >= 110 and cheese[1] * 4 >= (cheese[0] + cheese[1]) * 3, "seed %d: most cheese is in the lower third (%d of %d)" % [seed_n, cheese[1], cheese[0] + cheese[1]])
+		check(scrap[1] >= 2400, "seed %d: the lower third is rich in scrap (%d)" % [seed_n, scrap[1]])
+		check(pools >= 500, "seed %d: lava pools and lakes through the lower third, not only the bottom sheet (%d cells)" % [seed_n, pools])
+		check(big >= 3 and widest >= 60, "seed %d: big branching cave networks wander across the map (%d big, widest %d blocks)" % [seed_n, big, widest])
+		check(open >= 2, "seed %d: caves climb out to the surface in a few places (%d)" % [seed_n, open])
+		var shown := 0
+		for i in w.data.size():
+			var y := i / (sx * sz)
+			if y <= MapGenerator.CAVE_LAVA_Y or y > deep or (w.data[i] != Blocks.CHEESE and w.data[i] != Blocks.SCRAP):
+				continue
+			var c := Vector3i(i % sx, y, (i / sx) % sz)
+			for d: Vector3i in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]:
+				if w.get_cell(c + d) == Blocks.AIR:
+					shown += 1
+					break
+		check(shown >= 120, "seed %d: scrap and cheese show in cave walls (%d blocks)" % [seed_n, shown])
+		var hot := 0
+		for t in 2:
+			var b := MapGenerator.base_center(t)
+			for x in range(int(b.x) - 20, int(b.x) + 21):
+				for z in range(int(b.z) - 20, int(b.z) + 21):
+					if Vector2(x + 0.5 - b.x, z + 0.5 - b.z).length() > 20.0:
+						continue
+					for y in range(1, MapGenerator.GROUND):
+						if w.get_cell(Vector3i(x, y, z)) == Blocks.LAVA:
+							hot += 1
+		check(hot == 0, "seed %d: no lava within 20 blocks of either base (%d)" % [seed_n, hot])
+		end(m)
