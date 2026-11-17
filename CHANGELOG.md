@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+| Change | Files |
+|---|---|
+| Team gates cost scrap again: 7 for everyone, 3 for Builders | `match/class_defs.gd` (`price`), `match/match.gd`, `ui/hud.gd` |
+| Springs fling any rat or loose cheese within a block of their sides (any team), not only what lands on top | `actors/rat.gd`, `match/match.gd` |
+| Team Stash (12 scrap, max 2): a placeable door into your team's shared pool of scrap, dirt, stone, ice and obsidian (no cheese), also reachable at base with B. Only 5 TNT blasts break it; the pool survives | `world/blocks.gd`, `match/match.gd`, `ui/hud.gd`, `net/*` |
+| Placed traps (mouse trap, sticky, pitfall, wall spring) take 5 digs for their own team and 15 for the other team or a blast | `match/match.gd` |
+| Gear slot (J): one piece worn at a time. Jetpack (14 scrap): 1.1 s of lift, then 5 s to cool down | `actors/rat.gd`, `match/class_defs.gd`, `ui/hud.gd`, `actors/player_controller.gd` |
+| Fix: the ground right beside a base could be dug but never built on, so a moat dug around a base could not be filled. Base protection now covers the base itself and grows sideways only | `world/map_generator.gd` |
+| Bots heading home bridge any gap, climb out of moats near the door instead of walking away, buy and fire jetpacks, and dash on long open runs | `actors/bot_brain.gd` |
+
 ## 1.9.0 - Review fixes, line-of-sight names, loaded dash (2026-11-17)
 
 | Change | Files |

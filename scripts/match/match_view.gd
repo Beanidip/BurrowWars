@@ -128,6 +128,9 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"quench":
 			_sound("break_stone", c, 0.7, 1.4)
 			_burst(c, Color(0.92, 0.94, 0.96), 8, 3.0)
+		"jetpack":
+			_sound("jetratpack_flame", pos, 1.0, 0.0)
+			_burst(pos + Vector3(0, 0.2, 0), Color(1.0, 0.6, 0.15), 14, 3.0)
 		"lava":
 			_sound("tnt_pop", pos, 1.6, -4.0)
 			_burst(pos + Vector3(0, 0.3, 0), Color(1.0, 0.45, 0.1), 12, 4.0)

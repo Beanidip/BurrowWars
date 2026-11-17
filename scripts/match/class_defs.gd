@@ -24,9 +24,9 @@ const CLASSES := {
 	"builder": {
 		"name": "Builder", "speed": 1.0, "stamina": 100.0, "carry": 2, "brush": 0, "water": 0.5,
 		"remote_shop": true, "fly": false,
-		"blurb": "Patches walls, starts with team blocks, gets team gates free and shops from anywhere.",
+		"blurb": "Patches walls, starts with team blocks, buys team gates cheap and shops from anywhere.",
 		"abilities": [["patch", "Patch 3x3", 5.0, 25.0]],
-		"free_items": ["gate"],
+		"discount": {"gate": 3},
 		"kit": {"ladder": 6, "spring": 1, "gate": 4, "teamblock": 6},
 	},
 	"saboteur": {
@@ -62,6 +62,8 @@ const SHOP := [
 		"desc": "Hit it to light a 2 s fuse. Saboteurs detonate remotely. Chains."},
 	{"id": "teamblock", "name": "Team Block x4", "kind": "gadget", "qty": 4, "cost": 4, "cat": "Construction",
 		"desc": "A block in team colours: solid floor or wall for your team, thin air for enemies (and nothing they can dig). Dig it to take it back."},
+	{"id": "stash", "name": "Team Stash", "kind": "gadget", "qty": 1, "cost": 12, "max": 2, "cat": "Construction",
+		"desc": "Place it anywhere outside the bases. Your team deposits and takes scrap, dirt, stone, ice and obsidian here (or at base) with B. Only 5 TNT blasts break it - and the shared pool survives."},
 	{"id": "gate", "name": "Team Gate", "kind": "gadget", "qty": 1, "cost": 7, "cat": "Construction",
 		"desc": "See-through door. Your team walks through; enemies need two TNT blasts. Free for Builders."},
 	{"id": "dynamite", "name": "Mobile TNT x2", "kind": "gadget", "qty": 2, "cost": 7, "cat": "Traps",
@@ -80,19 +82,35 @@ const SHOP := [
 		"desc": "T to pilot it, left mouse to ram the blade: 3 wide, 2 high. Has no engine - feed it conveyors."},
 	{"id": "ice", "name": "Ice x4", "kind": "mat", "qty": 4, "cost": 3, "cat": "Construction",
 		"desc": "Slippery block. Slot 3, place with right mouse."},
+	{"id": "jetpack", "name": "Jetpack", "kind": "gear", "qty": 1, "cost": 14, "cat": "Gear",
+		"desc": "Wear it in your gear slot and press J: a burst of thrust lifts you over trenches and up cliffs. 5 s to cool down after each burst. One piece of gear at a time."},
 ]
 
 const MATS := ["dirt", "stone", "ice", "obsidian"]
 const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "ice": Blocks.ICE, "obsidian": Blocks.OBSIDIAN}
 ## Gadgets that can go inside your own team gate (see Blocks.GATE_GADGETS).
 const GATE_GADGETS := ["ladder", "spring", "highway", "conveyor", "wallspring"]
-const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "gate", "teamblock", "cannon", "crane", "dozer"]
+const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "gate", "teamblock", "stash", "cannon", "crane", "dozer"]
 const GADGET_NAME := {
 	"ladder": "Ladder", "spring": "Spring", "highway": "Highway", "conveyor": "Conveyor",
 	"trap": "Mouse Trap", "tnt": "TNT", "gate": "Team Gate",
 	"dynamite": "Mobile TNT", "sticky": "Sticky Trap", "pitfall": "Pitfall", "wallspring": "Wall Spring",
-	"cannon": "Scrap Cannon", "crane": "Wrecking Crane", "dozer": "Bulldozer", "teamblock": "Team Block",
+	"cannon": "Scrap Cannon", "crane": "Wrecking Crane", "dozer": "Bulldozer", "teamblock": "Team Block", "stash": "Team Stash",
 }
+
+
+## Gear: one piece worn at a time in the gear slot (J uses it).
+const GEAR := {"jetpack": "Jetpack"}
+
+
+static func price(cls: Dictionary, item_id: String, free_mode: bool) -> int:
+	## What this class pays for an item (Builders get team gates cheap).
+	if free_mode:
+		return 0
+	var discount: Dictionary = cls.get("discount", {})
+	if discount.has(item_id):
+		return int(discount[item_id])
+	return int(shop_item(item_id).get("cost", 0))
 
 
 static func shop_item(id: String) -> Dictionary:
@@ -111,6 +129,7 @@ static func gadget_block(id: String, team: int, facing: Vector3) -> int:
 		"trap": return Blocks.TRAP_BLUE if team == 0 else Blocks.TRAP_RED
 		"gate": return Blocks.GATE_BLUE if team == 0 else Blocks.GATE_RED
 		"teamblock": return Blocks.TEAM_BLUE if team == 0 else Blocks.TEAM_RED
+		"stash": return Blocks.STASH_BLUE if team == 0 else Blocks.STASH_RED
 		"sticky": return Blocks.STICKY_BLUE if team == 0 else Blocks.STICKY_RED
 		"pitfall": return Blocks.PIT_BLUE if team == 0 else Blocks.PIT_RED
 		"wallspring": return Blocks.WALL_SPRING

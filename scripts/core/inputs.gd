@@ -31,6 +31,7 @@ const KEYS := {
 	"ability_2": [KEY_F, "Class ability 2"],
 	"cycle_gadget": [KEY_R, "Change Q slot gadget"],
 	"drop_cheese": [KEY_G, "Drop one cheese"],
+	"gear": [KEY_J, "Use gear (jetpack)"],
 	"workshop": [KEY_B, "Workshop"],
 	"inventory": [KEY_I, "Inventory"],
 	"respawn": [KEY_K, "Respawn at base (with Ctrl)"],

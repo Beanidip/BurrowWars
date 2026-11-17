@@ -161,6 +161,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_say(m.use_ability(rat, 0, aim))
 	elif event.is_action_pressed("ability_2"):
 		_say(m.use_ability(rat, 1, aim))
+	elif event.is_action_pressed("gear"):
+		if rat.gear == "":
+			_say("No gear yet - the workshop sells a Jetpack (Gear)")
+		elif rat.gear_cd > 0.0:
+			_say("%s recharging (%.0f s)" % [ClassDefs.GEAR.get(rat.gear, rat.gear), ceilf(rat.gear_cd)])
+		else:
+			rat.gear_pressed = true
 	elif event.is_action_pressed("drop_cheese"):
 		if not m.drop_cheese(rat, aim, forward()):
 			_say("You aren't carrying any cheese")

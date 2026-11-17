@@ -45,6 +45,9 @@ var chisel_cd := 0.0
 var throw_cd := 0.0
 var operating := -1               # uid of the siege machine this rat controls
 var jumps_left := 1
+var gear := ""                    # the one piece of gear worn ("" or a ClassDefs.GEAR id)
+var gear_cd := 0.0
+var gear_t := 0.0                 # jetpack thrust time left
 var lava_strikes := 0             # 1 after a first lava bounce; the next touch sends you home
 var lava_reset := 0.0             # seconds until a first strike is forgiven
 var lava_grace := 0.0             # no second strike while still bouncing out
@@ -66,6 +69,7 @@ var jump_pressed := false
 var jump_held := false
 var down_held := false
 var dash_pressed := false
+var gear_pressed := false
 
 # networking (see scripts/net): on the server, the peer that drives this rat
 # (0 = local player or bot); on a client, true for the one rat it controls
@@ -78,6 +82,7 @@ var net_kick := 0                 # server: bumped whenever the authority moved 
 var anim_action := ""
 var anim_action_t := 0.0
 var landed_on_spring := false
+var gear_fired := false           # this step started a jetpack burst
 
 var _world: VoxelWorld
 
@@ -164,6 +169,7 @@ func step_timers(dt: float) -> void:
 	anim_action_t = maxf(0.0, anim_action_t - dt)
 	ability_cd[0] = maxf(0.0, ability_cd[0] - dt)
 	ability_cd[1] = maxf(0.0, ability_cd[1] - dt)
+	gear_cd = maxf(0.0, gear_cd - dt)
 	# An enemy sticky trap underfoot keeps you slowed. This lives here, not in
 	# Match's hazards, because both the server and a remote player's own game
 	# run it: they then agree on `slow`, and the server has nothing to correct.
@@ -174,6 +180,7 @@ func step_timers(dt: float) -> void:
 
 func _step_motion(dt: float) -> void:
 	landed_on_spring = false
+	gear_fired = false
 
 	var w := wish
 	w.y = 0.0
@@ -184,6 +191,7 @@ func _step_motion(dt: float) -> void:
 		jump_pressed = false
 		jump_held = false
 		dash_pressed = false
+		gear_pressed = false
 
 	var body_id := _world.block_at(center())
 	in_water = body_id == Blocks.WATER
@@ -248,6 +256,18 @@ func _step_motion(dt: float) -> void:
 		vel.y = maxf(vel.y, -30.0)
 
 	# dash: a burst along the wish direction (or facing when standing still)
+	# gear: the jetpack lifts you for a moment, then needs to cool down
+	if gear_pressed and gear == "jetpack" and gear_cd <= 0.0:
+		gear_t = Config.JETPACK_TIME
+		gear_cd = Config.JETPACK_TIME + Config.JETPACK_COOLDOWN
+		gear_fired = true
+		play_action("jump", Config.JETPACK_TIME)
+	if gear_t > 0.0:
+		gear_t = maxf(0.0, gear_t - dt)
+		vel.y = maxf(vel.y, Config.JETPACK_LIFT)
+		on_ladder = false
+		jumps_left = 1
+
 	var dash_cost := Config.DASH_CARRY_COST if carried > 0 else Config.DASH_COST
 	if dash_pressed and dash_cd <= 0.0 and stamina >= dash_cost:
 		var dir := w.normalized() if w.length() > 0.1 else Vector3(-sin(yaw), 0, -cos(yaw))
@@ -266,12 +286,38 @@ func _step_motion(dt: float) -> void:
 	if Blocks.is_conveyor(floor_id):
 		motion += Blocks.conveyor_dir(floor_id) * 3.0 * dt
 	_move(motion)
+	_spring_sides()
 	_clear_edges()
+
+
+func _spring_sides() -> void:
+	## A spring flings anything standing right next to it (within a block of
+	## its sides), not only what lands on top: up, and away from the spring.
+	if not on_floor or flying:
+		return
+	var f := feet_cell()
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			if dx == 0 and dz == 0:
+				continue
+			var c := f + Vector3i(dx, 0, dz)
+			if _world.get_cell(c) != Blocks.SPRING:
+				continue
+			var away := position - (Vector3(c) + Vector3(0.5, 0.0, 0.5))
+			away.y = 0.0
+			away = away.normalized() if away.length() > 0.05 else Vector3(-dx, 0, -dz).normalized()
+			vel = away * 5.0 + Vector3(0, Config.SPRING_SIDE_SPEED, 0)
+			knock = 0.3
+			on_floor = false
+			jumps_left = 1
+			landed_on_spring = true
+			return
 
 
 func _clear_edges() -> void:
 	jump_pressed = false
 	dash_pressed = false
+	gear_pressed = false
 
 
 func _move(motion: Vector3) -> void:

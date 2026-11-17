@@ -7,7 +7,7 @@ None of these block finishing a match.
 | Third-person camera pulls right in inside one-block tunnels | Dig a tunnel and walk in | It becomes near first-person and your sprite hides. Works, but V (first person) is nicer underground. |
 | You cannot stand on a spring | Walk onto one | Any contact launches. Intended as a trap, awkward as furniture. |
 | Team score can pass the goal | Bank 3 cheese when 1 short | Cosmetic: "9 / 8". |
-| Bots never use abilities, gadgets or the workshop | Any match | On the cut list. They only dig, carry, bonk and bridge. |
+| Bots use few tools | Any match | They dig, carry, bonk, bridge, dash, buy and fire jetpacks; they never use abilities, gadgets, stashes or other workshop items. |
 | A badly stuck bot respawns | Rare; after about 24 s without moving | It leaves its cheese where it stood. |
 | Loaded Free Build maps forget who owned TNT | F9 after placing TNT | Hitting it still lights it; remote detonate works for any charge in Free Build. |
 | First editor open takes a moment | Open the project | Godot imports about 250 sprites and sounds once. |

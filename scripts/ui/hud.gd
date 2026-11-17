@@ -25,6 +25,9 @@ var _slots: Array[PanelContainer] = []
 var _slot_counts: Array[Label] = []
 var _tool_slots: Array[PanelContainer] = []
 var _q_name: Label
+var _gear_name: Label
+var _gear_state: Label
+var _stash_labels: Dictionary = {}   # resource -> Label in the stash section
 var _q_count: Label
 var _status: Label
 var _cheese_row: HBoxContainer
@@ -156,6 +159,18 @@ func _build_bottom() -> void:
 	qv.add_child(_q_name)
 	qv.add_child(_q_count)
 	bar.add_child(q)
+	var gear := PanelContainer.new()
+	gear.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.BRASS, 8, 2, 6))
+	gear.custom_minimum_size = Vector2(92, 62)
+	var gv := VBoxContainer.new()
+	gv.add_theme_constant_override("separation", 0)
+	gear.add_child(gv)
+	gv.add_child(UiKit.label("%s  gear" % Inputs.key_name("gear"), 12, UiKit.BRASS))
+	_gear_name = UiKit.label("-", 15)
+	_gear_state = UiKit.label("", 13, UiKit.PAPER.darkened(0.15))
+	gv.add_child(_gear_name)
+	gv.add_child(_gear_state)
+	bar.add_child(gear)
 	for i in ClassDefs.MATS.size() + 1:
 		var paint := i == ClassDefs.MATS.size()
 		var slot := PanelContainer.new()
@@ -267,6 +282,12 @@ func _process(_delta: float) -> void:
 		_q_name.text = "empty"
 		_q_count.text = "buy at workshop"
 	_status.text = "%s  -  %s team\nScrap: %d" % [rat.cls["name"], Match.TEAM_NAMES[rat.team], rat.scrap]
+	if rat.gear == "":
+		_gear_name.text = "none"
+		_gear_state.text = "buy at workshop"
+	else:
+		_gear_name.text = String(ClassDefs.GEAR.get(rat.gear, rat.gear))
+		_gear_state.text = ("%.0f s" % ceilf(rat.gear_cd)) if rat.gear_cd > 0.0 else "ready"
 	_sync_cheese()
 	var lines := PackedStringArray()
 	var keys := ["ability_1", "ability_2"]
@@ -277,7 +298,7 @@ func _process(_delta: float) -> void:
 	_abilities.text = "\n".join(lines)
 	var shop := "[%s] Workshop" % Inputs.key_name("workshop")
 	if not m.can_shop(rat):
-		shop += " (at base)"
+		shop = "[%s] Team stash" % Inputs.key_name("workshop") if m.can_use_stash(rat) else shop + " (at base)"
 	_hint.text = "%s   [%s] Pack   [%s] Drop cheese\n[%s] Use machine   [%s] Camera   [Esc] Menu" % [shop, Inputs.key_name("inventory"),
 		Inputs.key_name("drop_cheese"), Inputs.key_name("interact"), Inputs.key_name("camera_toggle")]
 	_target.text = ""
@@ -306,8 +327,11 @@ func _process(_delta: float) -> void:
 	_update_markers()
 	for ol in _owned_labels:
 		var it: Dictionary = ol.get_meta("item")
-		var have := int(rat.gadgets.get(it["id"], 0)) if it["kind"] == "gadget" else int(rat.mats.get(it["id"], 0))
-		ol.text = "%s      owned: %s" % [it["name"], "unlimited" if m.free_mode else str(have)]
+		ol.text = "%s      owned: %s" % [it["name"], "unlimited" if m.free_mode else str(_owned(it))]
+	var bank: Dictionary = m.team_bank[rat.team]
+	for key: String in _stash_labels:
+		var have := rat.scrap if key == "scrap" else int(rat.mats.get(key, 0))
+		(_stash_labels[key] as Label).text = "%s:  you %d   |   stash %d" % [key.capitalize(), have, int(bank.get(key, 0))]
 	if _dialog_scrap != null:
 		_dialog_scrap.text = "Your scrap: %d      Scrap value x%.2f" % [rat.scrap, m.multiplier()]
 
@@ -420,8 +444,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _toggle(kind: String) -> void:
 	if _dialog_kind == kind:
 		close_dialog()
-	elif kind == "workshop" and not m.can_shop(rat):
-		_push_toast("The workshop is at your base. (Builders can shop anywhere.)", UiKit.PAPER)
+	elif kind == "workshop" and not m.can_shop(rat) and not m.can_use_stash(rat):
+		_push_toast("The workshop is at your base (Builders can shop anywhere); your team stash works beside any stash you placed.", UiKit.PAPER)
 	else:
 		open_dialog(kind)
 
@@ -434,6 +458,7 @@ func close_dialog() -> void:
 	_dialog_notice = null
 	_dialog_scrap = null
 	_owned_labels.clear()
+	_stash_labels.clear()
 	ctl.ui_open = false
 	get_tree().paused = false
 	if not m.over:
@@ -476,31 +501,46 @@ func _dialog_header(v: VBoxContainer, title: String, close_key: String) -> void:
 
 
 func _fill_workshop(v: VBoxContainer) -> void:
-	_dialog_header(v, "The Scrapyard Workshop", Inputs.key_name("workshop"))
+	var shopping := m.can_shop(rat)
+	_dialog_header(v, "The Scrapyard Workshop" if shopping else "Team Stash", Inputs.key_name("workshop"))
 	_dialog_scrap = UiKit.label("", 17)
 	v.add_child(_dialog_scrap)
-	_dialog_notice = UiKit.label("Mine orange scrap blocks to earn scrap. Banked cheese makes it worth more.", 14, UiKit.PAPER.darkened(0.15))
+	_dialog_notice = UiKit.label("Mine orange scrap blocks to earn scrap. Banked cheese makes it worth more." if shopping \
+		else "Your team's shared pool. Anyone on your team can take from it here or at base.", 14, UiKit.PAPER.darkened(0.15))
 	v.add_child(_dialog_notice)
 	var sc := UiKit.scroll(330)
 	var list: VBoxContainer = sc[1]
 	v.add_child(sc[0])
+	_stash_labels.clear()
+	if m.can_use_stash(rat):
+		list.add_child(UiKit.label("Team stash  (shared with your team; cheese can't go in)", 18, UiKit.BRASS))
+		for key: String in Config.STASH_KEYS:
+			var lbl := UiKit.label("", 16)
+			_stash_labels[key] = lbl
+			var btns := HBoxContainer.new()
+			btns.add_theme_constant_override("separation", 4)
+			btns.add_child(UiKit.button("Put 10", _stash.bind(key, 10), Vector2(80, 34)))
+			btns.add_child(UiKit.button("Put all", _stash.bind(key, 9999), Vector2(80, 34)))
+			btns.add_child(UiKit.button("Take 10", _stash.bind(key, -10), Vector2(84, 34)))
+			btns.add_child(UiKit.button("Take all", _stash.bind(key, -9999), Vector2(88, 34)))
+			list.add_child(UiKit.row(lbl, btns))
 	var last_cat := ""
-	for item: Dictionary in ClassDefs.SHOP:
+	for item: Dictionary in (ClassDefs.SHOP if shopping else []):
 		if item["cat"] != last_cat:
 			last_cat = item["cat"]
 			list.add_child(UiKit.label(last_cat, 18, UiKit.BRASS))
 		var text := VBoxContainer.new()
 		text.add_theme_constant_override("separation", 0)
-		var own := int(rat.gadgets.get(item["id"], 0)) if item["kind"] == "gadget" else int(rat.mats.get(item["id"], 0))
+		var own := _owned(item)
 		var own_label := UiKit.label("%s      owned: %d" % [item["name"], own], 17)
 		own_label.set_meta("item", item)
 		_owned_labels.append(own_label)
 		text.add_child(own_label)
 		text.add_child(UiKit.wrapped(item["desc"], 13, UiKit.PAPER.darkened(0.2)))
-		var gratis: bool = m.free_mode or (rat.cls.get("free_items", []) as Array).has(item["id"])
-		var price := "free" if gratis else "%d scrap" % int(item["cost"])
+		var cost := ClassDefs.price(rat.cls, String(item["id"]), m.free_mode)
+		var price := "free" if cost == 0 else "%d scrap" % cost
 		list.add_child(UiKit.row(text, UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))))
-	if not m.free_mode:
+	if not m.free_mode and shopping:
 		v.add_child(UiKit.label("Change class (at base, 15 s cooldown)", 15, UiKit.BRASS))
 		var classes := HBoxContainer.new()
 		classes.add_theme_constant_override("separation", 6)
@@ -509,6 +549,19 @@ func _fill_workshop(v: VBoxContainer) -> void:
 			b.tooltip_text = ClassDefs.CLASSES[id]["blurb"]
 			classes.add_child(b)
 		v.add_child(classes)
+
+
+func _owned(item: Dictionary) -> int:
+	match String(item["kind"]):
+		"gadget": return int(rat.gadgets.get(item["id"], 0))
+		"gear": return 1 if rat.gear == item["id"] else 0
+	return int(rat.mats.get(item["id"], 0))
+
+
+func _stash(key: String, amount: int) -> void:
+	var err := m.stash_move(rat, key, amount)
+	if err != "":
+		_say(err, true)
 
 
 func _buy(item_id: String) -> void:

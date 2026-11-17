@@ -32,7 +32,8 @@ See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 | Input | Action | Input | Action |
 |---|---|---|---|
 | WASD / mouse | Move / look | Q | Place equipped gadget |
-| Space | Jump, double jump, climb, swim up | R | Change the Q slot gadget |
+| Space | Jump, double jump, climb, swim up | R / wheel | Change the Q slot gadget |
+| J | Use gear (Jetpack) | B | Workshop / Team stash |
 | Shift | Dash | E / F | Class abilities |
 | Left mouse | Dig / bonk | B | Workshop (at base; Builder anywhere) |
 | Right mouse | Place selected material | I | Inventory |

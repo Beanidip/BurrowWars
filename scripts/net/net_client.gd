@@ -18,7 +18,7 @@ var _frame := 0
 var _fire_t := 0
 var _aim_t := 0
 var _sent_action_t := 0.0
-var _spring := false
+var _fx_notes: Dictionary = {}   # effects our own rat caused since the last report
 
 
 func _init(p_match: Match, info: Dictionary) -> void:
@@ -66,11 +66,10 @@ func act(method: String, args: Array) -> String:
 	return ""
 
 
-func note_spring() -> void:
-	## Our rat bounced off a spring or wall spring; tell the server with the
-	## next movement report so everyone hears it.
-	_spring = true
-
+func note_fx(kind: String) -> void:
+	## Our rat bounced off a spring or fired its jetpack; the server plays the
+	## effect for everyone when our next movement report arrives.
+	_fx_notes[kind] = true
 
 func aim_machine(yaw: float, pitch: float) -> void:
 	var now := Time.get_ticks_msec()
@@ -91,9 +90,9 @@ func _physics_process(_delta: float) -> void:
 	if r.anim_action_t > _sent_action_t + 0.01:
 		pkt["a"] = r.anim_action
 	_sent_action_t = r.anim_action_t
-	if _spring:
-		pkt["sp"] = true
-		_spring = false
+	if not _fx_notes.is_empty():
+		pkt["fx"] = _fx_notes.keys()
+		_fx_notes.clear()
 	Net._c_input.rpc_id(1, pkt)
 
 
@@ -280,6 +279,9 @@ func on_private(p: Dictionary) -> void:
 	r.operating = int(p.get("op", r.operating))
 	r.carried = int(p.get("ca", r.carried))
 	r.raid_t = float(p.get("raid", r.raid_t))
+	r.gear = String(p.get("gear", r.gear))
+	if p.get("bank") is Dictionary:
+		m.team_bank[r.team] = p["bank"]
 
 
 func on_kick(k: Dictionary) -> void:

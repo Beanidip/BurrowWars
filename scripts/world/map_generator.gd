@@ -50,10 +50,18 @@ static func base_zone(team: int) -> AABB:
 
 
 static func in_any_base(cell: Vector3i, margin := 0.5) -> bool:
-	## True when the centre of `cell` is inside either team's base (grown by
-	## `margin`). The single rule for "bases are protected".
+	## True when the centre of `cell` is inside either team's base (grown
+	## sideways by `margin`, never downward). The single rule for "bases are
+	## protected". The ground beside a base stays buildable, so a moat dug
+	## around a base can always be filled back in.
 	var p := Vector3(cell) + Vector3(0.5, 0.5, 0.5)
-	return base_zone(0).grow(margin).has_point(p) or base_zone(1).grow(margin).has_point(p)
+	for t in 2:
+		var z := base_zone(t)
+		if p.y >= z.position.y and p.y <= z.end.y + margin \
+				and p.x >= z.position.x - margin and p.x <= z.end.x + margin \
+				and p.z >= z.position.z - margin and p.z <= z.end.z + margin:
+			return true
+	return false
 
 
 static func spawn_point(team: int, slot := 0) -> Vector3:

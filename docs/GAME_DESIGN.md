@@ -59,6 +59,18 @@ the map has some; obsidian vaults, lava basins, ruins (one is a scrap lab) and o
 are placed by the seed. A brick sewer runs from just outside each base to the mushroom chapel
 at the centre. The ground is flat for about 15 blocks around each base.
 
+## Stash, gear and traps
+
+- **Team Stash** (workshop, 12 scrap, up to 2): place it outside the bases. Press B beside it
+  (or at base) to put scrap, dirt, stone, ice and obsidian into your team's shared pool or take
+  them out. Cheese never goes in. Only TNT hurts it: 5 blasts break it, and the pool survives.
+- **Gear slot** (J): one piece of gear at a time. The Jetpack (14 scrap) lifts you for 1.1 s, then
+  needs 5 s to cool down. Bots buy one when they can afford it.
+- **Placed traps** (mouse trap, sticky, pitfall, wall spring) take 5 digs for the team that
+  placed them and 15 for anyone else (blasts count as anyone else).
+- **Springs** fling anything within a block of their sides, as well as what lands on them.
+- **Team gates** cost 7 scrap; Builders pay 3.
+
 ## Hazards and safety valves
 
 Carrying cheese weakens your dash (50% / 40% / 30% of the normal burst with 1 / 2 / 3+ cheese) and makes it cost 40 stamina instead of 25, on top of the carry slowdown (`Config.DASH_CARRY`, `Config.DASH_CARRY_COST`). Enemy name tags only show while you can see that rat.

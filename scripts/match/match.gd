@@ -37,6 +37,12 @@ var pickups: Array[Pickup] = []
 var markers: Array[Dictionary] = []
 var tnt: Dictionary = {}        # Vector3i -> {"owner": rat id, "fuse": seconds or -1}
 var gate_damage: Dictionary = {}
+var trap_owner: Dictionary = {}      # Vector3i -> team that placed the trap there
+var stash_hits: Dictionary = {}      # Vector3i -> TNT blasts a team stash has taken
+## Each team's shared pool (scrap and building materials), reached at any of
+## the team's stashes or at base. It survives its stashes being blown up.
+var team_bank: Array[Dictionary] = [{"scrap": 0, "dirt": 0, "stone": 0, "ice": 0, "obsidian": 0},
+	{"scrap": 0, "dirt": 0, "stone": 0, "ice": 0, "obsidian": 0}]
 var lava: LiquidFlow
 var water: LiquidFlow
 var over := false
@@ -107,6 +113,8 @@ func _on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 	if Blocks.SOLID[new_id] == 0 and world.get_cell(above) == Blocks.HIGHWAY:
 		world.set_block(above, Blocks.AIR)
 	gate_damage.erase(cell)
+	trap_owner.erase(cell)
+	stash_hits.erase(cell)
 
 
 func _find_blocks(id: int) -> Array[Vector3i]:
@@ -215,8 +223,11 @@ func step(dt: float) -> void:
 					r.jump_pressed = false
 					r.dash_pressed = false
 				r.step(dt)
-				if r.landed_on_spring and remote != null:
-					remote.note_spring()   # the server plays it for everyone
+				if remote != null:   # the server plays these for everyone
+					if r.landed_on_spring:
+						remote.note_fx("spring")
+					if r.gear_fired:
+						remote.note_fx("jetpack")
 		return
 	for r in rats:
 		if r.net_peer != 0:
@@ -235,6 +246,8 @@ func step(dt: float) -> void:
 			r.step(dt)
 			if r.landed_on_spring:
 				fx.emit("spring", r.position, null)
+			if r.gear_fired:
+				fx.emit("jetpack", r.position, null)
 		_check_rat_hazards(r, dt)
 		_check_raid(r, dt)
 	_step_pickups(dt)
@@ -450,7 +463,7 @@ func _damage(rat: Rat, cell: Vector3i, power: int, quiet := false) -> bool:
 	## Shared excavation rule for paws, blasts, cannonballs, cranes and blades.
 	## Returns true when the block broke.
 	var id := world.get_cell(cell)
-	var hits := int(Blocks.HITS[id])
+	var hits := hits_for(rat, cell, id)
 	if hits <= 0 or power <= 0 or not VoxelWorld.in_bounds(cell):
 		return false
 	var layer := world.layered_gate(cell)
@@ -464,6 +477,24 @@ func _damage(rat: Rat, cell: Vector3i, power: int, quiet := false) -> bool:
 		return false
 	_break(rat, cell, id, quiet)
 	return true
+
+
+func _spring_beside(cell: Vector3i) -> Variant:
+	## Centre of a spring in one of the 8 cells around `cell` (same level), or null.
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			if (dx != 0 or dz != 0) and world.get_cell(cell + Vector3i(dx, 0, dz)) == Blocks.SPRING:
+				return Vector3(cell + Vector3i(dx, 0, dz)) + Vector3(0.5, 0.0, 0.5)
+	return null
+
+
+func hits_for(rat: Rat, cell: Vector3i, id: int) -> int:
+	## Dig hits a block takes from this rat (null = a blast or machine). Placed
+	## traps are quick for their own team to clear and tough for everyone else.
+	if Blocks.is_placed_trap(id):
+		var owner := int(trap_owner.get(cell, Blocks.trap_team(id)))
+		return Config.TRAP_HITS_OWN if rat != null and owner >= 0 and rat.team == owner else Config.TRAP_HITS_ENEMY
+	return int(Blocks.HITS[id])
 
 
 func _break(rat: Rat, cell: Vector3i, id: int, quiet := false) -> void:
@@ -671,6 +702,8 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 	world.set_block(cell, block)
 	if block == Blocks.TNT:
 		tnt[cell] = {"owner": rat.id, "fuse": -1.0}
+	elif Blocks.is_placed_trap(block):
+		trap_owner[cell] = rat.team
 	elif Blocks.is_machine(block):
 		siege.register(cell, block, rat)
 	rat.play_action("build", 0.3)
@@ -1078,6 +1111,13 @@ func _step_pickups(dt: float) -> void:
 					var push := Blocks.conveyor_dir(below) * 3.0 * dt
 					np.x += push.x
 					np.z += push.z
+				# a spring right beside it flings it up and away, like it does rats
+				var beside: Variant = _spring_beside(Vector3i(floori(p.pos.x), floori(np.y), floori(p.pos.z)))
+				if beside != null:
+					var away := Vector3(p.pos.x, 0, p.pos.z) - Vector3((beside as Vector3).x, 0, (beside as Vector3).z)
+					away = away.normalized() if away.length() > 0.05 else Vector3(1, 0, 0)
+					p.vel = away * 4.0 + Vector3(0, Config.SPRING_SIDE_SPEED * 0.9, 0)
+					fx.emit("spring", p.pos, null)
 			if world.solid_point(Vector3(np.x, np.y, p.pos.z)):
 				if world.block_at(Vector3(np.x, np.y, p.pos.z)) == Blocks.WALL_SPRING:
 					p.vel.x = -signf(np.x - p.pos.x) * 9.0   # wall springs bat it back
@@ -1165,6 +1205,8 @@ func blast(origin: Vector3, radius: float, power: float) -> void:
 					continue
 				if id == Blocks.TNT:
 					light_tnt(c, 0.25)   # chain reaction
+				elif Blocks.is_stash(id):
+					hit_stash(c)
 				elif world.gate_at(c) >= 0:
 					hit_gate(c, (Config.GATE_HP + 1) / 2)
 				else:
@@ -1331,6 +1373,71 @@ func can_shop(rat: Rat) -> bool:
 	return free_mode or bool(rat.cls["remote_shop"]) or in_base(rat)
 
 
+# ---------------------------------------------------------------- team stash
+
+func near_stash(rat: Rat) -> bool:
+	## Standing within reach of one of your team's stashes.
+	var f := rat.feet_cell()
+	var r := ceili(Config.STASH_REACH)
+	var own := Blocks.STASH_BLUE if rat.team == 0 else Blocks.STASH_RED
+	for dy in range(-r, r + 1):
+		for dz in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var c := f + Vector3i(dx, dy, dz)
+				if world.get_cell(c) == own and (Vector3(c) + Vector3(0.5, 0.5, 0.5)).distance_to(rat.center()) <= Config.STASH_REACH + 0.5:
+					return true
+	return false
+
+
+func can_use_stash(rat: Rat) -> bool:
+	return not free_mode and (in_base(rat) or near_stash(rat))
+
+
+func stash_move(rat: Rat, key: String, amount: int) -> String:
+	## Positive amount: put that much into the team pool. Negative: take it out.
+	## Only scrap and building materials; cheese never goes in a stash.
+	if remote != null:
+		return remote.act("stash_move", [key, amount])
+	if not Config.STASH_KEYS.has(key) or amount == 0:
+		return "Stashes hold scrap, dirt, stone, ice and obsidian"
+	if over:
+		return "Match is over"
+	if not can_use_stash(rat):
+		return "Stand at your base or next to one of your team stashes"
+	var bank: Dictionary = team_bank[rat.team]
+	var have := rat.scrap if key == "scrap" else int(rat.mats.get(key, 0))
+	var n := amount
+	if n > 0:
+		n = mini(n, have)
+		if n <= 0:
+			return "You have no %s to put in" % key
+	else:
+		n = -mini(-n, int(bank[key]))
+		if key != "scrap":
+			n = -mini(-n, 99 - have)
+		if n >= 0:
+			return "Nothing to take" if int(bank[key]) == 0 else "Your pack is full of %s" % key
+	bank[key] = int(bank[key]) + n
+	if key == "scrap":
+		rat.scrap -= n
+	else:
+		rat.mats[key] = have - n
+	fx.emit("buy", rat.position, "stash")
+	return ""
+
+
+func hit_stash(cell: Vector3i) -> void:
+	## Only explosions hurt a stash; enough of them break it. The pool is kept.
+	var id := world.get_cell(cell)
+	stash_hits[cell] = int(stash_hits.get(cell, 0)) + 1
+	if int(stash_hits[cell]) < Config.STASH_BLASTS:
+		fx.emit("hit", Vector3(cell), {"id": id, "ratio": float(stash_hits[cell]) / float(Config.STASH_BLASTS)})
+		return
+	world.set_block(cell, Blocks.AIR)
+	fx.emit("break", Vector3(cell), id)
+	toast.emit("A %s team stash was blown apart! (The team's pool is safe.)" % TEAM_NAMES[Blocks.stash_team(id)], -1)
+
+
 func try_buy(rat: Rat, item_id: String) -> String:
 	if remote != null:
 		return remote.act("try_buy", [item_id])
@@ -1341,10 +1448,18 @@ func try_buy(rat: Rat, item_id: String) -> String:
 		return "Match is over"
 	if not can_shop(rat):
 		return "Return to your base to use the workshop"
-	var cost := 0 if (free_mode or (rat.cls.get("free_items", []) as Array).has(item_id)) else int(item["cost"])
+	var cost := ClassDefs.price(rat.cls, item_id, free_mode)
 	if rat.scrap < cost:
 		return "Need %d scrap (you have %d)" % [cost, rat.scrap]
 	var qty := int(item["qty"])
+	if item["kind"] == "gear":
+		if rat.gear == item_id:
+			return "You are already wearing the %s" % item["name"]
+		rat.scrap -= cost
+		rat.gear = item_id     # one gear slot: a new piece replaces the old one
+		rat.gear_cd = 0.0
+		fx.emit("buy", rat.position, item_id)
+		return ""
 	if item["kind"] == "gadget":
 		var have := int(rat.gadgets.get(item_id, 0))
 		var cap := int(item.get("max", Config.STACK_MAX))

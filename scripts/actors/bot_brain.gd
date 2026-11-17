@@ -44,6 +44,7 @@ func think(dt: float) -> void:
 		return
 	rat.mats["dirt"] = maxi(int(rat.mats["dirt"]), 12)  # bots always have stair dirt
 	_try_bonk()
+	_shop()
 	# skill knob: lower-skill bots pause to celebrate every pickup and deposit
 	if rat.carried != last_carried:
 		last_carried = rat.carried
@@ -94,10 +95,13 @@ func _retarget() -> void:
 		var door := Vector3(clampf(gate.x, zone.position.x + 0.5, zone.end.x - 0.5), zone.position.y,
 			clampf(gate.z, zone.position.z + 0.5, zone.end.z - 0.5))
 		var flat := Vector2(rat.position.x - gate.x, rat.position.z - gate.z).length()
+		var to_door := Vector2(rat.position.x - door.x, rat.position.z - door.z).length()
 		if not final_run and flat < 1.5 and rat.position.y > MapGenerator.GROUND - 0.5:
 			final_run = true
-		elif final_run and rat.position.y < MapGenerator.GROUND - 1.5:
-			final_run = false   # fell into a hole: regroup at the gate
+		elif final_run and rat.position.y < MapGenerator.GROUND - 1.5 and to_door > 5.0:
+			final_run = false   # fell into a hole far from home: regroup at the gate
+		# (fallen in close to the door, e.g. a moat dug around the base: keep
+		# heading for the door and build, jump or jet up out of it)
 		target = door if final_run else gate
 		return
 	final_run = false
@@ -132,6 +136,19 @@ func _pick_cheese() -> Variant:
 	return best
 
 
+func _shop() -> void:
+	## Bots buy gear too: a jetpack, once they can afford it at base.
+	if rat.gear == "" and m.can_shop(rat) and not m.free_mode \
+			and rat.scrap >= ClassDefs.price(rat.cls, "jetpack", false):
+		m.try_buy(rat, "jetpack")
+
+
+func _jet_if_needed(dy: float) -> void:
+	## Fire the jetpack when the way on is well above us.
+	if rat.gear == "jetpack" and rat.gear_cd <= 0.0 and dy > 1.4:
+		rat.gear_pressed = true
+
+
 func _try_bonk() -> void:
 	if rat.bonk_cd > 0.0:
 		return
@@ -164,6 +181,8 @@ func _navigate() -> void:
 	var ax := absf(d.x)
 	var az := absf(d.z)
 	# close underneath (or on top of) the goal: go straight up or down
+	if mode == "home" or (ax < 3.0 and az < 3.0):
+		_jet_if_needed(d.y)
 	if (ax < 0.45 and az < 0.45) or (d.y > 0.6 and ax < 2.5 and az < 2.5 and mode == "home"):
 		_vertical(c, d.y)
 		return
@@ -238,8 +257,16 @@ func _step_level(dir: Vector3i) -> void:
 		return
 	var below := ahead + DOWN
 	var chasm := not _solid(below) and not _solid(below + DOWN) and not _solid(below + DOWN * 2)
-	if _is_lava(below) or (chasm and rat.on_floor):
-		m.try_place_mat(rat, below, "dirt")   # bridge hazards and deep drops
+	# carrying cheese home, any gap is worth bridging rather than dropping into
+	var gap := mode == "home" and not _solid(below) and rat.feet_cell().y >= MapGenerator.GROUND - 1
+	if _is_lava(below) or ((chasm or gap) and rat.on_floor):
+		m.try_place_mat(rat, below, "dirt")   # bridge hazards, holes and deep drops
+	# a long clear run: dash (bots manage stamina like anyone)
+	var dist := Vector2(target.x - rat.position.x, target.z - rat.position.z).length()
+	var cost := Config.DASH_CARRY_COST if rat.carried > 0 else Config.DASH_COST
+	if rat.on_floor and dist > 10.0 and rat.dash_cd <= 0.0 and rat.stamina >= cost + rat.max_stamina() * 0.4 \
+			and _solid(below) and not _solid(ahead + UP):
+		rat.dash_pressed = true
 	_walk(dir)
 
 

@@ -27,7 +27,8 @@ var _won := -1
 var _frame := 0
 var _last_input: Dictionary = {}   # peer id -> msec of the last accepted input
 var _dirty_private: Dictionary = {}
-var _spring_t: Dictionary = {}     # peer id -> msec of the last spring effect they reported
+var _fx_t: Dictionary = {}         # "peer:kind" -> msec of the last effect that peer reported
+const CLIENT_FX := ["spring", "jetpack"]
 
 
 func _ready() -> void:
@@ -104,7 +105,8 @@ func on_peer_left(id: int) -> void:
 	var rat: Rat = seats.get(id)
 	seats.erase(id)
 	_last_input.erase(id)
-	_spring_t.erase(id)
+	for k: String in CLIENT_FX:
+		_fx_t.erase("%d:%s" % [id, k])
 	if rat == null or not is_instance_valid(rat):
 		return
 	var who := rat.display_name
@@ -177,9 +179,12 @@ func on_input(id: int, pkt: Dictionary) -> void:
 	rat.stamina = clampf(float(pkt.get("s", rat.stamina)), 0.0, rat.max_stamina())
 	if pkt.get("a") is String and String(pkt["a"]) != "":
 		rat.play_action(String(pkt["a"]), 0.3)
-	if pkt.get("sp") == true and now - int(_spring_t.get(id, 0)) > 150:
-		_spring_t[id] = now          # at most a few per second, whatever a client claims
-		m.fx.emit("spring", rat.position, null)
+	if pkt.get("fx") is Array:
+		for kind: Variant in pkt["fx"]:
+			var key := "%d:%s" % [id, kind]
+			if kind is String and CLIENT_FX.has(kind) and now - int(_fx_t.get(key, 0)) > 150:
+				_fx_t[key] = now      # at most a few per second, whatever a client claims
+				m.fx.emit(String(kind), rat.position, null)
 	rat.net_pre = Match.net_state(rat)
 
 
@@ -290,6 +295,9 @@ func on_act(id: int, method: String, a: Array) -> void:
 		"try_change_class":
 			if _ok(a, [TYPE_STRING]):
 				res = m.try_change_class(rat, a[0])
+		"stash_move":
+			if _ok(a, [TYPE_STRING, TYPE_INT]):
+				res = m.stash_move(rat, a[0], clampi(a[1], -9999, 9999))
 		"set_equipped":
 			if _ok(a, [TYPE_STRING]):
 				m.set_equipped(rat, a[0])
@@ -394,4 +402,5 @@ func _snapshot() -> Dictionary:
 
 func _private(r: Rat) -> Dictionary:
 	return {"mats": r.mats, "gadgets": r.gadgets, "scrap": r.scrap, "eq": r.equipped, "mb": r.micro_bank,
-		"acd": r.ability_cd, "ccd": r.class_cd, "cls": r.class_id, "op": r.operating, "ca": r.carried, "raid": r.raid_t}
+		"acd": r.ability_cd, "ccd": r.class_cd, "cls": r.class_id, "op": r.operating, "ca": r.carried, "raid": r.raid_t,
+		"gear": r.gear, "bank": m.team_bank[r.team]}

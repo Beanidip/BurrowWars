@@ -10,7 +10,8 @@ enum {
 	STICKY_BLUE, STICKY_RED, PIT_BLUE, PIT_RED, WALL_SPRING, CANNON, CRANE, DOZER, TEAM_BLUE, TEAM_RED,
 	PAINT_0, PAINT_1, PAINT_2, PAINT_3, PAINT_4, PAINT_5, PAINT_6, PAINT_7, PAINT_8, PAINT_9, PAINT_10, PAINT_11,
 	PAINT_12, PAINT_13, PAINT_14, PAINT_15, PAINT_16, PAINT_17, PAINT_18, PAINT_19, PAINT_20, PAINT_21, PAINT_22, PAINT_23,
-	PAINT_24, PAINT_25, PAINT_26, PAINT_27, PAINT_28, PAINT_29, PAINT_30, PAINT_31, PAINT_32, PAINT_33, PAINT_34, PAINT_35, COUNT
+	PAINT_24, PAINT_25, PAINT_26, PAINT_27, PAINT_28, PAINT_29, PAINT_30, PAINT_31, PAINT_32, PAINT_33, PAINT_34, PAINT_35,
+	STASH_BLUE, STASH_RED, COUNT
 }
 
 const OBSIDIAN_HITS := 12   # balance knob: ordinary dig hits to break obsidian
@@ -100,6 +101,10 @@ const DEFS := [
 	["Blue Glass", 2, Color(0.30, 0.45, 1.00, 0.42), true, false, "mat:dirt"],
 	["Purple Glass", 2, Color(0.65, 0.40, 0.95, 0.42), true, false, "mat:dirt"],
 	["Pink Glass", 2, Color(1.00, 0.55, 0.80, 0.40), true, false, "mat:dirt"],
+	# Team stash: a placeable door into the team's shared resource pool. Only
+	# TNT blasts break it (Config.STASH_BLASTS); the pool itself is never lost.
+	["Team Stash", 0, Color(0.30, 0.48, 0.92), true, true, ""],
+	["Team Stash", 0, Color(0.90, 0.32, 0.28), true, true, ""],
 ]
 
 const PALETTE_SIZE := 36
@@ -199,6 +204,28 @@ static func paint_color(k: int) -> Color:
 	return COLOR[PAINT_0 + clampi(k, 0, PALETTE_SIZE - 1)]
 
 
+static func is_stash(id: int) -> bool:
+	return id == STASH_BLUE or id == STASH_RED
+
+
+static func stash_team(id: int) -> int:
+	return 0 if id == STASH_BLUE else 1
+
+
+static func is_placed_trap(id: int) -> bool:
+	## Traps a player places: tough for the other team, quick for their own.
+	return is_trap(id) or is_sticky(id) or is_pit(id) or id == WALL_SPRING
+
+
+static func trap_team(id: int) -> int:
+	## The team a trap block belongs to by its colour, or -1 (wall springs).
+	if id == TRAP_BLUE or id == STICKY_BLUE or id == PIT_BLUE:
+		return 0
+	if id == TRAP_RED or id == STICKY_RED or id == PIT_RED:
+		return 1
+	return -1
+
+
 static func is_team_block(id: int) -> bool:
 	return id == TEAM_BLUE or id == TEAM_RED
 
@@ -229,5 +256,6 @@ static func rotate180(id: int) -> int:
 		STICKY_BLUE: return STICKY_RED
 		PIT_BLUE: return PIT_RED
 		TEAM_BLUE: return TEAM_RED
+		STASH_BLUE: return STASH_RED
 	return id
 

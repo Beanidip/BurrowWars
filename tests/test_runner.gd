@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -1087,13 +1087,18 @@ func test_team_block_and_builder() -> void:
 	s.position = MapGenerator.spawn_point(0)
 	s.scrap = 10
 	check(m.try_buy(s, "teamblock") == "" and int(s.gadgets["teamblock"]) == 4 and s.scrap == 6, "any class can buy team blocks in the workshop (4 for 4 scrap)")
-	# free gates
-	var scrap := b.scrap
+	# gates cost scrap; Builders pay less than anyone else
+	b.scrap = 10
 	check(int(b.gadgets["gate"]) == 4, "Builder starts with team gates")
-	check(m.try_buy(b, "gate") == "" and b.scrap == scrap and int(b.gadgets["gate"]) == 5, "Builder gets team gates free at the workshop")
+	var gate_cost := int(ClassDefs.shop_item("gate")["cost"])
+	var builder_cost := ClassDefs.price(b.cls, "gate", false)
+	check(builder_cost > 0 and builder_cost < gate_cost, "Builders pay for gates, but less (%d vs %d scrap)" % [builder_cost, gate_cost])
+	check(m.try_buy(b, "gate") == "" and b.scrap == 10 - builder_cost and int(b.gadgets["gate"]) == 5, "a Builder's gate costs %d scrap" % builder_cost)
 	foe.position = MapGenerator.spawn_point(1)
-	foe.scrap = 3
-	check(m.try_buy(foe, "gate") != "" and foe.scrap == 3, "other classes still pay for gates")
+	foe.scrap = gate_cost - 1
+	check(m.try_buy(foe, "gate") != "" and foe.scrap == gate_cost - 1, "other classes pay the full %d" % gate_cost)
+	foe.scrap = gate_cost
+	check(m.try_buy(foe, "gate") == "" and foe.scrap == 0, "and can buy one with it")
 	check((b.cls["abilities"] as Array).size() == 1 and b.cls["abilities"][0][0] == "patch", "Builder keeps Patch; Team Block moved to the Q slot (no F ability)")
 	end(m)
 
@@ -1221,7 +1226,7 @@ func test_review_fixes() -> void:
 	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void:
 		if kind == "spring":
 			springs[0] += 1)
-	var pkt := {"k": r.net_kick, "p": r.position, "v": Vector3.ZERO, "y": 0.0, "f": 1, "s": r.stamina, "sp": true}
+	var pkt := {"k": r.net_kick, "p": r.position, "v": Vector3.ZERO, "y": 0.0, "f": 1, "s": r.stamina, "fx": ["spring", "bogus"]}
 	ns.on_input(7, pkt)
 	ns.on_input(7, pkt)   # a spammed claim right after is ignored
 	check(springs[0] == 1, "a remote player's spring bounce plays once for everyone (%d)" % springs[0])
@@ -1282,6 +1287,223 @@ func test_bot_sees_cheese() -> void:
 			break
 	check(wall_when_mined != -1, "the bot gets the cheese")
 	check(wall_when_mined != Blocks.STONE, "but only after digging through the wall in front of it")
+	end(m)
+
+
+func test_spring_sides_and_cheese() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var r := arena_rat(m, 1, "scout", Vector3(-6, 0, -6))
+	run(m, 0.3)
+	var spring := ARENA + Vector3i(0, 0, 0)
+	m.world.set_block(spring, Blocks.SPRING)
+	# a rat standing right beside the spring is flung up and away
+	r.position = Vector3(spring) + Vector3(1.5, 0, 0.5)
+	r.vel = Vector3.ZERO
+	r.on_floor = true
+	m.step(DT)
+	check(r.vel.y > 8.0 and r.vel.x > 2.0, "a rat next to a spring's side is bounced up and away (vel %s)" % str(r.vel))
+	var diag := arena_rat(m, 0, "digger", Vector3(-6, 0, 6))
+	run(m, 0.3)
+	diag.position = Vector3(spring) + Vector3(-0.5, 0, -0.5)    # the diagonal neighbour cell
+	diag.vel = Vector3.ZERO
+	m.step(DT)
+	check(diag.vel.y > 8.0, "any team, any side (diagonal too)")
+	var far := arena_rat(m, 0, "scout", Vector3(-6, 0, 2))
+	run(m, 0.3)
+	far.position = Vector3(spring) + Vector3(2.6, 0, 0.5)     # two cells away
+	far.vel = Vector3.ZERO
+	m.step(DT)
+	check(far.vel.y < 1.0, "two blocks away is safe")
+	# loose cheese next to a spring is flung too
+	var pk := m.spawn_pickup("cheese", Vector3(spring) + Vector3(0.5, 0.15, 1.5), Vector3.ZERO)
+	var top := 0.0
+	for i in 40:
+		m.step(DT)
+		top = maxf(top, pk.pos.y)
+	check(top > float(spring.y) + 2.0, "loose cheese beside a spring is flung up (peak %.1f)" % (top - spring.y))
+	# conveyors carry loose cheese
+	var belt := ARENA + Vector3i(-4, -1, 4)
+	m.world.set_block(belt, Blocks.CONV_XP)
+	m.world.set_block(belt + Vector3i(1, 0, 0), Blocks.CONV_XP)
+	var ride := m.spawn_pickup("cheese", Vector3(belt) + Vector3(0.3, 1.2, 0.5), Vector3.ZERO)
+	run(m, 0.8)
+	check(ride.pos.x > float(belt.x) + 1.0, "a conveyor carries loose cheese along (moved %.2f)" % (ride.pos.x - belt.x - 0.3))
+	end(m)
+
+
+func test_trap_durability() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 6)
+	var blue := arena_rat(m, 0, "saboteur")
+	var red := arena_rat(m, 1, "digger", Vector3(0, 0, 2))
+	run(m, 0.3)
+	var digs := func(r: Rat, cell: Vector3i) -> int:
+		var n := 0
+		while m.world.get_cell(cell) != Blocks.AIR and n < 40:
+			r.dig_cd = 0.0
+			m.try_dig(r, cell)
+			n += 1
+		return n
+	for kind: String in ["trap", "sticky", "pitfall", "wallspring"]:
+		blue.gadgets[kind] = 3
+		var own := ARENA + Vector3i(2, 0, -1)
+		var theirs := ARENA + Vector3i(2, 0, 1)
+		check(m.try_place_gadget(blue, own, kind) == "" and m.try_place_gadget(blue, theirs, kind) == "", "placed two %s" % kind)
+		var n_own: int = digs.call(blue, own)
+		var n_enemy: int = digs.call(red, theirs)
+		check(n_own == Config.TRAP_HITS_OWN and n_enemy == Config.TRAP_HITS_ENEMY, "%s: %d digs for its own team, %d for the enemy" % [kind, n_own, n_enemy])
+	blue.gadgets["trap"] = 1
+	var t := ARENA + Vector3i(-2, 0, 0)
+	m.try_place_gadget(blue, t, "trap")
+	m.blast(Vector3(t) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)
+	check(m.world.get_cell(t) == Blocks.TRAP_BLUE, "a single blast does not clear a placed trap")
+	end(m)
+
+
+func test_team_stash() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var a := arena_rat(m, 0, "builder")
+	var b := arena_rat(m, 0, "scout", Vector3(0, 0, 3))
+	var foe := arena_rat(m, 1, "scout", Vector3(4, 0, 0))
+	run(m, 0.3)
+	check(not m.can_use_stash(a) and m.stash_move(a, "dirt", 5) != "", "away from base, with no stash, there is no pool to use")
+	a.gadgets["stash"] = 1
+	var st := ARENA + Vector3i(1, 0, 1)
+	check(m.try_place_gadget(a, st, "stash") == "" and m.world.get_cell(st) == Blocks.STASH_BLUE, "a team stash is placed")
+	a.scrap = 20
+	a.mats["stone"] = 7
+	check(m.can_use_stash(a) and m.stash_move(a, "scrap", 15) == "" and m.stash_move(a, "stone", 9999) == "", "deposit scrap and all the stone")
+	check(a.scrap == 5 and int(a.mats["stone"]) == 0 and int(m.team_bank[0]["scrap"]) == 15 and int(m.team_bank[0]["stone"]) == 7, "the pool holds it")
+	check(m.stash_move(a, "cheese", 1) != "", "cheese never goes in a stash")
+	check(m.stash_move(b, "scrap", -10) == "" and b.scrap == 16 and int(m.team_bank[0]["scrap"]) == 5, "a teammate takes scrap out (6 + 10)")
+	check(m.stash_move(foe, "scrap", -5) != "" and int(m.team_bank[0]["scrap"]) == 5, "the other team cannot use your stash")
+	check(m.can_use_stash(foe) == false, "(they are not beside a stash of their own)")
+	# at base works too, with no stash nearby
+	var c := arena_rat(m, 0, "digger")
+	c.position = MapGenerator.spawn_point(0)
+	check(m.can_use_stash(c) and m.stash_move(c, "stone", -3) == "" and int(c.mats["stone"]) == 3, "the base reaches the pool as well")
+	# only TNT breaks it, 5 blasts, and the pool survives
+	for i in 6:
+		a.dig_cd = 0.0
+		m.try_dig(a, st)
+		foe.dig_cd = 0.0
+		m.try_dig(foe, st)
+	check(m.world.get_cell(st) == Blocks.STASH_BLUE, "digging does not hurt a stash")
+	for i in Config.STASH_BLASTS - 1:
+		m.blast(Vector3(st) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)
+	check(m.world.get_cell(st) == Blocks.STASH_BLUE, "it survives %d blasts" % (Config.STASH_BLASTS - 1))
+	m.blast(Vector3(st) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)
+	check(m.world.get_cell(st) == Blocks.AIR, "the %dth blast breaks it" % Config.STASH_BLASTS)
+	check(int(m.team_bank[0]["scrap"]) == 5 and int(m.team_bank[0]["stone"]) == 4, "the team pool is untouched")
+	end(m)
+
+
+func test_jetpack_gear() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 6)
+	var r := arena_rat(m, 0, "scout")
+	r.position = MapGenerator.spawn_point(0)
+	run(m, 0.3)
+	var cost := int(ClassDefs.shop_item("jetpack")["cost"])
+	r.scrap = cost * 2
+	check(r.gear == "" and m.try_buy(r, "jetpack") == "" and r.gear == "jetpack" and r.scrap == cost, "buying a jetpack puts it in the gear slot")
+	check(m.try_buy(r, "jetpack") != "" and r.scrap == cost, "you only wear one; buying it again is refused")
+	r.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	run(m, 0.3)
+	var y0 := r.position.y
+	r.gear_pressed = true
+	run(m, Config.JETPACK_TIME)
+	check(r.position.y > y0 + 5.0, "J lifts you (%.1f blocks)" % (r.position.y - y0))
+	check(r.gear_cd > Config.JETPACK_COOLDOWN - 0.2 and r.gear_cd <= Config.JETPACK_COOLDOWN + 0.05, "then it cools down for %.0f s" % Config.JETPACK_COOLDOWN)
+	run(m, 2.0)
+	var y1 := r.position.y
+	r.gear_pressed = true
+	run(m, 0.5)
+	check(r.position.y <= y1 + 0.05, "no second burst while cooling down")
+	run(m, Config.JETPACK_COOLDOWN)
+	r.gear_pressed = true
+	m.step(DT)
+	check(r.vel.y >= Config.JETPACK_LIFT - 0.01, "ready again after the cooldown")
+	var plain := arena_rat(m, 1, "scout", Vector3(3, 0, 3))
+	run(m, 0.3)
+	plain.gear_pressed = true
+	m.step(DT)
+	check(plain.vel.y < 1.0, "no jetpack, no lift")
+	end(m)
+
+
+func trench_around_base(m: Match, team: int, depth: int) -> void:
+	## What an enemy did in a playtest: a moat 2 wide all the way around the base.
+	var z := MapGenerator.base_zone(team)
+	var x0 := int(z.position.x) - 2
+	var x1 := int(z.end.x) + 1
+	var z0 := int(z.position.z) - 2
+	var z1 := int(z.end.z) + 1
+	for x in range(x0, x1 + 1):
+		for zz in range(z0, z1 + 1):
+			var ring := x < int(z.position.x) or x >= int(z.end.x) or zz < int(z.position.z) or zz >= int(z.end.z)
+			if not ring or not VoxelWorld.in_bounds(Vector3i(x, 0, zz)):
+				continue
+			for d in range(1, depth + 1):
+				m.world.set_block(Vector3i(x, MapGenerator.GROUND - d, zz), Blocks.AIR)
+			for y in range(MapGenerator.GROUND, MapGenerator.GROUND + 4):
+				m.world.set_block(Vector3i(x, y, zz), Blocks.AIR)
+
+
+func test_bot_crosses_trench() -> void:
+	for depth in [2, 3, 5]:
+		var m := new_match({"seed": 4242})
+		trench_around_base(m, 0, depth)
+		var bot := m.spawn_rat(0, "scout", true)
+		bot.position = MapGenerator.approach_point(0) + Vector3(6, 0, 0)
+		bot.carried = 1
+		var start := m.scores[0]
+		var respawns := [0]
+		m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void:
+			if kind == "respawn":
+				respawns[0] += 1)
+		var t := 0.0
+		while t < 45.0 and m.scores[0] == start:
+			m.step(DT)
+			t += DT
+		check(m.scores[0] > start and respawns[0] == 0, "a bot carrying cheese gets home across a %d-deep moat (%.0f s, %d respawns, at %s)" % [depth, t, respawns[0], str(bot.position.floor())])
+		end(m)
+
+
+func test_bot_gear_and_dash() -> void:
+	var m := new_match({"seed": 4242})
+	var bot := m.spawn_rat(0, "digger", true)
+	bot.scrap = 20
+	run(m, 0.5)
+	check(bot.gear == "jetpack" and bot.scrap == 20 - ClassDefs.price(bot.cls, "jetpack", false), "a bot at base with enough scrap buys a jetpack")
+	# dropped into a deep shaft next to home while carrying cheese, it jets out
+	var shaft := Vector3i(int(MapGenerator.approach_point(0).x), MapGenerator.GROUND - 1, int(MapGenerator.approach_point(0).z))
+	for d in range(0, 7):
+		m.world.set_block(shaft - Vector3i(0, d, 0), Blocks.AIR)
+	bot.position = Vector3(shaft - Vector3i(0, 6, 0)) + Vector3(0.5, 0, 0.5)
+	bot.carried = 1
+	var fired := [0]
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void:
+		if kind == "jetpack":
+			fired[0] += 1)
+	var t := 0.0
+	var start := m.scores[0]
+	while t < 30.0 and m.scores[0] == start:
+		m.step(DT)
+		t += DT
+	check(fired[0] > 0, "the bot fires its jetpack to climb out (%d bursts)" % fired[0])
+	check(m.scores[0] > start, "and banks the cheese (%.0f s)" % t)
+	# a long run across open ground: bots dash
+	var runner := m.spawn_rat(1, "scout", true)
+	var dashed := false
+	for i in int(20.0 / DT):
+		m.step(DT)
+		if runner.dash_t > 0.0:
+			dashed = true
+			break
+	check(dashed, "bots dash on long open runs")
 	end(m)
 
 
