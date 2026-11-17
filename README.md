@@ -66,14 +66,19 @@ See `docs/TEST_RESULTS.md` for what was actually executed and what was not.
 
 ## Art
 
-Rats are sprite sheets, one per class and team: `assets/rats/digger_blue.png`, `digger_red.png`, ...
-Each sheet is 4 columns of 72x72 cells, one row per animation (idle, run, jump, dig, attack, hurt,
-build, use, down); see `docs/rat_sheet_layout.png`. Draw over a sheet in Aseprite, LibreSprite or
-Pixelorama and the game picks it up. `tools/rat_sheets.py` packs loose frames into sheets and back.
+All of the game's 2D art is a handful of PNGs you can paint over (Aseprite, LibreSprite, Pixelorama):
 
-Icons are 16x16 PNGs in `assets/icons/`, named after the item or ability (`ladder.png`, `jetpack.png`,
-`superdig.png`...). Overwrite any of them with your own art and the game uses it. `tools/make_icons.py`
-redraws the generated set.
+| File | What it is |
+|---|---|
+| `assets/rats/<class>.png` | One sprite sheet per class (digger, scout, builder, saboteur): 72x72 cells, 4 columns, one row per animation (idle, run, jump, dig, attack, hurt, build, use, down). Paint team-coloured parts in **magenta**: the game makes the Blue and Red rats from the one drawing. Layout: `docs/rat_sheet_layout.png`. |
+| `assets/icons/icons.png` | Every gadget, trap, siege, gear, material, tool, ability and menu icon: 16x16 cells, 8 columns. Which icon is where: `docs/icon_sheet_layout.png`. A separate `assets/icons/<id>.png` overrides one icon. |
+| `assets/ui/panel_frame.png` | The menu panel (wood and the blue/red frame), a 9-slice: the outer 22 px on each side are frame and corners, the middle stretches. |
+| `assets/ui/burrow_*.png` | The masthead and the original UI icons. |
+
+Tools: `tools/rat_sheets.py` (`preview` shows your rats in both team colours, `pack`/`unpack`
+convert between sheets and single frames, `guide` redraws the layout picture) and
+`tools/make_icons.py` (regenerates the icon sheet; it overwrites hand edits, so only rerun it to add icons).
+Blocks, gadgets and siege machines are still drawn in code from flat colours.
 
 ## Credits
 

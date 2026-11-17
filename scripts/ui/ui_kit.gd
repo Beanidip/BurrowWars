@@ -22,10 +22,26 @@ const PANEL_RADIUS := 14.0
 const PANEL_BORDER := 6.0
 
 
+const PANEL_FILE := "res://assets/ui/panel_frame.png"
+
+
 static func team_panel() -> StyleBoxTexture:
-	## The menu panel: wood grain inside a blue/red diagonal frame.
+	## The menu panel: wood grain inside a blue/red diagonal frame. Drawn from
+	## assets/ui/panel_frame.png (a 9-slice: the outer PANEL_EDGE pixels on
+	## each side are the frame and corners, the middle stretches), or
+	## generated here if that file is missing.
 	if _panel_style != null:
 		return _panel_style
+	if ResourceLoader.exists(PANEL_FILE):
+		var file_style := StyleBoxTexture.new()
+		file_style.texture = load(PANEL_FILE)
+		file_style.texture_margin_left = PANEL_EDGE
+		file_style.texture_margin_right = PANEL_EDGE
+		file_style.texture_margin_top = PANEL_EDGE
+		file_style.texture_margin_bottom = PANEL_EDGE
+		file_style.set_content_margin_all(18)
+		_panel_style = file_style
+		return file_style
 	var n := PANEL_TEX
 	var grain := FastNoiseLite.new()
 	grain.seed = 7

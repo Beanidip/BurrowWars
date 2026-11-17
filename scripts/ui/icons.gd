@@ -1,11 +1,14 @@
 class_name Icons
 ## Little pixel-art icons for gadgets, traps, siege machines, gear, materials,
-## tools, abilities and menu buttons. Each is a PNG in res://assets/icons/
-## named after the item or ability id (e.g. "ladder", "jetpack", "superdig"),
-## drawn by tools/make_icons.py. Replace any PNG with your own art and the
-## game uses it; a missing icon just shows nothing.
+## tools, abilities and menu buttons, by item or ability id ("ladder",
+## "jetpack", "superdig"...). They all live in one sprite sheet,
+## res://assets/icons/icons.png (16x16 cells; IconSheet says which id is in
+## which cell; docs/icon_sheet_layout.png shows it). A separate
+## res://assets/icons/<id>.png, if present, overrides that one icon. A
+## missing icon just shows nothing.
 
 const DIR := "res://assets/icons/"
+const SHEET := "res://assets/icons/icons.png"
 static var _cache: Dictionary = {}
 
 
@@ -15,24 +18,30 @@ static func tex(id: String) -> Texture2D:
 	if _cache.has(id):
 		return _cache[id]
 	var t: Texture2D = null
-	for path: String in [DIR + id + ".png", "res://assets/ui/burrow_%s_small.png" % id]:
-		if ResourceLoader.exists(path):
-			t = load(path)
-			break
+	var cell := IconSheet.IDS.find(id)
+	if ResourceLoader.exists(DIR + id + ".png"):
+		t = load(DIR + id + ".png")                     # a single-icon override
+	elif cell >= 0 and ResourceLoader.exists(SHEET):
+		var a := AtlasTexture.new()
+		a.atlas = load(SHEET)
+		a.region = Rect2((cell % IconSheet.COLS) * IconSheet.CELL, (cell / IconSheet.COLS) * IconSheet.CELL, IconSheet.CELL, IconSheet.CELL)
+		t = a
+	elif ResourceLoader.exists("res://assets/ui/burrow_%s_small.png" % id):
+		t = load("res://assets/ui/burrow_%s_small.png" % id)   # the older UI icons (hammer, gear...)
 	_cache[id] = t
 	return t
 
 
 static func class_tex(class_id: String) -> Texture2D:
 	## A class's portrait: the first idle frame of its (blue) rat.
-	var path := RatSprite.sheet_path(class_id, 0)
-	var key := "class:" + path
+	var key := "class:" + RatSprite.sheet_path(class_id)
 	if not _cache.has(key):
 		var portrait: AtlasTexture = null
-		if ResourceLoader.exists(path):
-			# the first idle frame (top-left cell), cropped to the rat itself
+		var sheet := RatSprite.sheet_texture(class_id, 0)
+		if sheet != null:
+			# the first idle frame (top-left cell, in Blue), cropped to the rat itself
 			portrait = AtlasTexture.new()
-			portrait.atlas = load(path)
+			portrait.atlas = sheet
 			portrait.region = Rect2(12, 10, 48, 48)
 		_cache[key] = portrait
 	return _cache[key]
