@@ -10,6 +10,7 @@
 | Placed traps (mouse trap, sticky, pitfall, wall spring) take 5 digs for their own team and 15 for the other team or a blast | `match/match.gd` |
 | Gear slot (J): one piece worn at a time. Jetpack (14 scrap): 1.1 s of lift, then 5 s to cool down | `actors/rat.gd`, `match/class_defs.gd`, `ui/hud.gd`, `actors/player_controller.gd` |
 | Fix: the ground right beside a base could be dug but never built on, so a moat dug around a base could not be filled. Base protection now covers the base itself and grows sideways only | `world/map_generator.gd` |
+| Pixel-art icons (16x16) for every gadget, trap, siege machine, gear, material, tool and ability, shown on the hotbar, abilities panel, workshop, team stash, inventory and main menu buttons; class buttons show each class's rat. Icons are PNGs in `assets/icons/` (drawn by `tools/make_icons.py`) and can be replaced with your own art | `ui/icons.gd`, `ui/hud.gd`, `ui/main_menu.gd`, `assets/icons/`, `tools/make_icons.py` |
 | Bots heading home bridge any gap, climb out of moats near the door instead of walking away, buy and fire jetpacks, and dash on long open runs | `actors/bot_brain.gd` |
 
 ## 1.9.0 - Review fixes, line-of-sight names, loaded dash (2026-11-17)

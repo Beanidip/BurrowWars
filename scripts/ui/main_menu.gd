@@ -127,13 +127,13 @@ func _show_home() -> void:
 	col.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_theme_constant_override("separation", 8)
 	_page.add_child(col)
-	var play := UiKit.button("Cheese Race (Bot Game)", _show_setup, Vector2(320, 52))
+	var play := Icons.on_button(UiKit.button("Cheese Race (Bot Game)", _show_setup, Vector2(320, 52)), "cheese")
 	col.add_child(play)
-	col.add_child(UiKit.button("Play Online", _show_online, Vector2(320, 44)))
-	col.add_child(UiKit.button("Free Build", _show_free.bind(false), Vector2(320, 44)))
-	col.add_child(UiKit.button("How to Play", _show_help, Vector2(320, 44)))
-	col.add_child(UiKit.button("Settings & Controls", _show_settings, Vector2(320, 44)))
-	col.add_child(UiKit.button("Quit", func() -> void: get_tree().quit(), Vector2(320, 44)))
+	col.add_child(Icons.on_button(UiKit.button("Play Online", _show_online, Vector2(320, 44)), "online"))
+	col.add_child(Icons.on_button(UiKit.button("Free Build", _show_free.bind(false), Vector2(320, 44)), "hammer"))
+	col.add_child(Icons.on_button(UiKit.button("How to Play", _show_help, Vector2(320, 44)), "book"))
+	col.add_child(Icons.on_button(UiKit.button("Settings & Controls", _show_settings, Vector2(320, 44)), "gear"))
+	col.add_child(Icons.on_button(UiKit.button("Quit", func() -> void: get_tree().quit(), Vector2(320, 44)), "door"))
 	if _message != "":
 		var msg := UiKit.wrapped(_message, 15, UiKit.TEAM[1].lightened(0.3))
 		msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -180,7 +180,7 @@ func _setup_page() -> void:
 	classes.add_theme_constant_override("separation", 8)
 	_class_buttons.clear()
 	for id: String in ClassDefs.ORDER:
-		var cb := UiKit.button(ClassDefs.CLASSES[id]["name"], _pick_class.bind(id), Vector2(130, 40))
+		var cb := Icons.on_button(UiKit.button(ClassDefs.CLASSES[id]["name"], _pick_class.bind(id), Vector2(130, 40)), id, true)
 		cb.toggle_mode = true
 		classes.add_child(cb)
 		_class_buttons[id] = cb
@@ -381,7 +381,7 @@ func _show_online() -> void:
 	classes.add_theme_constant_override("separation", 6)
 	_class_buttons.clear()
 	for id: String in ClassDefs.ORDER:
-		var cb := UiKit.button(ClassDefs.CLASSES[id]["name"], _pick_class.bind(id), Vector2(104, 36))
+		var cb := Icons.on_button(UiKit.button(ClassDefs.CLASSES[id]["name"], _pick_class.bind(id), Vector2(104, 36)), id, true, 22)
 		cb.toggle_mode = true
 		classes.add_child(cb)
 		_class_buttons[id] = cb
@@ -413,8 +413,8 @@ func _show_online() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
 	buttons.add_child(UiKit.button("Back", _show_home, Vector2(160, 46)))
-	buttons.add_child(UiKit.button("Host Cheese Race...", _show_host_setup, Vector2(220, 46)))
-	buttons.add_child(UiKit.button("Host Free Build", _host_free, Vector2(200, 46)))
+	buttons.add_child(Icons.on_button(UiKit.button("Host Cheese Race...", _show_host_setup, Vector2(230, 46)), "cheese"))
+	buttons.add_child(Icons.on_button(UiKit.button("Host Free Build", _host_free, Vector2(210, 46)), "hammer"))
 	_page.add_child(buttons)
 	_name_edit.grab_focus()
 

@@ -8,7 +8,6 @@ extends CanvasLayer
 signal exit_requested
 signal rematch_requested
 
-const MAT_ICON_COLORS := [Color(0.47, 0.31, 0.20), Color(0.50, 0.50, 0.54), Color(0.70, 0.88, 0.96), Color(0.30, 0.20, 0.42)]
 const MAT_SHORT := ["Dirt", "Stone", "Ice", "Obsid."]
 
 var m: Match
@@ -26,6 +25,10 @@ var _slot_counts: Array[Label] = []
 var _tool_slots: Array[PanelContainer] = []
 var _q_name: Label
 var _gear_name: Label
+var _q_icon: TextureRect
+var _gear_icon: TextureRect
+var _ability_box: VBoxContainer
+var _ability_ids: Array = []
 var _gear_state: Label
 var _stash_labels: Dictionary = {}   # resource -> Label in the stash section
 var _q_count: Label
@@ -149,10 +152,15 @@ func _build_bottom() -> void:
 	# Q gadget slot
 	var q := PanelContainer.new()
 	q.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.BRASS, 8, 2, 6))
-	q.custom_minimum_size = Vector2(104, 62)
+	q.custom_minimum_size = Vector2(118, 62)
 	var qv := VBoxContainer.new()
 	qv.add_theme_constant_override("separation", 0)
-	q.add_child(qv)
+	_q_icon = Icons.rect("", 24)
+	var qh := HBoxContainer.new()
+	qh.add_theme_constant_override("separation", 4)
+	qh.add_child(_q_icon)
+	qh.add_child(qv)
+	q.add_child(qh)
 	qv.add_child(UiKit.label("Q  gadget", 12, UiKit.BRASS))
 	_q_name = UiKit.label("-", 15)
 	_q_count = UiKit.label("", 13, UiKit.PAPER.darkened(0.15))
@@ -161,10 +169,15 @@ func _build_bottom() -> void:
 	bar.add_child(q)
 	var gear := PanelContainer.new()
 	gear.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.BRASS, 8, 2, 6))
-	gear.custom_minimum_size = Vector2(92, 62)
+	gear.custom_minimum_size = Vector2(104, 62)
 	var gv := VBoxContainer.new()
 	gv.add_theme_constant_override("separation", 0)
-	gear.add_child(gv)
+	_gear_icon = Icons.rect("", 24)
+	var gh := HBoxContainer.new()
+	gh.add_theme_constant_override("separation", 4)
+	gh.add_child(_gear_icon)
+	gh.add_child(gv)
+	gear.add_child(gh)
 	gv.add_child(UiKit.label("%s  gear" % Inputs.key_name("gear"), 12, UiKit.BRASS))
 	_gear_name = UiKit.label("-", 15)
 	_gear_state = UiKit.label("", 13, UiKit.PAPER.darkened(0.15))
@@ -174,18 +187,20 @@ func _build_bottom() -> void:
 	for i in ClassDefs.MATS.size() + 1:
 		var paint := i == ClassDefs.MATS.size()
 		var slot := PanelContainer.new()
-		slot.custom_minimum_size = Vector2(60, 62)
+		slot.custom_minimum_size = Vector2(58, 62)
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 0)
 		slot.add_child(v)
 		var head := HBoxContainer.new()
 		head.add_child(UiKit.label(str(i + 1), 12, UiKit.BRASS))
-		var chip := ColorRect.new()
-		chip.color = Blocks.paint_color(0) if paint else MAT_ICON_COLORS[i]
+		head.add_theme_constant_override("separation", 3)
+		head.add_child(Icons.rect("paint" if paint else String(ClassDefs.MATS[i]), 18))
 		if paint:
+			var chip := ColorRect.new()
+			chip.color = Blocks.paint_color(0)
 			_paint_chip = chip
-		chip.custom_minimum_size = Vector2(16, 16)
-		head.add_child(chip)
+			chip.custom_minimum_size = Vector2(10, 18)
+			head.add_child(chip)
 		v.add_child(head)
 		v.add_child(UiKit.label("Paint" if paint else MAT_SHORT[i], 14))
 		var count := UiKit.label("0", 13, UiKit.PAPER.darkened(0.15))
@@ -196,12 +211,16 @@ func _build_bottom() -> void:
 	# tool slots: 9 chisel, 0 pantograph
 	for info: Array in [["chisel", "Chisel", "carve"], ["pantograph", "Pantograph", "copy"]]:
 		var ts := PanelContainer.new()
-		ts.custom_minimum_size = Vector2(88, 62)
+		ts.custom_minimum_size = Vector2(72, 62)
 		var tv := VBoxContainer.new()
 		tv.add_theme_constant_override("separation", 0)
 		ts.add_child(tv)
-		tv.add_child(UiKit.label(Inputs.key_name(info[0]), 12, UiKit.BRASS))
-		tv.add_child(UiKit.label(info[1], 14))
+		var th := HBoxContainer.new()
+		th.add_theme_constant_override("separation", 4)
+		th.add_child(UiKit.label(Inputs.key_name(info[0]), 12, UiKit.BRASS))
+		th.add_child(Icons.rect(String(info[0]), 18))
+		tv.add_child(th)
+		tv.add_child(UiKit.label(info[1], 13))
 		tv.add_child(UiKit.label(info[2], 13, UiKit.PAPER.darkened(0.15)))
 		_tool_slots.append(ts)
 		bar.add_child(ts)
@@ -234,7 +253,9 @@ func _build_bottom() -> void:
 	rv.add_theme_constant_override("separation", 2)
 	right.add_child(rv)
 	_abilities = UiKit.label("", 15)
-	rv.add_child(_abilities)
+	_ability_box = VBoxContainer.new()
+	_ability_box.add_theme_constant_override("separation", 2)
+	rv.add_child(_ability_box)
 	_hint = UiKit.label("", 12, UiKit.PAPER.darkened(0.2))
 	rv.add_child(_hint)
 
@@ -282,6 +303,8 @@ func _process(_delta: float) -> void:
 		_q_name.text = "empty"
 		_q_count.text = "buy at workshop"
 	_status.text = "%s  -  %s team\nScrap: %d" % [rat.cls["name"], Match.TEAM_NAMES[rat.team], rat.scrap]
+	_q_icon.texture = Icons.tex(rat.equipped)
+	_gear_icon.texture = Icons.tex(rat.gear)
 	if rat.gear == "":
 		_gear_name.text = "none"
 		_gear_state.text = "buy at workshop"
@@ -289,13 +312,22 @@ func _process(_delta: float) -> void:
 		_gear_name.text = String(ClassDefs.GEAR.get(rat.gear, rat.gear))
 		_gear_state.text = ("%.0f s" % ceilf(rat.gear_cd)) if rat.gear_cd > 0.0 else "ready"
 	_sync_cheese()
-	var lines := PackedStringArray()
 	var keys := ["ability_1", "ability_2"]
 	var list: Array = rat.cls["abilities"]
+	var ids: Array = []
+	for ab: Array in list:
+		ids.append(ab[0])
+	if ids != _ability_ids:      # class changed: one row (icon + text) per ability
+		_ability_ids = ids
+		for c in _ability_box.get_children():
+			c.queue_free()
+		for id: String in ids:
+			_ability_box.add_child(Icons.with_icon(id, UiKit.label("", 15), 22))
 	for i in list.size():
 		var cd := float(rat.ability_cd[i])
-		lines.append("[%s] %s%s" % [Inputs.key_name(keys[i]), list[i][1], "  (%.0fs)" % ceilf(cd) if cd > 0.0 else ""])
-	_abilities.text = "\n".join(lines)
+		var row := _ability_box.get_child(i) as HBoxContainer
+		if row != null and not row.is_queued_for_deletion():
+			(row.get_child(1) as Label).text = "[%s] %s%s" % [Inputs.key_name(keys[i]), list[i][1], "  (%.0fs)" % ceilf(cd) if cd > 0.0 else ""]
 	var shop := "[%s] Workshop" % Inputs.key_name("workshop")
 	if not m.can_shop(rat):
 		shop = "[%s] Team stash" % Inputs.key_name("workshop") if m.can_use_stash(rat) else shop + " (at base)"
@@ -523,7 +555,7 @@ func _fill_workshop(v: VBoxContainer) -> void:
 			btns.add_child(UiKit.button("Put all", _stash.bind(key, 9999), Vector2(80, 34)))
 			btns.add_child(UiKit.button("Take 10", _stash.bind(key, -10), Vector2(84, 34)))
 			btns.add_child(UiKit.button("Take all", _stash.bind(key, -9999), Vector2(88, 34)))
-			list.add_child(UiKit.row(lbl, btns))
+			list.add_child(UiKit.row(Icons.with_icon(key, lbl, 24), btns))
 	var last_cat := ""
 	for item: Dictionary in (ClassDefs.SHOP if shopping else []):
 		if item["cat"] != last_cat:
@@ -539,13 +571,13 @@ func _fill_workshop(v: VBoxContainer) -> void:
 		text.add_child(UiKit.wrapped(item["desc"], 13, UiKit.PAPER.darkened(0.2)))
 		var cost := ClassDefs.price(rat.cls, String(item["id"]), m.free_mode)
 		var price := "free" if cost == 0 else "%d scrap" % cost
-		list.add_child(UiKit.row(text, UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))))
+		list.add_child(UiKit.row(Icons.with_icon(String(item["id"]), text, 32), UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))))
 	if not m.free_mode and shopping:
 		v.add_child(UiKit.label("Change class (at base, 15 s cooldown)", 15, UiKit.BRASS))
 		var classes := HBoxContainer.new()
 		classes.add_theme_constant_override("separation", 6)
 		for id: String in ClassDefs.ORDER:
-			var b := UiKit.button(ClassDefs.CLASSES[id]["name"], _change_class.bind(id), Vector2(130, 36))
+			var b := Icons.on_button(UiKit.button(ClassDefs.CLASSES[id]["name"], _change_class.bind(id), Vector2(140, 36)), id, true)
 			b.tooltip_text = ClassDefs.CLASSES[id]["blurb"]
 			classes.add_child(b)
 		v.add_child(classes)
@@ -652,13 +684,18 @@ func _fill_inventory(v: VBoxContainer) -> void:
 		var equipped := rat.equipped == g
 		var b := UiKit.button("Equipped" if equipped else "Equip to Q", _equip.bind(g), Vector2(140, 38))
 		b.disabled = equipped
-		list.add_child(UiKit.row(text, b))
+		list.add_child(UiKit.row(Icons.with_icon(g, text, 32), b))
 	if not any:
 		list.add_child(UiKit.wrapped("Your pack is empty. Mine scrap, then visit the workshop (%s) at your base." % Inputs.key_name("workshop"), 15))
-	var mats := PackedStringArray()
+	var mats := HBoxContainer.new()
+	mats.add_theme_constant_override("separation", 14)
+	mats.add_child(UiKit.label("Materials:", 15))
 	for mat: String in ClassDefs.MATS:
-		mats.append("%s x%d" % [mat.capitalize(), int(rat.mats[mat])])
-	v.add_child(UiKit.label("Materials:  " + "   ".join(mats), 15))
+		mats.add_child(Icons.with_icon(mat, UiKit.label("x%d" % int(rat.mats[mat]), 15), 20))
+	mats.add_child(Icons.with_icon("scrap", UiKit.label("x%d" % rat.scrap, 15), 20))
+	v.add_child(mats)
+	if rat.gear != "":
+		v.add_child(Icons.with_icon(rat.gear, UiKit.label("Gear: %s  (%s to use)" % [ClassDefs.GEAR.get(rat.gear, rat.gear), Inputs.key_name("gear")], 15), 22))
 	v.add_child(UiKit.label("Cheese carried: %d / %d      Scrap: %d" % [rat.carried, rat.capacity(), rat.scrap], 15))
 
 

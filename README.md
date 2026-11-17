@@ -64,6 +64,12 @@ See `docs/TEST_RESULTS.md` for what was actually executed and what was not.
 - `docs/MULTIPLAYER.md` - playing online, hosting, dedicated/public servers, netcode
 - `docs/KNOWN_ISSUES.md`, `docs/NEXT_SESSION.md` - honest status and the next steps
 
+## Art
+
+Icons are 16x16 PNGs in `assets/icons/`, named after the item or ability (`ladder.png`, `jetpack.png`,
+`superdig.png`...). Overwrite any of them with your own art and the game uses it. `tools/make_icons.py`
+redraws the generated set.
+
 ## Credits
 
 Rat sprites, UI icons, sound effects and music are the project owner's own assets,
