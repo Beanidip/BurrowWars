@@ -7,12 +7,14 @@ extends RefCounted
 
 const UP := Vector3i(0, 1, 0)
 const DOWN := Vector3i(0, -1, 0)
+const SCRAP_REACH := 5            # how far a bot looks for scrap to mine on the side
+const SCRAP_ENOUGH := 40          # a bot this rich stops detouring for scrap
 
 var m: Match
 var rat: Rat
 var rng := RandomNumberGenerator.new()
 
-var mode := "seek"               # seek | home
+var mode := "seek"               # seek | home | scrap | defend | raid
 var target := Vector3.ZERO
 var target_cell := Vector3i(-1, -1, -1)
 var retarget_t := 0.0
@@ -26,6 +28,8 @@ var jitter := 0.0
 var final_run := false
 var rest_t := 0.0
 var last_carried := 0
+var last_scrap := -1
+var mined := 0                    # scrap dug since the last visit to a stash or base
 
 
 func _init(p_match: Match, p_rat: Rat, p_seed: int) -> void:
@@ -44,6 +48,8 @@ func think(dt: float) -> void:
 		return
 	rat.mats["dirt"] = maxi(int(rat.mats["dirt"]), 12)  # bots always have stair dirt
 	_try_bonk()
+	_count_scrap()
+	_bank_scrap()
 	_shop()
 	# skill knob: lower-skill bots pause to celebrate every pickup and deposit
 	if rat.carried != last_carried:
@@ -105,6 +111,13 @@ func _retarget() -> void:
 		target = door if final_run else gate
 		return
 	final_run = false
+	var cheese_cell := target_cell
+	var scrap: Variant = _pick_scrap(cheese)
+	if scrap != null:
+		mode = "scrap"
+		target = scrap
+		return
+	target_cell = cheese_cell
 	mode = "seek"
 	if cheese != null:
 		target = cheese
@@ -124,7 +137,12 @@ func _pick_cheese() -> Variant:
 			best = p.pos
 	if best != null:
 		return best
-	for c: Vector3i in m.world.cheese_cells:
+	var spots: Array[Vector3i] = []
+	spots.assign(m.world.cheese_cells.keys())
+	for c: Vector3i in m.decoys:
+		if int(m.decoys[c]) != rat.team:
+			spots.append(c)      # the other team's Cheese Decoys look like cheese to us too
+	for c: Vector3i in spots:
 		var p2 := Vector3(c) + Vector3(0.5, 0.0, 0.5)
 		# per-bot preference noise so teammates spread over different deposits
 		var noise := fmod(absf(float(c.x * 31 + c.y * 17 + c.z * 13) + jitter), 9.0)
@@ -134,6 +152,48 @@ func _pick_cheese() -> Variant:
 			best = p2
 			target_cell = c
 	return best
+
+
+func _pick_scrap(cheese: Variant) -> Variant:
+	## Scrap close by, when we aren't hauling cheese: worth a short detour.
+	## Sets target_cell to the block to mine.
+	if m.free_mode or rat.carried > 0 or rat.scrap >= SCRAP_ENOUGH:
+		return null
+	var f := rat.feet_cell()
+	var best: Variant = null
+	var best_d := SCRAP_REACH + 0.5
+	if cheese != null:
+		best_d = minf(best_d, (cheese as Vector3).distance_to(rat.position))   # cheese right there comes first
+	for dy in range(-2, 4):
+		for dz in range(-SCRAP_REACH, SCRAP_REACH + 1):
+			for dx in range(-SCRAP_REACH, SCRAP_REACH + 1):
+				var c := f + Vector3i(dx, dy, dz)
+				if m.world.get_cell(c) != Blocks.SCRAP:
+					continue
+				var p := Vector3(c) + Vector3(0.5, 0.0, 0.5)
+				var d := p.distance_to(rat.position)
+				if d < best_d:
+					best_d = d
+					best = p
+					target_cell = c
+	return best
+
+
+func _count_scrap() -> void:
+	## Scrap that came in since last time was mined (spending only lowers it).
+	if last_scrap >= 0 and rat.scrap > last_scrap:
+		mined += rat.scrap - last_scrap
+	last_scrap = rat.scrap
+
+
+func _bank_scrap() -> void:
+	## At base or beside a team stash: half of what we mined goes to the team.
+	if mined < 2 or not m.can_use_stash(rat):
+		return
+	var put := mini(mined / 2, rat.scrap)
+	mined = 0
+	if put > 0 and m.stash_move(rat, "scrap", put) == "":
+		last_scrap = rat.scrap
 
 
 func _shop() -> void:
@@ -168,8 +228,9 @@ func _navigate() -> void:
 	if rat.on_ladder:
 		rat.jump_held = d.y > 0.4
 		rat.down_held = d.y < -0.4
-	# cheese block within paw's reach: mine it
-	if mode == "seek" and target_cell.y >= 0 and m.world.get_cell(target_cell) == Blocks.CHEESE:
+	# cheese (or scrap) block within paw's reach: mine it
+	var goal := m.world.get_cell(target_cell) if target_cell.y >= 0 else Blocks.AIR
+	if (mode == "seek" or mode == "scrap") and (goal == Blocks.CHEESE or goal == Blocks.SCRAP or Blocks.is_decoy(goal)):
 		var to_cheese := Vector3(target_cell) + Vector3(0.5, 0.5, 0.5) - rat.eye()
 		if to_cheese.length() < 2.1:
 			# only when nothing is in between; otherwise walk (and dig) toward it like anyone else

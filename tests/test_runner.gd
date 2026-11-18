@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -3329,6 +3329,24 @@ func test_bubble_shoes() -> void:
 	run(m, 1.0)
 	r.wish = Vector3.ZERO
 	check(r.position.y < ARENA.y - 1.0 and r.scrap == 1, "with less than %d scrap you fall" % Config.BUBBLE_COST)
+	# running out halfway across: one bubble, then an ordinary fall (no hovering)
+	r.position = Vector3(ARENA) + Vector3(-0.5, 0, -5.5)
+	r.vel = Vector3.ZERO
+	r.scrap = Config.BUBBLE_COST + 1
+	run(m, 0.3)
+	r.wish = Vector3(1, 0, 0)
+	var past := -1
+	var frames := 0
+	while frames < 240:
+		m.step(DT)
+		frames += 1
+		if past < 0 and r.position.x > ARENA.x + 3.3:
+			past = frames
+		if past >= 0 and r.position.y < ARENA.y - 0.3:
+			break
+	r.wish = Vector3.ZERO
+	var one := m.world.get_cell(ARENA + Vector3i(2, -1, -6)) == Blocks.BUBBLE and m.world.get_cell(ARENA + Vector3i(3, -1, -6)) == Blocks.AIR
+	check(one and past >= 0 and frames - past <= 14, "out of scrap mid-bridge, the next step is a plain fall (%d frames)" % (frames - past))
 	# a jump off the edge is a jump: the shoes don't catch it
 	r.position = Vector3(ARENA) + Vector3(1.2, 0, -2.5)
 	r.vel = Vector3.ZERO
@@ -3408,4 +3426,77 @@ func test_decoy_and_squeaker() -> void:
 		red.position = Vector3(pad) + Vector3(3.5, 0, 0.5)
 		run(m, Config.SQUEAKER_REST + 0.2)
 	check(squeaks == 3 and m.world.get_cell(pad) == Blocks.AIR, "three squeaks, then it's spent (%d)" % squeaks)
+	end(m)
+
+
+func test_bots_scrap_and_decoys() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	for dx in range(-8, 9):
+		for dz in range(-8, 9):
+			for dy in [-3, -2]:
+				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.STONE)   # no surprise scrap under the floor
+	var bot := m.spawn_rat(0, "digger", true)
+	bot.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	bot.gear = "jetpack"         # nothing to shop for: the scrap is easy to count
+	var brain: BotBrain = null
+	for b in m.bots:
+		if b.rat == bot:
+			brain = b
+	for dy in 2:
+		m.world.set_block(ARENA + Vector3i(4, dy, 0), Blocks.SCRAP)
+	var before := bot.scrap
+	var t := 0.0
+	while t < 25.0 and (m.world.get_cell(ARENA + Vector3i(4, 0, 0)) == Blocks.SCRAP or m.world.get_cell(ARENA + Vector3i(4, 1, 0)) == Blocks.SCRAP):
+		m.step(DT)
+		t += DT
+	m.step(DT)                   # (the bot counts its last block on its next think)
+	var gained := bot.scrap - before
+	check(gained > 0 and m.world.get_cell(ARENA + Vector3i(4, 0, 0)) != Blocks.SCRAP, "a bot mines scrap it passes near (+%d in %.0f s)" % [gained, t])
+	# at base it banks half of what it mined
+	var bank0 := int(m.team_bank[0]["scrap"])
+	var mined := brain.mined
+	bot.position = MapGenerator.spawn_point(0)
+	bot.vel = Vector3.ZERO
+	var held := bot.scrap
+	run(m, 0.5)
+	var banked := int(m.team_bank[0]["scrap"]) - bank0
+	check(mined >= 2 and banked == mined / 2 and bot.scrap == held - banked, "and at base banks half of it for the team (%d of %d)" % [banked, mined])
+	# the other team's Cheese Decoy fools it; its own team's doesn't
+	var own := ARENA + Vector3i(-2, 0, 0)
+	var fake := ARENA + Vector3i(2, 0, -2)
+	m.world.set_block(own, Blocks.DECOY_BLUE)
+	m.world.set_block(fake, Blocks.DECOY_RED)
+	bot.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	bot.vel = Vector3.ZERO
+	bot.scrap = Config.BUBBLE_COST * 30   # rich enough not to go looking for scrap
+	var picked: Variant = brain._pick_cheese()
+	check(picked != null and Vector3i((picked as Vector3).floor()) == fake, "a bot takes the other team's decoy for cheese")
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	t = 0.0
+	while t < 15.0 and not kinds.has("decoy"):
+		m.step(DT)
+		t += DT
+	check(kinds.has("decoy") and bot.stun > 0.0 and m.world.get_cell(own) == Blocks.DECOY_BLUE, "and digs it, and gets a face full of stink (%.1f s)" % t)
+	end(m)
+
+
+func test_sound_levels() -> void:
+	## Someone else's digging is much quieter than your own; dash and pound are soft.
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var me := arena_rat(m, 0, "digger")
+	run(m, 0.2)
+	var view := MatchView.new()
+	view.m = m
+	view.listener = me
+	var near := Vector3(ARENA) + Vector3(2.5, 0.5, 0.5)
+	var far := Vector3(ARENA) + Vector3(9.5, 0.5, 0.5)
+	var own := view._volume(near)
+	var other := view._volume(far, MatchView.OTHERS_DIG_FALLOFF) + MatchView.OTHERS_DIG_GAIN
+	var before := view._volume(far)      # how loud it used to be
+	check(other < before - 12.0, "another rat digging 9 blocks off is much quieter than before (%.0f dB vs %.0f dB)" % [other, before])
+	check(own > other + 15.0, "and well below your own digging (%.0f dB)" % own)
+	view.free()
 	end(m)

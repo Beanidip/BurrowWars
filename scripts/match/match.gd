@@ -47,6 +47,7 @@ var stash_hits: Dictionary = {}      # Vector3i -> TNT blasts a team stash has t
 var bubbles: Dictionary = {}         # Vector3i -> seconds before that Bubble Shoes bubble pops
 var squeaks: Dictionary = {}         # Vector3i -> squeaks a Squeaker Pad has left
 var squeak_rest: Dictionary = {}     # Vector3i -> seconds before that pad can squeak again
+var decoys: Dictionary = {}          # Vector3i -> team of a Cheese Decoy there (bots of the other team fall for them)
 ## Each team's shared pool (scrap and building materials), reached at any of
 ## the team's stashes or at base. It survives its stashes being blown up.
 var team_bank: Array[Dictionary] = [{"scrap": 0, "dirt": 0, "stone": 0, "ice": 0, "obsidian": 0},
@@ -118,6 +119,9 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 		tnt[cell] = {"owner": -1, "fuse": -1.0}
 	for cell: Vector3i in _find_blocks(Blocks.BUBBLE):
 		bubbles[cell] = Config.BUBBLE_TIME     # bubbles in a loaded map still pop
+	for id: int in [Blocks.DECOY_BLUE, Blocks.DECOY_RED]:
+		for cell: Vector3i in _find_blocks(id):
+			decoys[cell] = Blocks.trap_team(id)
 	Log.info("match setup: mode=%s seed=%d goal=%d cheese_on_map=%d" % [
 		settings.get("mode", "race"), map_seed, goal, world.cheese_cells.size()])
 
@@ -133,6 +137,10 @@ func _on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 	if not Blocks.is_squeaker(new_id):
 		squeaks.erase(cell)          # a new pad in this cell starts with all its squeaks
 		squeak_rest.erase(cell)
+	if Blocks.is_decoy(new_id):
+		decoys[cell] = Blocks.trap_team(new_id)
+	else:
+		decoys.erase(cell)
 
 
 func _find_blocks(id: int) -> Array[Vector3i]:

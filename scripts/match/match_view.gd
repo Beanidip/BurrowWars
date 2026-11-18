@@ -75,18 +75,31 @@ func _make_pickup(kind: String) -> MeshInstance3D:
 	return node
 
 
-func _volume(pos: Vector3) -> float:
+const OTHERS_DIG_GAIN := -9.0     # dB: someone else digging, quieter than your own paws
+const OTHERS_DIG_FALLOFF := 1.3   # dB per block for it (everything else: 0.7)
+
+
+func _volume(pos: Vector3, falloff := 0.7) -> float:
 	## Distance attenuation in dB; returns -100 when too far to hear.
 	if listener == null:
 		return 0.0
 	var d := listener.position.distance_to(pos)
-	return -100.0 if d > 30.0 else -d * 0.7
+	return -100.0 if d > 30.0 else -d * falloff
 
 
-func _sound(sound: String, pos: Vector3, pitch := 1.0, gain := 0.0) -> void:
-	var v := _volume(pos)
+func _sound(sound: String, pos: Vector3, pitch := 1.0, gain := 0.0, falloff := 0.7) -> void:
+	var v := _volume(pos, falloff)
 	if v > -50.0:
 		Sfx.play(sound, v + gain, pitch)
+
+
+func _dig_sound(sound: String, c: Vector3, pitch := 1.0, gain := 0.0) -> void:
+	## Digging, breaking and chiselling: full volume within your own reach,
+	## much quieter (and fading faster) when it's another rat at work.
+	if listener != null and listener.eye().distance_to(c) > Config.DIG_REACH + 1.2:
+		_sound(sound, c, pitch, gain + OTHERS_DIG_GAIN, OTHERS_DIG_FALLOFF)
+	else:
+		_sound(sound, c, pitch, gain)
 
 
 static func _material_sound(id: int) -> String:
@@ -99,7 +112,10 @@ static func _material_sound(id: int) -> String:
 
 
 static func break_sheet(id: int) -> String:
-	## Which recoloured block-break effect suits a block.
+	## Which block-break effect suits a block. It is drawn hue-shifted to the
+	## block's colour, so this picks the light and shade: the material's own
+	## sheet, or for soft blocks (cheese, grass, paint, team blocks...) one as
+	## bright or dark as the block.
 	if id == Blocks.ICE:
 		return "break_ice"
 	match _material_sound(id):
@@ -107,6 +123,13 @@ static func break_sheet(id: int) -> String:
 		"scrap": return "break_scrap"
 		"obsidian": return "break_dark"
 		"wood": return "break_wood"
+	var v := Blocks.COLOR[id].v
+	if v >= 0.8:
+		return "break_ice"
+	if v >= 0.58:
+		return "break_scrap"
+	if v < 0.3:
+		return "break_dark"
 	return "break_dirt"
 
 
@@ -170,7 +193,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 	match kind:
 		"hit":
 			var id := int(data["id"])
-			_sound("mine_" + _material_sound(id), c)
+			_dig_sound("mine_" + _material_sound(id), c)
 			_burst(c, Blocks.COLOR[id], 3, 2.5)
 			_sprite("hit", _facing_viewer(c, 0.62), 0.3, null, -1.0, Blocks.COLOR[id])   # sparks in the block's colour
 			_crack.visible = true
@@ -179,12 +202,10 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			(_crack.material_override as StandardMaterial3D).albedo_color = Color(0, 0, 0, 0.12 + 0.45 * float(data["ratio"]))
 		"break":
 			var bid := int(data)
-			_sound("break_" + _material_sound(bid), c)
+			_dig_sound("break_" + _material_sound(bid), c)
 			_burst(c, Blocks.COLOR[bid], 6, 4.0)
-			if Blocks.is_paint(bid):
-				_sprite("break_dirt", c - Vector3(0, 0.45, 0), 0.7, null, -1.0, Blocks.COLOR[bid])   # dyed dirt bursts in its dye
-			else:
-				_sprite(break_sheet(bid), c - Vector3(0, 0.45, 0), 0.7)
+			# the shards take the block's own colour: the material's sheet, hue-shifted to the block
+			_sprite(break_sheet(bid), c - Vector3(0, 0.45, 0), 0.7, null, -1.0, Blocks.COLOR[bid])
 			if _crack.position.distance_to(c) < 0.1:
 				_crack.visible = false
 		"clang":
@@ -211,7 +232,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			elif flier == null:
 				_burst(pos + Vector3(0, 0.2, 0), Color(1.0, 0.6, 0.15), 14, 3.0)
 		"dash":
-			_sound("jetratpack_flame", pos, 2.2, -10.0)
+			_sound("jetratpack_flame", pos, 2.2, -20.0)
 			_sprite("dash", pos, 0.42, null, -1.0, Color(0, 0, 0, 0), _moving_left(_nearest_rat(pos)))
 		"jump":
 			_sprite("dust", pos, 0.3)
@@ -243,7 +264,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sprite("shield_block", pos, 0.85, null, -1.0, Color(0, 0, 0, 0), false, true)
 			_float_text(pos + Vector3(0, 1.3, 0), "BLOCKED!", Color(0.6, 0.85, 1.0))
 		"pound":
-			_sound("siege_impact", pos, 0.8, -4.0)
+			_sound("siege_impact", pos, 0.9, -16.0)
 			_sprite("pound", pos, 0.32)
 		"splash":
 			_sound("splash", pos, 1.0 if size >= 1.0 else 1.4, 0.0 if size >= 1.0 else -6.0)
@@ -284,7 +305,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_burst(pos, Color(0.3, 0.28, 0.28), 16, 6.0)
 			_sprite("explosion", pos - Vector3(0, 0.5, 0), clampf(size / 3.0, 0.5, 1.4))
 		"chip":
-			_sound("mine_" + _material_sound(int(data)), pos, 1.7, -8.0)
+			_dig_sound("mine_" + _material_sound(int(data)), pos, 1.7, -8.0)
 			_burst(pos + Vector3.ONE * 0.07, Blocks.COLOR[int(data)], 2, 1.5)
 		"throw":
 			_sound("block_place", pos, 1.5)

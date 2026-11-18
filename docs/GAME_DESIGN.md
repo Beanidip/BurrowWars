@@ -95,16 +95,19 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
   them out. Cheese never goes in. Only TNT hurts it: 5 blasts break it, and the pool survives.
 - **Gear slot** (J): one piece of gear at a time. The Jetpack (14 scrap) lifts you for 1.1 s, then
   needs 5 s to cool down; carrying cheese it lifts half as strongly. Bots buy one when they can
-  afford it. The **Rat Knight Shield** (12 scrap) is raised with J for 5 s: bonks, cannonballs
+  afford it. Bots also mine scrap they pass near (when not hauling cheese) and bank half of what
+  they mined into the team pool whenever they're at base or beside a stash. The **Rat Knight Shield** (12 scrap) is raised with J for 5 s: bonks, cannonballs
   and wrecking balls bounce off, so nobody can knock cheese out of your paws, but hauling cheese
   behind it you move a quarter slower. 8 s to ready it again.
 - **Bubble Shoes** (gear, 10 scrap): J switches them on or off. While on, stepping off an edge
   (not jumping) blows a bubble block under your feet instead of falling, 2 scrap each, so
   walking out over a gap builds a bridge. Bubbles pop after 10 s; anyone can stand on them or
-  dig one. With less than 2 scrap you fall. Online the server makes each bubble.
+  dig one. With less than 2 scrap the next step off an edge is a plain fall. Online the server
+  makes each bubble.
 - **Cheese Decoy** (trap, 12 scrap, single use): looks exactly like Golden Cheese, and the other
   team's aim label even calls it that. An enemy who digs it is dazed for 1.5 s in a stink cloud
-  and it's gone; your own team digs it back into the pack. Blasts just destroy it.
+  and it's gone; your own team digs it back into the pack. Blasts just destroy it. Bots fall for
+  the other team's decoys too.
 - **Squeaker Pad** (trap, 15 scrap): a floor pad. An enemy stepping on it squeaks for everyone
   nearby and drops a beacon only its team sees (8 s). At most one squeak per 2 s; the third
   spends it. Like other placed traps: 5 digs for its team, 15 for anyone else.

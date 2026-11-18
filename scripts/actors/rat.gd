@@ -359,8 +359,6 @@ func _bubble_check(was_on_floor: bool, y_before: float, dt: float) -> void:
 	var holding := _bubble_hold > 0.0 and absf(position.y - _bubble_y) < 0.6
 	if not was_on_floor and not holding:
 		return            # a jump or a drop already under way: the shoes only catch a step off an edge
-	if not free_build and scrap < Config.BUBBLE_COST and not holding:
-		return
 	var level := _bubble_y if holding else y_before
 	var cell := Vector3i(floori(position.x), floori(level + 0.01) - 1, floori(position.z))
 	if _world.get_cell(cell) != Blocks.AIR:
@@ -368,10 +366,14 @@ func _bubble_check(was_on_floor: bool, y_before: float, dt: float) -> void:
 	if cell == _bubble_last and not holding:
 		return            # we asked for this one and it never came (refused): fall after all
 	if cell != _bubble_last:
+		if not free_build and scrap < Config.BUBBLE_COST:
+			return        # out of scrap: an ordinary step off the edge, and down we go
 		wants_bubble = true
 		bubble_cell = cell
 		_bubble_last = cell
-		_bubble_hold = 0.4
+		_bubble_hold = 0.3
+		if net_local and not free_build:
+			scrap -= Config.BUBBLE_COST   # online: count it now; the server's tally follows
 	_bubble_y = level
 	position.y = level
 	vel.y = 0.0
