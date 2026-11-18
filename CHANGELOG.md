@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 - Lobby playground, deep caves, pixel effects, art pipeline (2026-11-18)
 
 | Change | Files |
 |---|---|
+| Version 2.0.0, network protocol 7 (the wire format and block list changed: 1.9 and 2.0 refuse each other with a clear message) | `project.godot`, `export_presets.cfg`, `net/net.gd` |
 | Team gates cost scrap again: 7 for everyone, 3 for Builders | `match/class_defs.gd` (`price`), `match/match.gd`, `ui/hud.gd` |
 | Springs fling any rat or loose cheese within a block of their sides (any team), not only what lands on top | `actors/rat.gd`, `match/match.gd` |
 | Team Stash (12 scrap, max 2): a placeable door into your team's shared pool of scrap, dirt, stone, ice and obsidian (no cheese), also reachable at base with B. Only 5 TNT blasts break it; the pool survives | `world/blocks.gd`, `match/match.gd`, `ui/hud.gd`, `net/*` |
