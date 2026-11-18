@@ -10,6 +10,26 @@ const NZ := [0, 0, 0, 0, 1, -1]
 
 
 static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_trans: Material) -> ArrayMesh:
+	return make_mesh(build_arrays(world, k), mat_opaque, mat_trans)
+
+
+static func make_mesh(surfaces: Array, mat_opaque: Material, mat_trans: Material) -> ArrayMesh:
+	## Main thread: the arrays from build_arrays into a mesh. Surface key -1 is
+	## opaque, -2 see-through, anything else a textured block id.
+	if surfaces.is_empty():
+		return null
+	var mesh := ArrayMesh.new()
+	for surf: Array in surfaces:
+		var key: int = surf[3]
+		var mat: Material = mat_opaque if key == -1 else (mat_trans if key == -2 else BlockTextures.material(key))
+		_commit(mesh, surf[0], surf[1], mat, surf[2])
+	return mesh
+
+
+static func build_arrays(world: VoxelWorld, k: Vector3i) -> Array:
+	## The geometry of one chunk as plain arrays: [vertices, colours, uvs, key]
+	## per surface. Only reads the world, so it can run on a worker thread
+	## (VoxelWorld.start_prebuild meshes a whole map on every core this way).
 	var ov := PackedVector3Array()
 	var oc := PackedColorArray()
 	var tv := PackedVector3Array()
@@ -24,6 +44,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 	var opaque := Blocks.OPAQUE
 	var mf := world.micro_flag
 	var textured := BlockTextures.flags()
+	var colors := Blocks.COLOR      # local copies: worker threads meshing side by side don't fight over the shared tables
 	var tex: Dictionary = {}     # block id -> [vertices, colours, uvs] for textured faces
 	var layered := not world.gates.is_empty()
 	for y in range(y0, y0 + VoxelWorld.CHUNK):
@@ -34,7 +55,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 				if id == Blocks.AIR:
 					continue
 				var mn := Vector3(x, y, z)
-				var col: Color = Blocks.COLOR[id]
+				var col: Color = colors[id]
 				var tint: float = 0.93 + 0.14 * float((x * 73856093 ^ y * 19349663 ^ z * 83492791) & 255) / 255.0
 				if layered and world.gates.has(Vector3i(x, y, z)):
 					# a gate holding a gadget: the see-through gate box wraps the gadget
@@ -75,7 +96,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 							continue
 						var c := base
 						if id == Blocks.GRASS and f != 2:
-							c = Blocks.COLOR[Blocks.DIRT] * tint * depth
+							c = colors[Blocks.DIRT] * tint * depth
 						if textured[id] == 1:
 							if not tex.has(id):
 								tex[id] = [PackedVector3Array(), PackedColorArray(), PackedVector2Array()]
@@ -142,12 +163,14 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 						_box(ov, oc, mn + Vector3(0.12, 0, 0.12), mn + Vector3(0.88, 0.08, 0.88), Color(0.78, 0.62, 0.38))
 						_box(ov, oc, mn + Vector3(0.2, 0.08, 0.42), mn + Vector3(0.8, 0.16, 0.58), col)
 						_box(ov, oc, mn + Vector3(0.42, 0.08, 0.6), mn + Vector3(0.58, 0.2, 0.76), Color(1.0, 0.85, 0.2))
-	var mesh := ArrayMesh.new()
-	_commit(mesh, ov, oc, mat_opaque)
+	var out: Array = []
+	if not ov.is_empty():
+		out.append([ov, oc, PackedVector2Array(), -1])
 	for tid: int in tex:
-		_commit(mesh, tex[tid][0], tex[tid][1], BlockTextures.material(tid), tex[tid][2])
-	_commit(mesh, tv, tc, mat_trans)
-	return mesh if mesh.get_surface_count() > 0 else null
+		out.append([tex[tid][0], tex[tid][1], tex[tid][2], tid])
+	if not tv.is_empty():
+		out.append([tv, tc, PackedVector2Array(), -2])
+	return out
 
 
 # --- liquids -------------------------------------------------------------------

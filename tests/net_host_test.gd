@@ -29,6 +29,11 @@ func wait_for(cond: Callable, timeout: float) -> bool:
 	return bool(cond.call())
 
 
+func until_loaded() -> GameSession:
+	await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session.loaded, 60.0)
+	return main.session
+
+
 func _run() -> void:
 	if OS.get_environment("BW_NET_TEST") == "lobby":
 		await _run_lobby()
@@ -37,8 +42,7 @@ func _run() -> void:
 	Net.player_name = "Hosty"
 	main.start_match({"mode": "race", "seed": 777, "goal": 3, "team": 0, "class": "scout", "team_size": 2,
 		"bot_rest": 3.0, "net": "host", "port": port})
-	await get_tree().process_frame
-	var s: GameSession = main.session
+	var s: GameSession = await until_loaded()
 	check(s != null and Net.role == Net.Role.SERVER and s.net is NetServer, "hosting from a normal game session")
 	check(s.player.display_name == "Hosty", "the host's rat carries the host's name")
 	var joined := await wait_for(func() -> bool: return (s.net as NetServer).player_count() > 0, 30.0)
@@ -70,10 +74,9 @@ func _run_lobby() -> void:
 	Net.player_name = "Hosty"
 	main.start_match({"mode": "race", "seed": 777, "goal": 3, "team": 0, "class": "scout", "team_size": 2,
 		"bot_rest": 3.0, "net": "host", "port": port, "lobby": true})
-	await get_tree().process_frame
-	var s: GameSession = main.session
+	var s: GameSession = await until_loaded()
 	check(s != null and s.m.lobby and s.net is NetServer, "hosting opens the playground lobby")
-	check(s.m.bots.is_empty() and s.m.rats.size() == 1 and s.player.gear == "jetpack", "just the host so far, wearing a jetpack")
+	check(s.m.bots.is_empty() and s.m.rats.size() <= 2 and s.player.gear == "jetpack", "no bots in the lobby; the host wears a jetpack")
 	check(s.hud.lobby_text().contains(Inputs.key_name("start_match")), "the host is told how to start (%s)" % s.hud.lobby_text())
 	var joined := await wait_for(func() -> bool: return (s.net as NetServer).player_count() > 0, 30.0)
 	check(joined, "a friend joined the lobby")

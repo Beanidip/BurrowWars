@@ -9,6 +9,8 @@ signal start_requested          # the host ends the lobby: start the match
 
 var settings: Dictionary = {}
 var net_info: Dictionary = {}   # online client: the server's welcome
+var loading: LoadingScreen      # Main's loading screen, lifted once the world is meshed (null: mesh near the player now)
+var loaded := false             # the world is meshed and the match running
 var m: Match
 var net: Node                   # NetServer when hosting, NetClient when joined
 var player: Rat
@@ -114,13 +116,30 @@ func _ready() -> void:
 	hud.rematch_requested.connect(func() -> void: rematch_requested.emit())
 	hud.start_requested.connect(func() -> void: start_requested.emit())
 	m.won.connect(_celebrate)
-	m.world.rebuild_near(player.position, 56.0)   # the rest of this big map streams in over the next frames
+	if loading != null:
+		# behind the loading screen: the match waits while every core meshes the world
+		m.auto_step = false
+		m.world.prebuilt.connect(_on_prebuilt, CONNECT_ONE_SHOT)
+		m.world.start_prebuild(player.position)
+	else:
+		m.world.rebuild_near(player.position, 56.0)   # the rest of this big map streams in over the next frames
+		loaded = true
+
+
+func _on_prebuilt() -> void:
+	m.auto_step = true
+	loaded = true
+	if loading != null and is_instance_valid(loading):
+		loading.finish()
+	loading = null
 
 
 var _tag_t := 0.0
 
 
 func _process(delta: float) -> void:
+	if loading != null and is_instance_valid(loading) and m != null:
+		loading.progress = 0.3 + 0.7 * m.world.prebuild_progress
 	_tag_t -= delta
 	if _tag_t > 0.0 or player == null or ctl == null or ctl.cam == null:
 		return

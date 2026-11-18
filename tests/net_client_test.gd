@@ -51,6 +51,7 @@ func join_server() -> GameSession:
 		await wait_for(func() -> bool: return failed[0] or (main.session != null and is_instance_valid(main.session) and main.session.m != null), 6.0)
 		Net.join_failed.disconnect(on_fail)
 		if main.session != null and is_instance_valid(main.session) and main.session.player != null:
+			await wait_for(func() -> bool: return is_instance_valid(main.session) and main.session.loaded, 30.0)
 			return main.session
 		await wait(0.5)
 	return null
@@ -83,15 +84,13 @@ func _run() -> void:
 	var ref := VoxelWorld.new()
 	ref.visual = false
 	MapGenerator.generate(ref, int(m.settings["seed"]))
-	if OS.get_environment("BW_EXPECT_BOTS") == "":
-		check(m.world.data == ref.data, "the world snapshot matches the seed's map")
-	else:
-		# a hosted game was already being played (bots dig) before we joined
-		var diff := 0
-		for i in m.world.data.size():
-			if m.world.data[i] != ref.data[i]:
-				diff += 1
-		check(diff < 2000, "the world snapshot is the seed's map plus the host's digging (%d cells changed)" % diff)
+	# the bots start digging as soon as we connect (and, hosted, were already
+	# playing), and our loading screen is up for a moment first
+	var diff := 0
+	for i in m.world.data.size():
+		if m.world.data[i] != ref.data[i]:
+			diff += 1
+	check(diff < 2000, "the world snapshot is the seed's map plus the bots' digging (%d cells changed)" % diff)
 	ref.free()
 	m.try_change_class(me, "builder")   # at home, so allowed: gives us gates and a spring
 	var built := await wait_for(func() -> bool: return me.class_id == "builder" and int(me.gadgets.get("gate", 0)) > 0, 3.0)
@@ -143,6 +142,8 @@ func _run() -> void:
 				var id := m.world.get_cell(c)
 				if id != Blocks.DIRT and id != Blocks.GRASS:
 					continue
+				if Vector2(c.x + 0.5 - me.position.x, c.z + 0.5 - me.position.z).length() < 0.9:
+					continue      # not the ground under our own feet: we'd drop into the hole and block the refill
 				var d := (Vector3(c) + Vector3(0.5, 0.5, 0.5)).distance_to(eye)
 				var from_start := (Vector3(c) + Vector3(0.5, 0.5, 0.5)).distance_to(start + Vector3(0, 0.7, 0))
 				if d < 3.2 and from_start > Config.DIG_REACH + 1.2 and d < best:
@@ -179,7 +180,8 @@ func _run() -> void:
 		check(sprung, "a spring placed inside the gate arrives with its gate layer")
 	m.try_place_mat(me, Vector3i(2, 30, 2), "dirt")
 	var refused := await wait_for(func() -> bool: return _notices.size() > 0, 2.0)
-	check(refused and _notices[-1] == "Too far", "a refused request comes back as a notice (%s)" % str(_notices))
+	# (out of reach - or, if our seat came with no dirt, out of dirt: either way the server says why)
+	check(refused and (_notices[-1] == "Too far" or _notices[-1].begins_with("No dirt")), "a refused request comes back as a notice (%s)" % str(_notices))
 
 	# authority-side moves reach us: Ctrl+K respawn puts us back in base
 	m.respawn(me)

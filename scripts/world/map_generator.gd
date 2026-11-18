@@ -130,6 +130,15 @@ static func generate(world: VoxelWorld, map_seed: int, cheese_at_least := 0) -> 
 	_cache[key] = [world.data.duplicate(), world.points_of_interest.duplicate()]
 
 
+static func warm(map_seed: int, cheese_at_least: int) -> void:
+	## Generate a map into the cache (run on a worker thread behind the loading
+	## screen); the match's own generate() then just copies it.
+	var w := VoxelWorld.new()
+	w.visual = false
+	generate(w, map_seed, cheese_at_least)
+	w.free()
+
+
 static func _more_cheese(world: VoxelWorld, rng: RandomNumberGenerator, heights: PackedInt32Array, half_target: int) -> void:
 	## Big goals need more cheese: add it underground, a sector at a time, so
 	## it stays spread over the whole map (the other half gets the same).

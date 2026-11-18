@@ -8,6 +8,8 @@ var session: GameSession
 var dedicated: DedicatedServer
 var _last_settings: Dictionary = {}
 var _pending: Dictionary = {}    # the match a hosted lobby is waiting to start
+var _cover: LoadingScreen        # the loading screen while a session is being built
+var _launches := 0               # a newer launch supersedes one still loading
 
 
 func _ready() -> void:
@@ -54,13 +56,47 @@ func start_match(settings: Dictionary) -> void:
 
 
 func _launch(settings: Dictionary) -> void:
+	## Put up the loading screen, generate the map on a worker thread (so the
+	## cheese keeps spinning), then build the session behind the screen.
 	_clear()
+	var me := _launches
+	var cover := _show_cover()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _warm_map(settings, cover)
+	if me != _launches:
+		return                # something newer started (or we went back to the menu) meanwhile
 	session = GameSession.new()
 	session.settings = settings
+	session.loading = cover
 	session.exit_requested.connect(show_menu.bind(""), CONNECT_DEFERRED)
 	session.rematch_requested.connect(_rematch, CONNECT_DEFERRED)
 	session.start_requested.connect(_start_pending, CONNECT_DEFERRED)
 	add_child(session)
+	_cover = null             # the session owns it now and lifts it when the world is ready
+
+
+func _show_cover() -> LoadingScreen:
+	var cover := LoadingScreen.new()
+	add_child(cover)
+	_cover = cover
+	return cover
+
+
+func _warm_map(settings: Dictionary, cover: LoadingScreen) -> void:
+	## A generated map is made on a worker thread into the generator's cache.
+	var mode := String(settings.get("mode", "race"))
+	if mode == "lobby" or String(settings.get("net", "")) == "client" or String(settings.get("map_file", "")) != "":
+		return
+	var need := 0 if mode == "free" else MapGenerator.min_cheese(int(settings.get("goal", 8)))
+	var task := WorkerThreadPool.add_task(MapGenerator.warm.bind(int(settings.get("seed", 1)), need), true)
+	var t := 0.0
+	while not WorkerThreadPool.is_task_completed(task):
+		await get_tree().process_frame
+		t += get_process_delta_time()
+		if is_instance_valid(cover):
+			cover.progress = 0.3 * (1.0 - exp(-t * 1.5))
+	WorkerThreadPool.wait_for_task_completion(task)
 
 
 func _start_pending() -> void:
@@ -80,6 +116,8 @@ func _on_joined(info: Dictionary) -> void:
 	session = GameSession.new()
 	session.settings = s
 	session.net_info = info
+	session.loading = _show_cover()
+	_cover = null
 	session.exit_requested.connect(show_menu.bind(""), CONNECT_DEFERRED)
 	add_child(session)
 
@@ -97,10 +135,16 @@ func _rematch() -> void:
 
 
 func _clear() -> void:
+	_launches += 1           # any launch still loading is now out of date
 	get_tree().paused = false
 	if menu != null:
 		menu.queue_free()
 		menu = null
 	if session != null:
+		if session.loading != null and is_instance_valid(session.loading):
+			session.loading.queue_free()
 		session.queue_free()
 		session = null
+	if _cover != null and is_instance_valid(_cover):
+		_cover.queue_free()
+	_cover = null

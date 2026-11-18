@@ -32,8 +32,18 @@ var loaded_extra: Dictionary = {}  # non-terrain data from the last load (machin
 var points_of_interest: Array[Vector3] = []
 var visual := true
 
+signal prebuilt                   # start_prebuild finished: every chunk has its mesh
+
+var prebuild_progress := 1.0       # 0..1 while start_prebuild is meshing the map
+
 var _dirty: Dictionary = {}
 var _chunks: Dictionary = {}
+var _pre_keys: Array[Vector3i] = []
+var _pre_results: Array = []
+var _pre_lock: Mutex
+var _pre_task := -1
+var _pre_snap: VoxelWorld
+var _pre_next := 0
 var _mat_opaque: StandardMaterial3D
 var _mat_trans: StandardMaterial3D
 
@@ -371,18 +381,98 @@ func rebuild_dirty(budget: int) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _pre_task >= 0:
+		_prebuild_place()
+		return
 	if visual and not _dirty.is_empty():
 		rebuild_dirty(6)
 
 
 func _rebuild_chunk(k: Vector3i) -> void:
+	_place_chunk(k, ChunkMesher.build_arrays(self, k))
+
+
+func _place_chunk(k: Vector3i, surfaces: Array) -> void:
 	var mi: MeshInstance3D = _chunks.get(k)
 	if mi == null:
 		mi = MeshInstance3D.new()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(mi)
 		_chunks[k] = mi
-	mi.mesh = ChunkMesher.build(self, k, _mat_opaque, _mat_trans)
+	mi.mesh = ChunkMesher.make_mesh(surfaces, _mat_opaque, _mat_trans)
+
+
+# ---------------------------------------------------------------- loading
+
+func start_prebuild(centre: Vector3) -> void:
+	## Mesh every waiting chunk on all CPU cores, nearest to `centre` first,
+	## while a loading screen is up. Workers read a frozen copy of the world
+	## (edits meanwhile are safe: they mark chunks dirty again for later);
+	## finished meshes go in a few at a time each frame; then `prebuilt`.
+	BlockTextures.flags()            # its lazy set-up must not race on the workers
+	_pre_keys.clear()
+	for k: Vector3i in _dirty.keys():
+		if k.x >= 0 and k.y >= 0 and k.z >= 0 and k.x < SX / CHUNK and k.y < SY / CHUNK and k.z < SZ / CHUNK:
+			_pre_keys.append(k)
+	_dirty.clear()
+	if _pre_keys.is_empty():
+		prebuild_progress = 1.0
+		prebuilt.emit.call_deferred()
+		return
+	var near := func(a: Vector3i, b: Vector3i) -> bool:
+		return (Vector3(a) * CHUNK).distance_squared_to(centre) < (Vector3(b) * CHUNK).distance_squared_to(centre)
+	_pre_keys.sort_custom(near)
+	_pre_snap = VoxelWorld.new()
+	_pre_snap.visual = false
+	_pre_snap.data = data
+	_pre_snap.micro_flag = micro_flag
+	_pre_snap.micro = micro.duplicate(true)
+	_pre_snap.gates = gates.duplicate()
+	_pre_results = []
+	_pre_results.resize(_pre_keys.size())
+	_pre_lock = Mutex.new()
+	_pre_next = 0
+	prebuild_progress = 0.0
+	# high priority: Godot runs low-priority tasks on only about a third of its threads
+	_pre_task = WorkerThreadPool.add_group_task(_prebuild_one.bind(_pre_keys.duplicate(), _pre_snap), _pre_keys.size(), -1, true)
+
+
+func _prebuild_one(i: int, keys: Array[Vector3i], snap: VoxelWorld) -> void:
+	var surfaces := ChunkMesher.build_arrays(snap, keys[i])
+	_pre_lock.lock()
+	_pre_results[i] = surfaces
+	_pre_lock.unlock()
+
+
+func _prebuild_place() -> void:
+	var t0 := Time.get_ticks_msec()
+	while _pre_next < _pre_keys.size() and Time.get_ticks_msec() - t0 < 10:
+		_pre_lock.lock()
+		var surfaces: Variant = _pre_results[_pre_next]
+		_pre_results[_pre_next] = null
+		_pre_lock.unlock()
+		if surfaces == null:
+			break             # the workers haven't got to this one yet
+		_place_chunk(_pre_keys[_pre_next], surfaces)
+		_pre_next += 1
+	prebuild_progress = float(_pre_next) / float(_pre_keys.size())
+	if _pre_next >= _pre_keys.size():
+		_end_prebuild()
+		prebuilt.emit()
+
+
+func _end_prebuild() -> void:
+	if _pre_task >= 0:
+		WorkerThreadPool.wait_for_group_task_completion(_pre_task)
+		_pre_task = -1
+	if _pre_snap != null:
+		_pre_snap.free()
+		_pre_snap = null
+	_pre_results = []
+
+
+func _exit_tree() -> void:
+	_end_prebuild()      # leaving mid-load (quit to menu): let the workers finish, then tidy up
 
 
 # ---------------------------------------------------------------- persistence

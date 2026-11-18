@@ -61,6 +61,16 @@ func frames(n: int) -> void:
 		await get_tree().process_frame
 
 
+func until_loaded(old: GameSession = null) -> void:
+	## A new session is up and its loading screen gone (the map is built on
+	## worker threads behind it).
+	for i in 1800:
+		var s: GameSession = main.session
+		if s != null and is_instance_valid(s) and s != old and s.loaded:
+			return
+		await get_tree().process_frame
+
+
 func shot(shot_name: String) -> void:
 	if _shots == "":
 		return
@@ -114,8 +124,12 @@ func _run() -> void:
 
 	# --- Cheese Race -----------------------------------------------------
 	main.start_match({"mode": "race", "seed": 4242, "goal": 2, "team": 0, "class": "builder", "team_size": 2})
+	await frames(3)
+	check(main.find_children("*", "LoadingScreen", true, false).size() == 1, "a loading screen covers the start")
+	await until_loaded()
 	await frames(30)
 	var s: GameSession = main.session
+	check(main.find_children("*", "LoadingScreen", true, false).is_empty() or s.loading == null, "and lifts once the world is built")
 	check(s != null and s.m.rats.size() == 4, "race starts with 2v2 rats")
 	check(s.m.world.get_child_count() > 20, "terrain chunks were meshed (%d)" % s.m.world.get_child_count())
 	check(s.player.on_floor and s.m.in_base(s.player), "player stands in the base")
@@ -247,6 +261,7 @@ func _run() -> void:
 		check(fits((s.hud._dialog as Control).get_child(1) as Control), "results fit the viewport")
 	await shot("14_results")
 	s.hud.rematch_requested.emit()
+	await until_loaded(s)
 	await frames(30)
 	check(main.session != null and main.session != s and not main.session.m.over, "rematch starts a fresh match")
 	main.session.hud._exit()
@@ -255,6 +270,7 @@ func _run() -> void:
 
 	# --- Free Build -------------------------------------------------------
 	main.start_match({"mode": "free", "seed": 5, "goal": 9999, "team": 0, "class": "maestro", "team_size": 1})
+	await until_loaded()
 	await frames(30)
 	s = main.session
 	check(s.m.free_mode and s.m.rats.size() == 1 and s.player.class_id == "maestro", "Free Build starts solo as Chisel Maestro")
