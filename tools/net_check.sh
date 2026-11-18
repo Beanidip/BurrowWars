@@ -24,11 +24,13 @@ pair() {   # name, server command..., then "::" , client env...
   fi
 }
 
-pair "net: dedicated server + client" "$GODOT" --headless --path . -- --server --port 24599 --seed 777 --goal 3 --team-size 2 \
+pair "net: dedicated server + client" "$GODOT" --headless --path . -- --server --port 24599 --seed 777 --goal 3 --team-size 2 --lobby 0 \
   :: BW_PORT=24599
 WAIT_SERVER=1 pair "net: player-hosted game + client" "$GODOT" --headless --path . res://tests/net_host_test.tscn \
   :: BW_PORT=24598 BW_EXPECT_BOTS=2
-pair "net: round ends, server rolls everyone onto a new map" "$GODOT" --headless --path . -- --server --port 24597 --goal 1 --team-size 1 --skill 2 --round-break 3 \
+pair "net: round ends, server rolls everyone onto a new map" "$GODOT" --headless --path . -- --server --port 24597 --goal 1 --team-size 1 --skill 2 --round-break 3 --lobby 3 \
   :: BW_PORT=24597 BW_NET_TEST=round BW_EXPECT_BOTS=1
+WAIT_SERVER=1 pair "net: hosted lobby, the host starts the match" env BW_NET_TEST=lobby BW_PORT=24596 "$GODOT" --headless --path . res://tests/net_host_test.tscn \
+  :: BW_PORT=24596 BW_NET_TEST=lobby
 rm -rf "$logdir"
 exit $fail

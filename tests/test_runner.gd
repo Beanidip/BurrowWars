@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -2996,3 +2996,89 @@ func test_deep_caves_and_riches() -> void:
 							hot += 1
 		check(hot == 0, "seed %d: no lava within 20 blocks of either base (%d)" % [seed_n, hot])
 		end(m)
+
+
+func test_lobby_playground() -> void:
+	var m := new_match({"mode": "lobby"})
+	check(m.lobby and m.free_mode and m.bots.is_empty(), "the lobby is a free playground with no bots")
+	var c := Vector3(MapGenerator.LOBBY_CENTER)
+	var a := m.spawn_rat(0, "scout", false)
+	var b := m.spawn_rat(0, "digger", false)
+	var red := m.spawn_rat(1, "builder", false)
+	run(m, 0.6)
+	for r: Rat in [a, b, red]:
+		check(r.position.distance_to(c) < 4.5 and r.on_floor and absf(r.position.y - c.y) < 0.05, "%s spawns standing on the plaza (%s)" % [r.class_id, str(r.position - c)])
+		check(r.gear == "jetpack", "%s wears a jetpack" % r.class_id)
+	check(a.class_id == "scout" and red.team == 1, "players keep their class and team")
+	check(m.siege.machines.size() == MapGenerator.LOBBY_CANNONS.size(), "the cannon battery is ready (%d)" % m.siege.machines.size())
+	# fixtures stay, the island can be dug
+	var bull := MapGenerator.LOBBY_BULL
+	var before := m.world.get_cell(bull)
+	a.position = Vector3(bull) + Vector3(-2.5, -0.5, 0.5)
+	a.dig_cd = 0.0
+	m.try_dig(a, bull)
+	check(m.world.get_cell(bull) == before and Blocks.is_paint(before), "the bullseye can't be dug")
+	m.blast(Vector3(bull) + Vector3(-0.5, 0.5, 0.5), 3.0, 50.0)
+	check(m.world.get_cell(bull) == before and m.world.get_cell(MapGenerator.LOBBY_CANNONS[0]) == Blocks.CANNON, "or blasted")
+	var cannon: Vector3i = MapGenerator.LOBBY_CANNONS[1]
+	b.position = Vector3(cannon) + Vector3(-1.5, 0, 0.5)
+	b.dig_cd = 0.0
+	m.try_dig(b, cannon)
+	check(m.world.get_cell(cannon) == Blocks.CANNON and int(b.gadgets.get("cannon", 0)) == 0, "a lobby cannon can't be picked up")
+	var ground := Vector3i(int(c.x) + 3, int(c.y) - 1, int(c.z) - 12)
+	check(m.world.get_cell(ground) == Blocks.GRASS, "there is open grass to dig")
+	b.position = Vector3(ground) + Vector3(0.5, 1, 1.5)
+	b.dig_cd = 0.0
+	m.try_dig(b, ground)
+	check(m.world.get_cell(ground) == Blocks.AIR, "the island itself can be burrowed into")
+	# teammates may bonk and shoot each other, and fly further than in a match
+	a.position = c + Vector3(0.5, 0, 3.5)
+	b.position = c + Vector3(1.5, 0, 3.5)
+	a.bonk_cd = 0.0
+	run(m, 0.1)
+	check(m.try_bonk(a, b) and b.vel.length() > 15.0, "a teammate's bonk launches you (%.1f)" % b.vel.length())
+	run(m, 2.0)
+	check(m.siege.try_operate(red, cannon) != "", "you must stand at a cannon to man it")
+	red.position = Vector3(cannon) + Vector3(-0.5, 0, 0.5)
+	run(m, 0.1)
+	check(m.siege.try_operate(red, cannon) == "", "a Red rat can man the lobby's cannon")
+	var mc: SiegeSystem.Machine = m.siege.machines[cannon]
+	mc.pitch = 0.0
+	var target := m.siege.muzzle(mc) + m.siege.aim_dir(mc) * 4.0
+	a.position = target - Vector3(0, 0.45, 0)
+	a.vel = Vector3.ZERO
+	a.knock = 0.0
+	check(m.siege.fire(red) == "", "and fire it")
+	var flung := 0.0
+	for i in 40:
+		m.step(DT)
+		flung = maxf(flung, a.vel.length())
+	check(flung > 15.0, "a cannonball flings a friend across the playground (%.1f)" % flung)
+	m.siege.release(red)
+	# the bullseye
+	var cheers: Array[String] = []
+	m.toast.connect(func(text: String, _t: int) -> void: cheers.append(text))
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	b.position = Vector3(bull) + Vector3(-Rat.RADIUS - 0.05, 0.1, 0.5)   # flat against the gold
+	b.vel = Vector3.ZERO
+	m.step(DT)
+	check(kinds.has("bullseye") and cheers.size() > 0 and cheers[-1].contains("BULLSEYE"), "flying into the gold scores a BULLSEYE (%s %s at %s)" % [str(kinds), str(cheers), str(b.center() - Vector3(bull))])
+	kinds.clear()
+	run(m, 0.5)
+	check(not kinds.has("bullseye"), "once, not every frame")
+	# the diving board is over deep water, and respawning returns to the plaza
+	var board_end := Vector3i(int(c.x), int(c.y) + 9, int(c.z) + 32)
+	check(m.world.get_cell(board_end) == Blocks.WOOD, "a diving board")
+	var deep := 0
+	for y in range(board_end.y - 1, 0, -1):
+		var id := m.world.get_cell(Vector3i(board_end.x, y, board_end.z))
+		if id == Blocks.WATER:
+			deep += 1
+		elif id != Blocks.AIR:
+			break
+	check(deep >= 3, "with deep water under it (%d)" % deep)
+	m.respawn(b)
+	check(b.position.distance_to(c) < 4.5, "respawning brings you back to the plaza")
+	check(not m.over and m.scores == [0, 0], "nobody wins a lobby")
+	end(m)

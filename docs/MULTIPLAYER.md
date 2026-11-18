@@ -9,9 +9,17 @@ seats as they join, and a bot takes the seat back when they leave, so teams alwa
 then press **Join** on a server in the list, or type an address (`1.2.3.4` or `1.2.3.4:24565`)
 and press **Join**.
 
-**Host a game for friends:** **Play Online** > **Host a game...** sets up a normal Cheese Race
+**Host a game for friends:** **Play Online** > **Host Cheese Race...** sets up a normal Cheese Race
 and opens a server on your machine (default UDP port **24565**). You play in it like any other
 match.
+- **Lobby** (on by default in the host options): instead of starting straight away, you and
+  everyone who joins wait in the **playground**, a small island with a trampoline park, a
+  conveyor loop, a cannon battery anyone can man, a bullseye wall to fling each other at, a lava
+  hot tub, a tower of blocks to knock down and a diving tower over the lake. Everyone wears a
+  jetpack, everything is free, and bonks and cannonballs hit teammates too (twice as hard).
+  The match starts only when the host presses **Enter** (rebindable: "Lobby: start the match").
+  After a match, **Back to the lobby** takes everyone back to the playground. Untick Lobby to
+  start the match as soon as you open the server, as before.
 - Same Wi-Fi/LAN: friends join with your local address (for example `192.168.1.20`).
 - Over the internet: forward **UDP 24565** on your router to your PC, allow Burrow Wars through
   Windows Firewall when asked, and give friends your public IP address. There is no NAT
@@ -25,8 +33,9 @@ version the server runs.
 ## Public servers (always on, anyone can join)
 
 A **dedicated server** is the same game started headless with `--server`: no window, no local
-player, teams filled with bots, and a new round on a new map 15 seconds after each win. When
-nobody is connected the world holds still.
+player, teams filled with bots, and a new round on a new map after each win. Before each round,
+everyone waits 30 seconds in the playground lobby (see `--lobby`). When nobody is connected the
+world holds still.
 
 ```bash
 # from the exported Linux build
@@ -48,6 +57,7 @@ On Windows: `BurrowWars.exe --headless -- --server`.
 | `--team-size N` | 4 | Seats per team, bots included (1-8). |
 | `--skill 0/1/2` | 1 | Bot skill: relaxed, normal, fierce. |
 | `--round-break S` | 15 | Seconds between a win and the next map. |
+| `--lobby S` | 30 | Seconds in the playground before each round (the countdown only runs while someone is connected). `0` = no lobby. Ignored with `--free`. |
 | `--seed N` | random | Fix the first map (later rounds are random). |
 | `--free` | off | Run Free Build instead of Cheese Race. |
 | `--map FILE` | none | Start every round on a saved/exported `.bwmap` (from Esc > Export map) instead of a new map. |

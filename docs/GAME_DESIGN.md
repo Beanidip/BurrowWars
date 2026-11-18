@@ -69,6 +69,25 @@ rich: most of the map's cheese and about twice the scrap of the rest of the unde
 much of it set into cave walls where you can see it from the tunnel. Nothing deep is
 placed within about 20 blocks of a base.
 
+## The lobby playground
+
+Hosted games (and dedicated servers between rounds) start in a playground instead of a map: a
+round grassy island in a lake (`MapGenerator.lobby`). There are no bases, scores or bots, and
+everything is free as in Free Build, but players keep their own class and team. Each rat wears a
+jetpack. Teammates can bonk and shoot each other, and bonks and cannonballs fling twice as far
+(`Config.LOBBY_LAUNCH`). The fixtures can't be dug, blasted, chiselled or picked up; the island
+itself can be burrowed into, and the coloured tower is meant to be knocked down. Fixtures:
+
+- the plaza in the middle (spawns, respawns), with a clockwise conveyor loop round it;
+- a trampoline park: a checkerboard of springs (they also fling anyone standing beside them);
+- a launch lane of conveyors into a row of springs, aimed at a bullseye wall. Flying into the
+  gold centre, or hitting it with a cannonball, scores a "BULLSEYE!";
+- a battery of three cannons anyone can man (T), facing the bullseye across the plaza;
+- a lava hot tub (the usual lava rules: bounce, then back to the plaza);
+- a pier out to a diving tower with a board over deep water.
+
+A host's lobby lasts until the host presses Enter; a dedicated server's runs a countdown.
+
 ## Stash, gear and traps
 
 - **Team Stash** (workshop, 12 scrap, up to 2): place it outside the bases. Press B beside it

@@ -53,6 +53,7 @@ var _server_list: VBoxContainer
 var _map_pick: OptionButton
 var _map_paths: Array[String] = []
 var _free_hosting := false
+var _lobby_check: CheckBox
 var _status: Label
 
 ## Public servers are listed in servers.json in the game's GitHub repository,
@@ -219,12 +220,18 @@ func _setup_page() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
 	buttons.add_child(UiKit.button("Back", _show_home, Vector2(160, 46)))
+	var go := UiKit.button("Open server & play" if _hosting else "Start digging!", _start_race, Vector2(260, 46))
 	if _hosting:
 		_port_edit = LineEdit.new()
 		_port_edit.text = str(Net.DEFAULT_PORT)
 		_port_edit.custom_minimum_size = Vector2(120, 34)
 		_page.add_child(UiKit.row(UiKit.label("Port (UDP; forward it on your router for internet play)"), _port_edit))
-	var go := UiKit.button("Open server & play" if _hosting else "Start digging!", _start_race, Vector2(260, 46))
+		_lobby_check = CheckBox.new()
+		_lobby_check.text = "Wait in the playground lobby: friends join there, and the match starts when you press %s" % Inputs.key_name("start_match")
+		_lobby_check.button_pressed = bool(Config.get_value("host_lobby"))
+		_lobby_check.toggled.connect(func(on: bool) -> void: go.text = "Open lobby" if on else "Open server & play")
+		_page.add_child(UiKit.row(UiKit.label("Lobby"), _lobby_check))
+		go.text = "Open lobby" if _lobby_check.button_pressed else "Open server & play"
 	buttons.add_child(go)
 	_page.add_child(buttons)
 	_pick_team(_team)
@@ -299,6 +306,9 @@ func _start_race() -> void:
 		s["map_file"] = _selected_map()
 	if _hosting:
 		s["net"] = "host"
+		s["lobby"] = _lobby_check != null and is_instance_valid(_lobby_check) and _lobby_check.button_pressed
+		Config.set_value("host_lobby", s["lobby"])
+		Config.save()
 		var port_text := _port_edit.text.strip_edges() if _port_edit != null else ""
 		var port := port_text.to_int() if port_text.is_valid_int() else 0
 		s["port"] = port if port > 0 and port < 65536 else Net.DEFAULT_PORT

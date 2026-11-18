@@ -6,11 +6,13 @@ extends Node
 ##
 ##   godot --headless --path . -- --server [--port 24565] [--name "My Server"]
 ##         [--goal 10] [--team-size 4] [--skill 1] [--free] [--round-break 15]
+##         [--lobby 30]                  (seconds in the playground before each round; 0 = none)
 ##         [--map path/to/saved.bwmap]   (every round then starts on that map)
 ##
 ## or, from an exported build:  BurrowWars.exe --headless -- --server
 
 const ROUND_BREAK := 15.0      # default seconds between a win and the next map
+const LOBBY_TIME := 30.0       # default seconds in the playground before each round
 
 var options: Dictionary = {}
 var m: Match
@@ -32,7 +34,7 @@ static func parse_args() -> Dictionary:
 			var key := a.substr(2)
 			if key in ["server", "free"]:
 				out[key] = true
-			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break", "map"] and i + 1 < args.size():
+			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map"] and i + 1 < args.size():
 				out[key] = args[i + 1]
 				i += 1
 		i += 1
@@ -49,7 +51,27 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	Log.info("dedicated server '%s' listening on UDP %d" % [_server_name(), port])
-	_new_round()
+	_next()
+
+
+func _lobby_time() -> float:
+	if bool(options.get("free", false)):
+		return 0.0     # Free Build is a sandbox already
+	return clampf(float(options.get("lobby", LOBBY_TIME)), 0.0, 600.0)
+
+
+func _next() -> void:
+	## Between rounds: the playground (if there is one), else straight to a new map.
+	if _lobby_time() > 0.0:
+		_new_lobby()
+	else:
+		_new_round()
+
+
+func _new_lobby() -> void:
+	_start(Match.lobby_settings({"server_name": _server_name()}))
+	m.lobby_left = _lobby_time()
+	Log.info("lobby: the next round starts %d s after someone is here" % int(m.lobby_left))
 
 
 func _server_name() -> String:
@@ -73,20 +95,25 @@ func _settings() -> Dictionary:
 
 
 func _new_round() -> void:
+	var s := _settings()
+	_start(s)
+	if not m.free_mode:
+		var size := int(s["team_size"])
+		for i in size * 2:
+			m.spawn_rat(i % 2, ClassDefs.ORDER[(i / 2) % 4], true)
+	Log.info("new round: seed %d, goal %d, %d players connected" % [int(s["seed"]), int(s["goal"]), Net.hellos.size()])
+
+
+func _start(s: Dictionary) -> void:
 	if net != null:
 		net.queue_free()
 	if m != null:
 		m.queue_free()
 	_restart_in = -1.0
-	var s := _settings()
 	m = Match.new()
 	m.name = "Match"
 	add_child(m)
 	m.setup(s, false)
-	if not m.free_mode:
-		var size := int(s["team_size"])
-		for i in size * 2:
-			m.spawn_rat(i % 2, ClassDefs.ORDER[(i / 2) % 4], true)
 	m.won.connect(func(team: int) -> void:
 		_restart_in = clampf(float(options.get("round-break", ROUND_BREAK)), 1.0, 300.0)
 		Log.info("round won by %s; next map in %d s" % [Match.TEAM_NAMES[team], int(_restart_in)]))
@@ -94,7 +121,6 @@ func _new_round() -> void:
 	net.name = "NetServer"
 	net.m = m
 	add_child(net)
-	Log.info("new round: seed %d, goal %d, %d players connected" % [int(s["seed"]), int(s["goal"]), Net.hellos.size()])
 
 
 func _process(delta: float) -> void:
@@ -102,10 +128,15 @@ func _process(delta: float) -> void:
 		return
 	# nobody connected: hold the world still instead of letting bots play alone
 	m.auto_step = net.player_count() > 0
+	if m.lobby and net.player_count() > 0:
+		m.lobby_left -= delta
+		if m.lobby_left <= 0.0:
+			_new_round()
+			return
 	if _restart_in >= 0.0:
 		_restart_in -= delta
 		if _restart_in <= 0.0:
-			_new_round()
+			_next()
 	_status_t += delta
 	if _status_t >= 60.0:
 		_status_t = 0.0

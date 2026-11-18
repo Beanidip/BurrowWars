@@ -30,6 +30,10 @@ class Pickup:
 var world: VoxelWorld
 var settings: Dictionary = {}
 var free_mode := false
+var lobby := false                  # the playground everyone waits in before a hosted match
+var lobby_props: Dictionary = {}    # Vector3i -> true: playground fixtures nobody can break
+var lobby_left := -1.0              # seconds until a server's lobby ends; -1 = when the host says
+var _bull_cd: Dictionary = {}       # rat id -> seconds before it can score another bullseye
 var goal := 8
 var scores: Array[int] = [0, 0]
 var rats: Array[Rat] = []
@@ -70,7 +74,8 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 	settings = match_settings
 	replica = as_replica
 	visual = with_visuals
-	free_mode = settings.get("mode", "race") == "free"
+	lobby = settings.get("mode", "race") == "lobby"
+	free_mode = settings.get("mode", "race") == "free" or lobby   # everything is free in the lobby too
 	goal = int(settings.get("goal", 8))
 	var map_seed := int(settings.get("seed", 1))
 	_rng.seed = map_seed * 7919 + 13
@@ -90,12 +95,16 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 	var need := 0 if free_mode else MapGenerator.min_cheese(goal)
 	var map_file := String(settings.get("map_file", ""))
 	var imported := false
-	if map_file != "" and not replica:
+	if map_file != "" and not replica and not lobby:
 		imported = world.load_from(map_file)
 		if not imported:
 			Log.warn("could not load map %s; generating one instead" % map_file)
 	if replica:
 		pass   # an online player's world arrives whole from the server (NetClient)
+	elif lobby:
+		lobby_props = MapGenerator.lobby(world)
+		for cell: Vector3i in MapGenerator.LOBBY_CANNONS:
+			siege.add_fixed(cell, Blocks.CANNON, MapGenerator.lobby_yaw())
 	elif imported:
 		if not free_mode:
 			MapGenerator.prepare_imported(world, map_seed, need)
@@ -139,13 +148,15 @@ func spawn_rat(team: int, class_id: String, is_bot: bool, fixed_id := -1) -> Rat
 	for r in rats:
 		if r.team == team:
 			slot += 1
-	rat.position = MapGenerator.spawn_point(team, slot)
-	rat.yaw = MapGenerator.spawn_yaw(team)
+	rat.position = spawn_point(team, slot)
+	rat.yaw = MapGenerator.lobby_yaw() if lobby else MapGenerator.spawn_yaw(team)
 	rat.display_name = BOT_NAMES[(rat.id * 3 + team) % BOT_NAMES.size()] if is_bot else "You"
 	rat.name = "Rat%d" % rat.id
 	rat.scrap = 6
 	if free_mode:
 		rat.flying = false
+	if lobby:
+		rat.gear = "jetpack"     # everyone flies in the playground
 	add_child(rat)
 	rats.append(rat)
 	if is_bot and not replica:
@@ -247,6 +258,8 @@ func step(dt: float) -> void:
 				fx.emit(kind, r.position, null)
 		_check_rat_hazards(r, dt)
 		_check_raid(r, dt)
+	if lobby:
+		_lobby_step(dt)
 	_step_pickups(dt)
 	_step_tnt(dt)
 	dynamite.step(dt)
@@ -426,6 +439,9 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 		return false
 	rat.dig_cd = 1.0 / Config.DIG_RATE
 	rat.play_action("dig", 0.28)
+	if lobby and lobby_props.has(cell):
+		fx.emit("clang", Vector3(cell), id)   # part of the playground
+		return false
 	var layer := world.layered_gate(cell)
 	if layer >= 0 and layer != rat.team:
 		fx.emit("clang", Vector3(cell), id)   # the gadget is behind the other team's gate
@@ -484,6 +500,8 @@ func _damage(rat: Rat, cell: Vector3i, power: int, quiet := false) -> bool:
 	var hits := hits_for(rat, cell, id)
 	if hits <= 0 or power <= 0 or not VoxelWorld.in_bounds(cell):
 		return false
+	if lobby and lobby_props.has(cell):
+		return false   # the playground's fixtures stay put
 	var layer := world.layered_gate(cell)
 	if layer >= 0 and (rat == null or rat.team != layer):
 		return false   # only the gate's own team can take a gadget out of it
@@ -626,6 +644,8 @@ func try_paint_block(rat: Rat, cell: Vector3i, color: int) -> String:
 	## painted blocks and glass just change colour. Free, at dig speed.
 	if over or rat.stun > 0.0 or rat.dig_cd > cd_slack(rat):
 		return "wait"
+	if lobby and lobby_props.has(cell):
+		return "That's part of the playground"
 	if remote != null:
 		rat.dig_cd = 1.0 / Config.DIG_RATE
 		rat.play_action("build", 0.25)
@@ -815,6 +835,8 @@ func _chisel_gate(rat: Rat, cell: Vector3i, mv: Vector3i) -> String:
 		return "wait"
 	if not VoxelWorld.in_bounds(cell) or mv.x < 0 or mv.y < 0 or mv.z < 0 or mv.x >= Blocks.MICRO or mv.y >= Blocks.MICRO or mv.z >= Blocks.MICRO:
 		return "Out of bounds"
+	if lobby and lobby_props.has(cell):
+		return "That's part of the playground"
 	var p := Vector3(cell) + (Vector3(mv) + Vector3(0.5, 0.5, 0.5)) / float(Blocks.MICRO)
 	if p.distance_to(rat.eye()) > Config.DIG_REACH + 0.6:
 		return "Too far"
@@ -1022,7 +1044,7 @@ func drop_cheese(rat: Rat, aim: Dictionary = {}, look := Vector3.ZERO) -> bool:
 func try_bonk(rat: Rat, target: Rat) -> bool:
 	if over or rat == target or target == null:
 		return false
-	if rat.team == target.team or rat.bonk_cd > cd_slack(rat) or rat.stun > 0.0:
+	if (rat.team == target.team and not lobby) or rat.bonk_cd > cd_slack(rat) or rat.stun > 0.0:
 		return false
 	if rat.center().distance_to(target.center()) > Config.BONK_RANGE + (0.7 if rat.net_peer != 0 else 0.0):
 		return false
@@ -1038,7 +1060,7 @@ func try_bonk(rat: Rat, target: Rat) -> bool:
 	var dir := target.position - rat.position
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
-	target.vel = dir * 7.0 + Vector3(0, 5.0, 0)
+	target.vel = (dir * 7.0 + Vector3(0, 5.0, 0)) * launch_power()
 	target.knock = 0.4
 	target.on_floor = false
 	if target.carried > 0:
@@ -1056,7 +1078,7 @@ func respawn(rat: Rat) -> void:
 	siege.release(rat)
 	drop_everything(rat)
 	var slot := rat.id % 4
-	rat.position = MapGenerator.spawn_point(rat.team, slot)
+	rat.position = spawn_point(rat.team, slot)
 	rat.vel = Vector3.ZERO
 	rat.stun = 0.0
 	rat.knock = 0.0
@@ -1064,6 +1086,42 @@ func respawn(rat: Rat) -> void:
 	rat.lava_strikes = 0
 	rat.unstick()
 	fx.emit("respawn", rat.position, null)
+
+
+static func lobby_settings(race: Dictionary) -> Dictionary:
+	## The playground round in front of a match: same host, team and class.
+	var s := {"mode": "lobby", "seed": 1, "goal": 9999, "team": int(race.get("team", 0)), "class": String(race.get("class", "digger")),
+		"team_size": 1, "server_name": String(race.get("server_name", ""))}
+	if race.has("net"):
+		s["net"] = race["net"]
+		s["port"] = int(race.get("port", Net.DEFAULT_PORT))
+	return s
+
+
+func spawn_point(team: int, slot := 0) -> Vector3:
+	return MapGenerator.lobby_spawn(team, slot) if lobby else MapGenerator.spawn_point(team, slot)
+
+
+func launch_power() -> float:
+	## Knockback from bonks and cannonballs: a lot more in the playground.
+	return Config.LOBBY_LAUNCH if lobby else 1.0
+
+
+func _lobby_step(dt: float) -> void:
+	## The bullseye: fling a rat (or fire a cannonball) into the gold centre.
+	var face := Vector3(MapGenerator.LOBBY_BULL) + Vector3(0.0, 0.5, 0.5)
+	for r in rats:
+		var cd := maxf(0.0, float(_bull_cd.get(r.id, 0.0)) - dt)
+		_bull_cd[r.id] = cd
+		if cd <= 0.0 and r.center().distance_to(face) < 1.3:
+			bullseye(r)
+
+
+func bullseye(r: Rat) -> void:
+	if r != null:
+		_bull_cd[r.id] = 3.0
+	fx.emit("bullseye", Vector3(MapGenerator.LOBBY_BULL) + Vector3(-0.5, 0.5, 0.5), null)
+	toast.emit("BULLSEYE! %s" % (r.display_name if r != null else ""), r.team if r != null else -1)
 
 
 func drop_everything(rat: Rat) -> void:

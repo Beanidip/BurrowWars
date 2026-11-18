@@ -5,6 +5,7 @@ extends Node
 
 signal exit_requested
 signal rematch_requested
+signal start_requested          # the host ends the lobby: start the match
 
 var settings: Dictionary = {}
 var net_info: Dictionary = {}   # online client: the server's welcome
@@ -111,6 +112,7 @@ func _ready() -> void:
 		(net as NetClient).notice.connect(func(text: String) -> void: ctl.notice.emit(text))
 	hud.exit_requested.connect(func() -> void: exit_requested.emit())
 	hud.rematch_requested.connect(func() -> void: rematch_requested.emit())
+	hud.start_requested.connect(func() -> void: start_requested.emit())
 	m.won.connect(_celebrate)
 	m.world.rebuild_near(player.position, 56.0)   # the rest of this big map streams in over the next frames
 

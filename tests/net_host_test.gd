@@ -30,6 +30,9 @@ func wait_for(cond: Callable, timeout: float) -> bool:
 
 
 func _run() -> void:
+	if OS.get_environment("BW_NET_TEST") == "lobby":
+		await _run_lobby()
+		return
 	var port := OS.get_environment("BW_PORT").to_int() if OS.get_environment("BW_PORT").is_valid_int() else 24598
 	Net.player_name = "Hosty"
 	main.start_match({"mode": "race", "seed": 777, "goal": 3, "team": 0, "class": "scout", "team_size": 2,
@@ -57,4 +60,41 @@ func _run() -> void:
 		check(bots == 3, "their seat went back to a bot (%d bots)" % bots)
 	Net.close()
 	print("---- net host: %d failed ----" % _fails)
+	get_tree().quit(1 if _fails > 0 else 0)
+
+
+func _run_lobby() -> void:
+	## Hosting with the lobby on: everyone waits in the playground until the
+	## host starts, then the match begins for all of them.
+	var port := OS.get_environment("BW_PORT").to_int() if OS.get_environment("BW_PORT").is_valid_int() else 24596
+	Net.player_name = "Hosty"
+	main.start_match({"mode": "race", "seed": 777, "goal": 3, "team": 0, "class": "scout", "team_size": 2,
+		"bot_rest": 3.0, "net": "host", "port": port, "lobby": true})
+	await get_tree().process_frame
+	var s: GameSession = main.session
+	check(s != null and s.m.lobby and s.net is NetServer, "hosting opens the playground lobby")
+	check(s.m.bots.is_empty() and s.m.rats.size() == 1 and s.player.gear == "jetpack", "just the host so far, wearing a jetpack")
+	check(s.hud.lobby_text().contains(Inputs.key_name("start_match")), "the host is told how to start (%s)" % s.hud.lobby_text())
+	var joined := await wait_for(func() -> bool: return (s.net as NetServer).player_count() > 0, 30.0)
+	check(joined, "a friend joined the lobby")
+	if joined:
+		var friend: Rat = (s.net as NetServer).seats.values()[0]
+		check(friend.team == 1 and friend.class_id == "digger" and friend.gear == "jetpack", "in their team and class, with a jetpack")
+		await wait_for(func() -> bool: return s.m.time > 6.0, 10.0)
+		check(is_instance_valid(s) and main.session == s and s.m.lobby, "nothing starts by itself")
+		s.start_requested.emit()     # the host presses start
+		var started := await wait_for(func() -> bool: return main.session != s and main.session != null \
+				and is_instance_valid(main.session) and main.session.m != null and not main.session.m.lobby, 10.0)
+		check(started, "the host starts the match")
+		if started:
+			var race: GameSession = main.session
+			var seated := await wait_for(func() -> bool: return (race.net as NetServer).player_count() > 0, 10.0)
+			var bots := 0
+			for r in race.m.rats:
+				bots += 1 if r.is_bot else 0
+			check(seated and race.m.rats.size() == 4 and bots == 2, "everyone is carried into the match; bots fill the rest (%d rats, %d bots)" % [race.m.rats.size(), bots])
+			check(race.player.gear == "" and race.player.display_name == "Hosty", "lobby jetpacks stay in the lobby")
+			await wait_for(func() -> bool: return (race.net as NetServer).player_count() == 0, 30.0)
+	Net.close()
+	print("---- net lobby host: %d failed ----" % _fails)
 	get_tree().quit(1 if _fails > 0 else 0)

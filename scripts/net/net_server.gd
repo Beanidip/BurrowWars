@@ -68,7 +68,7 @@ func on_hello(id: int, hello: Dictionary) -> void:
 	if want != 0 and want != 1:
 		want = _smaller_team()
 	var cls := String(hello.get("class", "digger"))
-	if m.free_mode:
+	if m.free_mode and not m.lobby:
 		cls = "maestro"
 	elif not ClassDefs.ORDER.has(cls):
 		cls = "digger"
@@ -79,10 +79,12 @@ func on_hello(id: int, hello: Dictionary) -> void:
 		if m.rats.size() >= 16:
 			Net._s_refuse.rpc_id(id, "The server is full.")
 			return
-		rat = m.spawn_rat(want if not m.free_mode else 0, cls, false)
+		rat = m.spawn_rat(want if m.lobby or not m.free_mode else 0, cls, false)
 	m.make_player(rat, id, pname)
 	if rat.class_id != cls:
 		rat.set_class(cls, true)
+	if m.lobby:
+		rat.gear = "jetpack"
 	if not m.in_base(rat) and not m.free_mode:
 		m.respawn(rat)   # take over the seat at home, not wherever the bot was
 	rat.net_pre = Match.net_state(rat)
@@ -397,7 +399,7 @@ func _snapshot() -> Dictionary:
 	for s in m.dynamite.sticks:
 		sticks.append([s.uid, s.pos, s.vel, s.fuse, s.resting])
 	return {"t": m.time, "sc": [m.scores[0], m.scores[1]], "o": m.over, "w": m.winner, "r": rats, "p": picks,
-		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks}
+		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "lt": m.lobby_left}
 
 
 func _private(r: Rat) -> Dictionary:

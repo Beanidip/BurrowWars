@@ -273,6 +273,137 @@ static func surface(heights: PackedInt32Array, x: int, z: int) -> int:
 	return heights[x * VoxelWorld.SZ + z]
 
 
+# --- the lobby playground ------------------------------------------------------
+
+const LOBBY_CENTER := Vector3i(HALF, GROUND, MID_Z)
+const LOBBY_R := 19                # radius of the flat top of the island
+const LOBBY_SEA := GROUND - 4      # top water layer of the lake around it
+const LOBBY_BULL := Vector3i(HALF + 17, GROUND + 5, MID_Z)   # the bullseye's centre block
+const LOBBY_CANNONS: Array[Vector3i] = [Vector3i(HALF - 9, GROUND, MID_Z - 3), Vector3i(HALF - 9, GROUND, MID_Z), Vector3i(HALF - 9, GROUND, MID_Z + 3)]
+
+
+static func lobby_spawn(team: int, slot := 0) -> Vector3:
+	## Around the plaza in the middle of the playground, Blue on one side, Red on the other.
+	var a := float(slot) * 0.9 + (PI if team == 1 else 0.0) + 0.4
+	return Vector3(LOBBY_CENTER) + Vector3(0.5 + cos(a) * 2.5, 0.0, 0.5 + sin(a) * 2.5)
+
+
+static func lobby_yaw() -> float:
+	return -PI * 0.5    # facing the bullseye
+
+
+static func lobby(world: VoxelWorld) -> Dictionary:
+	## The playground friends wait in before a hosted match: a round grassy
+	## island in a lake, with a trampoline park, a conveyor loop round the
+	## plaza, a cannon battery, a launch lane, a bullseye wall to fling each
+	## other at, a lava hot tub, a tower of coloured blocks to knock down and
+	## a pier with a diving tower. Returns the cells that are part of the
+	## playground's fixtures (they cannot be dug, blasted or picked up); the
+	## island itself can be burrowed into.
+	world.data.fill(Blocks.AIR)
+	world.micro.clear()
+	world.gates.clear()
+	world.points_of_interest.clear()
+	var props := {}
+	var c := LOBBY_CENTER
+	var g := GROUND
+	var lake_floor := GROUND - 9
+	# the island and the lake
+	for x in VoxelWorld.SX:
+		for z in VoxelWorld.SZ:
+			var d := Vector2(x + 0.5 - c.x, z + 0.5 - c.z).length()
+			var top := g - 1 if d < LOBBY_R else maxi(lake_floor, g - 1 - ceili((d - LOBBY_R) / 1.5))
+			for y in top + 1:
+				var id := Blocks.STONE
+				if y == 0:
+					id = Blocks.BEDROCK
+				elif y == top:
+					id = Blocks.GRASS if top > LOBBY_SEA else Blocks.DIRT
+				elif y >= top - 2:
+					id = Blocks.DIRT
+				world.set_raw(x, y, z, id)
+			for y in range(top + 1, LOBBY_SEA + 1):
+				world.set_raw(x, y, z, Blocks.WATER)
+	var put := func(cell: Vector3i, id: int) -> void:
+		world.set_raw(cell.x, cell.y, cell.z, id)
+		props[cell] = true
+	# the plaza
+	for dx in range(-4, 5):
+		for dz in range(-4, 5):
+			put.call(c + Vector3i(dx, -1, dz), Blocks.BRICK)
+	put.call(c + Vector3i(0, -1, 0), Blocks.GLOW)
+	# a conveyor loop round the plaza, clockwise seen from above
+	for k in range(-6, 7):
+		put.call(c + Vector3i(k, -1, -6), Blocks.CONV_XP if k < 6 else Blocks.CONV_ZP)
+		put.call(c + Vector3i(6, -1, k), Blocks.CONV_ZP if k < 6 else Blocks.CONV_XN)
+		put.call(c + Vector3i(-k, -1, 6), Blocks.CONV_XN if k < 6 else Blocks.CONV_ZN)
+		put.call(c + Vector3i(-6, -1, -k), Blocks.CONV_ZN if k < 6 else Blocks.CONV_XP)
+	# trampoline park: a checkerboard of springs
+	for dx in range(-13, -6):
+		for dz in range(-13, -6):
+			if (dx + dz) % 2 == 0:
+				put.call(c + Vector3i(dx, -1, dz), Blocks.SPRING)
+	# launch lane towards the bullseye: conveyors, then a row of springs
+	for dx in range(8, 13):
+		for dz in range(-1, 2):
+			put.call(c + Vector3i(dx, -1, dz), Blocks.CONV_XP)
+	for dz in range(-1, 2):
+		put.call(c + Vector3i(13, -1, dz), Blocks.SPRING)
+	# the bullseye wall
+	for x in [LOBBY_BULL.x, LOBBY_BULL.x + 1]:
+		for y in range(g, g + 11):
+			for z in range(LOBBY_BULL.z - 5, LOBBY_BULL.z + 6):
+				var r := Vector2(y + 0.5 - (LOBBY_BULL.y + 0.5), z + 0.5 - (LOBBY_BULL.z + 0.5)).length()
+				var id := Blocks.STONE
+				if r < 0.8:
+					id = Blocks.PAINT_0 + 19        # gold
+				elif r < 2.0 or (r >= 3.2 and r < 4.4):
+					id = Blocks.PAINT_0              # red
+				elif r < 3.2:
+					id = Blocks.PAINT_0 + 10         # white
+				put.call(Vector3i(x, y, z), id)
+	# the cannon battery (the machines themselves are set up by the match)
+	for cell: Vector3i in LOBBY_CANNONS:
+		put.call(cell, Blocks.CANNON)
+		put.call(cell + Vector3i(0, -1, 0), Blocks.BRICK)
+	# the lava hot tub, with a low rim
+	for dx in range(7, 12):
+		for dz in range(-13, -8):
+			var rim := dx == 7 or dx == 11 or dz == -13 or dz == -9
+			put.call(c + Vector3i(dx, -1, dz), Blocks.BRICK if rim else Blocks.LAVA)
+			if rim:
+				put.call(c + Vector3i(dx, 0, dz), Blocks.BRICK)
+	# a tower of coloured blocks to knock down (not a fixture: it is meant to go)
+	for dx in range(9, 12):
+		for dz in range(8, 11):
+			for dy in 8:
+				world.set_raw(c.x + dx, g + dy, c.z + dz, Blocks.PAINT_0 + (dx * 7 + dz * 3 + dy * 5) % 26)
+	# the pier and the diving tower, out over deep water
+	for dz in range(16, 28):
+		for dx in range(-1, 2):
+			put.call(c + Vector3i(dx, -1, dz), Blocks.WOOD)
+		if dz % 4 == 0:
+			for y in range(lake_floor + 1, g - 1):
+				for sx: int in [c.x - 1, c.x + 1]:
+					var cur := world.get_block(sx, y, c.z + dz)
+					if cur == Blocks.WATER or cur == Blocks.AIR:
+						put.call(Vector3i(sx, y, c.z + dz), Blocks.WOOD)
+	for dx in range(-1, 2):
+		for dz in range(25, 28):
+			for y in range(1, g + 9):
+				put.call(Vector3i(c.x + dx, y, c.z + dz), Blocks.BRICK)
+	for y in range(g, g + 10):
+		put.call(Vector3i(c.x, y, c.z + 24), Blocks.LADDER)
+	for dx in range(-2, 3):
+		for dz in range(23, 28):
+			if world.get_block(c.x + dx, g + 9, c.z + dz) != Blocks.LADDER:
+				put.call(Vector3i(c.x + dx, g + 9, c.z + dz), Blocks.WOOD)
+	for dz in range(28, 33):
+		put.call(Vector3i(c.x, g + 9, c.z + dz), Blocks.WOOD)   # the diving board
+	world.reindex()
+	return props
+
+
 # --- caves --------------------------------------------------------------------
 
 static func _caves(world: VoxelWorld, map_seed: int, heights: PackedInt32Array) -> void:

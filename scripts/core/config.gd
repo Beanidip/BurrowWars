@@ -14,6 +14,7 @@ const CRANE_MIN_SPEED := 2.4     # the ball must be moving at least this fast to
 const RAID_TIME := 3.0           # seconds inside the enemy base to lift one banked cheese
 const BONK_COOLDOWN := 2.0
 const BONK_RANGE := 2.4
+const LOBBY_LAUNCH := 2.0          # bonks and cannonballs fling rats this much harder in the lobby playground
 const BONK_PICKUP_LOCK := 2.0
 const DASH_COST := 25.0
 const DASH_CARRY := [1.0, 0.5, 0.4, 0.3]   # dash burst by cheese carried (3+ uses the last)
@@ -63,6 +64,7 @@ const DEFAULTS := {
 	"last_team": 0,
 	"player_name": "",
 	"last_address": "",
+	"host_lobby": true,
 }
 
 var _cfg := ConfigFile.new()

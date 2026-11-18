@@ -60,6 +60,9 @@ func _run() -> void:
 	if OS.get_environment("BW_NET_TEST") == "round":
 		await _run_round()
 		return
+	if OS.get_environment("BW_NET_TEST") == "lobby":
+		await _run_lobby()
+		return
 	var s := await join_server()
 	check(s != null, "joined the dedicated server and got a session")
 	if s == null:
@@ -205,11 +208,22 @@ func _run_round() -> void:
 	if s == null:
 		get_tree().quit(1)
 		return
+	if s.m.lobby:
+		check(s.m.lobby_left > 0.0 and s.hud.lobby_text().contains("starts in"), "a server opens with a timed playground (%s)" % s.hud.lobby_text())
+		var raced := await wait_for(func() -> bool: return main.session != s and main.session != null and is_instance_valid(main.session) \
+				and main.session.player != null and not main.session.m.lobby, 30.0)
+		check(raced, "then the round starts by itself")
+		s = main.session
 	var first_seed := int(s.m.settings["seed"])
 	var won := await wait_for(func() -> bool: return is_instance_valid(s) and s.m.over, 120.0)
 	check(won, "the round ends with a winner on our screen")
 	var next := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) \
 			and main.session != s and main.session.player != null, 40.0)
+	if next and main.session.m.lobby:
+		check(true, "between rounds everyone waits in the playground")
+		var lob: GameSession = main.session
+		next = await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) \
+				and main.session != lob and main.session.player != null and not main.session.m.lobby, 40.0)
 	check(next, "the server moves us into the next round")
 	if next:
 		var s2: GameSession = main.session
@@ -217,4 +231,27 @@ func _run_round() -> void:
 		check(s2.player.display_name == "Tester" and not s2.m.over and s2.m.scores == [0, 0], "fresh scores, same player")
 	Net.close()
 	print("---- net round: %d failed ----" % _fails)
+	get_tree().quit(1 if _fails > 0 else 0)
+
+
+func _run_lobby() -> void:
+	## A friend's hosted lobby: play in the playground until the host starts.
+	var s := await join_server()
+	check(s != null and s.m.lobby, "joined the host's playground lobby")
+	if s == null:
+		get_tree().quit(1)
+		return
+	check(s.player.gear == "jetpack" and s.player.team == 1 and s.m.lobby_left < 0.0, "with a jetpack, waiting on the host")
+	check(s.hud.lobby_text().contains("waiting for the host"), "we're told the host starts it (%s)" % s.hud.lobby_text())
+	var c := Vector3(MapGenerator.LOBBY_CENTER)
+	check(s.player.position.distance_to(c) < 5.0 and s.m.world.get_cell(MapGenerator.LOBBY_BULL) != Blocks.AIR, "the playground arrived (we stand on its plaza)")
+	var started := await wait_for(func() -> bool: return main.session != s and main.session != null and is_instance_valid(main.session) \
+			and main.session.player != null and not main.session.m.lobby, 40.0)
+	check(started, "the host started the match and we were carried into it")
+	if started:
+		var race: GameSession = main.session
+		check(race.player.display_name == "Tester" and race.player.team == 1 and race.m.rats.size() == 4, "same name and team, in a full 2v2 match")
+		await wait(1.0)
+	Net.close()
+	print("---- net lobby: %d failed ----" % _fails)
 	get_tree().quit(1 if _fails > 0 else 0)

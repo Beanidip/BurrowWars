@@ -21,6 +21,8 @@
 | Minecraft-style caves in the lower third of the map: winding tunnel networks that swell, narrow and fork, with rooms, and three tunnels per side that climb out to the surface. The old round noise caves are rarer | `world/map_generator.gd` |
 | More lava down deep: tunnels that reach the bottom are lava lakes, some deep rooms have lava floors, and about half the sectors hide a small lava pocket (roughly 3-4x the lava above the bottom layer). None within 20 blocks of a base | `world/map_generator.gd` |
 | The lower third is richer: about twice the scrap and 1.7x the cheese, much of it set into cave walls where it shows. Both halves still get exactly the same | `world/map_generator.gd` |
+| Lobby playground: a hosted game opens in a playground island (trampoline park, conveyor loop, a cannon battery anyone can man, a bullseye wall to fling each other at, a lava hot tub, a block tower to knock down, a diving tower over the lake). Everyone wears a jetpack, everything is free, and teammates can bonk and shoot each other twice as hard. The match starts only when the host presses Enter; after it, Back to the lobby returns everyone there. A "Lobby" option in the host setup turns it off | `world/map_generator.gd`, `match/match.gd`, `match/siege.gd`, `core/main.gd`, `ui/hud.gd`, `ui/main_menu.gd`, `net/net_server.gd` |
+| Dedicated servers hold a 30 s playground lobby before each round (`--lobby S`, 0 turns it off); the countdown runs only while someone is connected | `net/dedicated_server.gd`, `net/net_client.gd` |
 
 ## 1.9.0 - Review fixes, line-of-sight names, loaded dash (2026-11-17)
 

@@ -66,6 +66,18 @@ func register(cell: Vector3i, kind: int, rat: Rat) -> Machine:
 	return mc
 
 
+func add_fixed(cell: Vector3i, kind: int, yaw: float) -> Machine:
+	## A machine that comes with the map (the lobby's cannon battery): anyone
+	## may operate it there, nobody owns it.
+	var mc := Machine.new()
+	mc.uid = m.take_uid()
+	mc.kind = kind
+	mc.cell = cell
+	mc.yaw = yaw
+	machines[cell] = mc
+	return mc
+
+
 func on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 	if _moving or not machines.has(cell):
 		return
@@ -110,7 +122,7 @@ func try_operate(rat: Rat, cell: Vector3i) -> String:
 		return "Nothing to operate there"
 	if m.over or rat.stun > 0.0:
 		return "Can't do that right now"
-	if mc.team != rat.team:
+	if mc.team != rat.team and not m.lobby:
 		return "That machine belongs to the other team"
 	if mc.operator != -1 and mc.operator != rat.id:
 		return "Someone else is at the controls"
@@ -381,8 +393,9 @@ func _swing(mc: Machine, dt: float) -> void:
 			continue
 		if speed > 2.5:
 			for r in m.rats:
-				if r.team != mc.team and r.knock <= 0.0 and r.center().distance_to(ball) < BALL_RADIUS + 0.45:
-					r.vel = tangent * minf(speed, 9.0) + Vector3(0, 5.0, 0)
+				var foe := r.team != mc.team or (m.lobby and r.id != mc.operator)
+				if foe and r.knock <= 0.0 and r.center().distance_to(ball) < BALL_RADIUS + 0.45:
+					r.vel = (tangent * minf(speed, 9.0) + Vector3(0, 5.0, 0)) * m.launch_power()
 					r.knock = 0.5
 					r.on_floor = false
 					if r.carried > 0:
@@ -403,8 +416,9 @@ func _fly(s: Shot, dt: float) -> bool:
 		if s.pos.y < -4.0:
 			return true
 		for r in m.rats:
-			if r.team != s.team and r.center().distance_to(s.pos) < 0.6:
-				r.vel = s.vel.normalized() * 8.0 + Vector3(0, 5.0, 0)
+			var foe := r.team != s.team or (m.lobby and r.id != s.owner)   # in the playground, anyone but the gunner
+			if foe and r.center().distance_to(s.pos) < 0.6:
+				r.vel = (s.vel.normalized() * 8.0 + Vector3(0, 5.0, 0)) * m.launch_power()
 				r.knock = 0.5
 				r.on_floor = false
 				if r.carried > 0:
@@ -421,6 +435,8 @@ func _impact(s: Shot) -> void:
 	var cell := Vector3i(floori(s.pos.x), floori(s.pos.y), floori(s.pos.z))
 	var shooter := m.rat_by_id(s.owner)
 	m.fx.emit("impact", s.pos, m.world.get_cell(cell))
+	if m.lobby and cell == MapGenerator.LOBBY_BULL:
+		m.bullseye(shooter)
 	# 3x dig damage to the struck block...
 	m._damage(shooter, cell, Config.CANNON_HIT, true)
 	# ...and one hit each to the four blocks around it, in the plane the shot struck

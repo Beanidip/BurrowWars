@@ -38,6 +38,7 @@ const KEYS := {
 	"fly": [KEY_N, "Free Build: toggle flight"],
 	"save_map": [KEY_F5, "Free Build: save map"],
 	"load_map": [KEY_F9, "Free Build: load map"],
+	"start_match": [KEY_ENTER, "Lobby: start the match (host)"],
 	"pause": [KEY_ESCAPE, "Pause"],
 }
 

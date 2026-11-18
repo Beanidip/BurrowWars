@@ -7,6 +7,7 @@ var menu: MainMenu
 var session: GameSession
 var dedicated: DedicatedServer
 var _last_settings: Dictionary = {}
+var _pending: Dictionary = {}    # the match a hosted lobby is waiting to start
 
 
 func _ready() -> void:
@@ -42,13 +43,33 @@ func start_match(settings: Dictionary) -> void:
 		if err != "":
 			show_menu(err)
 			return
-	_clear()
 	_last_settings = settings
+	if String(settings.get("net", "")) == "host" and bool(settings.get("lobby", false)):
+		# everyone gathers in the playground until the host starts the match
+		_pending = settings
+		_launch(Match.lobby_settings(settings))
+	else:
+		_pending = {}
+		_launch(settings)
+
+
+func _launch(settings: Dictionary) -> void:
+	_clear()
 	session = GameSession.new()
 	session.settings = settings
 	session.exit_requested.connect(show_menu.bind(""), CONNECT_DEFERRED)
 	session.rematch_requested.connect(_rematch, CONNECT_DEFERRED)
+	session.start_requested.connect(_start_pending, CONNECT_DEFERRED)
 	add_child(session)
+
+
+func _start_pending() -> void:
+	## The host pressed start in the lobby: the real match begins for everyone.
+	if _pending.is_empty():
+		return
+	var s := _pending
+	_pending = {}
+	_launch(s)
 
 
 func _on_joined(info: Dictionary) -> void:

@@ -7,6 +7,7 @@ extends CanvasLayer
 
 signal exit_requested
 signal rematch_requested
+signal start_requested       # the host pressed Start in the lobby
 
 const MAT_SHORT := ["Dirt", "Stone", "Ice", "Obsid."]
 
@@ -18,6 +19,7 @@ var _root: Control
 var _score_labels: Array[Label] = []
 var _score_bars: Array[ProgressBar] = []
 var _mult: Label
+var _lobby_banner: Label
 var _stamina: ProgressBar
 var _stamina_text: Label
 var _slots: Array[PanelContainer] = []
@@ -69,7 +71,10 @@ func _ready() -> void:
 	m.won.connect(_on_won)
 	ctl.notice.connect(func(text: String) -> void: _push_toast(text, UiKit.PAPER))
 	_capture(true)
-	if m.free_mode:
+	if m.lobby:
+		_push_toast("The playground! Everything is free and you wear a jetpack (%s). Man a cannon (%s) and fling your friends at the bullseye." % [
+			Inputs.key_name("gear"), Inputs.key_name("interact")], UiKit.BRASS)
+	elif m.free_mode:
 		_push_toast("Free Build: N toggles flight, F5 saves the map, F9 loads it. Everything is free.", UiKit.BRASS)
 	else:
 		_push_toast("Dig for golden cheese and carry it back to your base. First to %d wins!" % m.goal, UiKit.BRASS)
@@ -114,6 +119,17 @@ func _build_top() -> void:
 	h.add_child(_score_bars[1])
 	h.add_child(_score_labels[1])
 	top.visible = not m.free_mode
+	if m.lobby:
+		var banner := UiKit.panel()
+		banner.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.BRASS, 10, 2, 8))
+		banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		banner.position.y = 8
+		banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_lobby_banner = UiKit.label("", 22, UiKit.BRASS)
+		_lobby_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		banner.add_child(_lobby_banner)
+		_root.add_child(banner)
 	_toasts = VBoxContainer.new()
 	_toasts.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_toasts.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -276,9 +292,20 @@ func _build_crosshair() -> void:
 
 # ---------------------------------------------------------------- per frame
 
+func lobby_text() -> String:
+	var here := "%d %s here" % [m.rats.size(), "rat" if m.rats.size() == 1 else "rats"]
+	if m.lobby_left >= 0.0:
+		return "PLAYGROUND  -  %s  -  the match starts in %d s" % [here, ceili(m.lobby_left)]
+	if not m.replica:
+		return "PLAYGROUND  -  %s  -  press %s to start the match" % [here, Inputs.key_name("start_match")]
+	return "PLAYGROUND  -  %s  -  waiting for the host to start the match" % here
+
+
 func _process(_delta: float) -> void:
 	if rat == null:
 		return
+	if _lobby_banner != null:
+		_lobby_banner.text = lobby_text()
 	for t in 2:
 		_score_labels[t].text = "%s  %d / %d" % [Match.TEAM_NAMES[t], m.scores[t], m.goal] if t == 0 else "%d / %d  %s" % [m.scores[t], m.goal, Match.TEAM_NAMES[t]]
 		_score_bars[t].max_value = m.goal
@@ -458,12 +485,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		_toggle("inventory")
 	elif event.is_action_pressed("color_picker"):
 		_toggle("colors")
-	elif m.free_mode and event.is_action_pressed("save_map"):
+	elif m.lobby and not m.replica and m.lobby_left < 0.0 and _dialog == null and event.is_action_pressed("start_match"):
+		get_viewport().set_input_as_handled()
+		start_requested.emit()
+	elif m.free_mode and not m.lobby and event.is_action_pressed("save_map"):
 		var ok := m.world.save_to(VoxelWorld.MAPS_DIR + "/free_build.bwmap", {"machines": m.siege.to_save()})
 		_push_toast("Map saved to %s" % ProjectSettings.globalize_path("user://maps/free_build.bwmap") if ok else "Map save failed - see log", UiKit.BRASS)
-	elif m.free_mode and event.is_action_pressed("load_map") and m.networked:
+	elif m.free_mode and not m.lobby and event.is_action_pressed("load_map") and m.networked:
 		_push_toast("Loading a map is only possible offline", UiKit.PAPER)
-	elif m.free_mode and event.is_action_pressed("load_map"):
+	elif m.free_mode and not m.lobby and event.is_action_pressed("load_map"):
 		if m.world.load_from("user://maps/free_build.bwmap"):
 			m.tnt.clear()
 			m.siege.from_save(m.world.loaded_extra.get("machines", []))
@@ -782,7 +812,8 @@ func _fill_results(v: VBoxContainer) -> void:
 	var h := HBoxContainer.new()
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 12)
-	var again := UiKit.button("Rematch (new map)", func() -> void: rematch_requested.emit(), Vector2(220, 46))
+	var again := UiKit.button("Back to the lobby" if bool(m.settings.get("lobby", false)) else "Rematch (new map)",
+		func() -> void: rematch_requested.emit(), Vector2(220, 46))
 	if m.replica:
 		again = UiKit.button("Next round starts soon...", func() -> void: pass, Vector2(260, 46))
 		again.disabled = true
