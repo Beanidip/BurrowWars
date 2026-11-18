@@ -37,6 +37,9 @@ var _q_count: Label
 var _status: Label
 var _cheese_row: HBoxContainer
 var _abilities: Label
+var _bottom: VBoxContainer      # target line, stamina and the hotbar, centred at the bottom
+var _hotbar: HBoxContainer
+var _side_panels: Array[Control] = []   # the corner panels; lifted above the hotbar when it would run under them
 var _hint: Label
 var _target: Label
 var _toasts: VBoxContainer
@@ -141,6 +144,7 @@ func _build_top() -> void:
 
 func _build_bottom() -> void:
 	var bottom := VBoxContainer.new()
+	_bottom = bottom
 	bottom.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	bottom.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	bottom.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -162,15 +166,17 @@ func _build_bottom() -> void:
 	_stamina.add_child(_stamina_text)
 	bottom.add_child(_stamina)
 	var bar := HBoxContainer.new()
+	_hotbar = bar
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_theme_constant_override("separation", 6)
 	bottom.add_child(bar)
 	# Q gadget slot
 	var q := PanelContainer.new()
 	q.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.BRASS, 8, 2, 6))
-	q.custom_minimum_size = Vector2(118, 62)
+	q.custom_minimum_size = Vector2(SLOT_WIDE, 62)
 	var qv := VBoxContainer.new()
 	qv.add_theme_constant_override("separation", 0)
+	qv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_q_icon = Icons.rect("", 24)
 	var qh := HBoxContainer.new()
 	qh.add_theme_constant_override("separation", 4)
@@ -178,16 +184,17 @@ func _build_bottom() -> void:
 	qh.add_child(qv)
 	q.add_child(qh)
 	qv.add_child(UiKit.label("Q  gadget", 12, UiKit.BRASS))
-	_q_name = UiKit.label("-", 15)
-	_q_count = UiKit.label("", 13, UiKit.PAPER.darkened(0.15))
+	_q_name = _fitted(UiKit.label("-", 15))
+	_q_count = _fitted(UiKit.label("", 13, UiKit.PAPER.darkened(0.15)))
 	qv.add_child(_q_name)
 	qv.add_child(_q_count)
 	bar.add_child(q)
 	var gear := PanelContainer.new()
 	gear.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.BRASS, 8, 2, 6))
-	gear.custom_minimum_size = Vector2(104, 62)
+	gear.custom_minimum_size = Vector2(SLOT_WIDE, 62)
 	var gv := VBoxContainer.new()
 	gv.add_theme_constant_override("separation", 0)
+	gv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_gear_icon = Icons.rect("", 24)
 	var gh := HBoxContainer.new()
 	gh.add_theme_constant_override("separation", 4)
@@ -195,8 +202,8 @@ func _build_bottom() -> void:
 	gh.add_child(gv)
 	gear.add_child(gh)
 	gv.add_child(UiKit.label("%s  gear" % Inputs.key_name("gear"), 12, UiKit.BRASS))
-	_gear_name = UiKit.label("-", 15)
-	_gear_state = UiKit.label("", 13, UiKit.PAPER.darkened(0.15))
+	_gear_name = _fitted(UiKit.label("-", 15))
+	_gear_state = _fitted(UiKit.label("", 13, UiKit.PAPER.darkened(0.15)))
 	gv.add_child(_gear_name)
 	gv.add_child(_gear_state)
 	bar.add_child(gear)
@@ -248,6 +255,7 @@ func _build_bottom() -> void:
 	left.position = Vector2(12, -12)
 	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(left)
+	_side_panels.append(left)
 	var lv := VBoxContainer.new()
 	lv.add_theme_constant_override("separation", 2)
 	left.add_child(lv)
@@ -258,13 +266,14 @@ func _build_bottom() -> void:
 	lv.add_child(_cheese_row)
 	# right: abilities + key hints
 	var right := UiKit.panel()
-	right.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.WOOD_LIGHT, 10, 2, 10))
+	right.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.08, 0.05, 0.85), UiKit.WOOD_LIGHT, 8, 2, 7))
 	right.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	right.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	right.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	right.position = Vector2(-12, -12)
 	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(right)
+	_side_panels.append(right)
 	var rv := VBoxContainer.new()
 	rv.add_theme_constant_override("separation", 2)
 	right.add_child(rv)
@@ -272,8 +281,19 @@ func _build_bottom() -> void:
 	_ability_box = VBoxContainer.new()
 	_ability_box.add_theme_constant_override("separation", 2)
 	rv.add_child(_ability_box)
-	_hint = UiKit.label("", 12, UiKit.PAPER.darkened(0.2))
+	_hint = UiKit.label("", 11, UiKit.PAPER.darkened(0.2))
 	rv.add_child(_hint)
+
+
+const SLOT_WIDE := 128.0         # the Q gadget and gear slots: a fixed width, so the hotbar never grows
+
+
+static func _fitted(l: Label) -> Label:
+	## A label that keeps to its slot: too long a name ends in "..." instead of widening the hotbar.
+	l.clip_text = true
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.custom_minimum_size = Vector2(SLOT_WIDE - 40.0, 0)
+	return l
 
 
 func _build_crosshair() -> void:
@@ -292,6 +312,23 @@ func _build_crosshair() -> void:
 
 # ---------------------------------------------------------------- per frame
 
+func _fit_side_panels() -> void:
+	## The hotbar grows with long gadget and gear names; on a narrow window it
+	## would run under the corner panels. Any panel it would overlap sits just
+	## above the bottom bar instead (and drops back down when there's room).
+	if _hotbar == null or _bottom == null:
+		return
+	var bar := _hotbar.get_global_rect()
+	for p in _side_panels:
+		var r := p.get_global_rect()
+		var clash := r.position.x < bar.end.x + 8.0 and r.end.x > bar.position.x - 8.0
+		var want := -12.0 - (_bottom.size.y + 6.0 if clash else 0.0)
+		if not is_equal_approx(p.offset_bottom, want):
+			var h := p.size.y
+			p.offset_bottom = want
+			p.offset_top = want - h
+
+
 func lobby_text() -> String:
 	var here := "%d %s here" % [m.rats.size(), "rat" if m.rats.size() == 1 else "rats"]
 	if m.lobby_left >= 0.0:
@@ -306,6 +343,7 @@ func _process(_delta: float) -> void:
 		return
 	if _lobby_banner != null:
 		_lobby_banner.text = lobby_text()
+	_fit_side_panels()
 	for t in 2:
 		_score_labels[t].text = "%s  %d / %d" % [Match.TEAM_NAMES[t], m.scores[t], m.goal] if t == 0 else "%d / %d  %s" % [m.scores[t], m.goal, Match.TEAM_NAMES[t]]
 		_score_bars[t].max_value = m.goal
@@ -354,7 +392,7 @@ func _process(_delta: float) -> void:
 		for c in _ability_box.get_children():
 			c.queue_free()
 		for id: String in ids:
-			_ability_box.add_child(Icons.with_icon(id, UiKit.label("", 15), 22))
+			_ability_box.add_child(Icons.with_icon(id, UiKit.label("", 13), 18))
 	for i in list.size():
 		var cd := float(rat.ability_cd[i])
 		var row := _ability_box.get_child(i) as HBoxContainer
@@ -363,7 +401,7 @@ func _process(_delta: float) -> void:
 	var shop := "[%s] Workshop" % Inputs.key_name("workshop")
 	if not m.can_shop(rat):
 		shop = "[%s] Team stash" % Inputs.key_name("workshop") if m.can_use_stash(rat) else shop + " (at base)"
-	_hint.text = "%s   [%s] Pack   [%s] Drop cheese\n[%s] Use machine   [%s] Camera   [Esc] Menu" % [shop, Inputs.key_name("inventory"),
+	_hint.text = "%s\n[%s] Pack   [%s] Drop cheese\n[%s] Machine   [%s] Camera   [Esc] Menu" % [shop, Inputs.key_name("inventory"),
 		Inputs.key_name("drop_cheese"), Inputs.key_name("interact"), Inputs.key_name("camera_toggle")]
 	_target.text = ""
 	if ctl.tool_text != "" and _dialog == null:

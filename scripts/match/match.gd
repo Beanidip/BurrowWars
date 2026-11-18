@@ -48,6 +48,7 @@ var bubbles: Dictionary = {}         # Vector3i -> seconds before that Bubble Sh
 var squeaks: Dictionary = {}         # Vector3i -> squeaks a Squeaker Pad has left
 var squeak_rest: Dictionary = {}     # Vector3i -> seconds before that pad can squeak again
 var decoys: Dictionary = {}          # Vector3i -> team of a Cheese Decoy there (bots of the other team fall for them)
+var guard_t: Array[float] = [0.0, 0.0]   # seconds each team has had a rat standing in its own base, without a break
 ## Each team's shared pool (scrap and building materials), reached at any of
 ## the team's stashes or at base. It survives its stashes being blown up.
 var team_bank: Array[Dictionary] = [{"scrap": 0, "dirt": 0, "stone": 0, "ice": 0, "obsidian": 0},
@@ -285,6 +286,13 @@ func step(dt: float) -> void:
 		_check_raid(r, dt)
 	if lobby:
 		_lobby_step(dt)
+	for t in 2:
+		var guarded := false
+		for r in rats:
+			if r.team == t and in_base(r, t):
+				guarded = true
+				break
+		guard_t[t] = guard_t[t] + dt if guarded else 0.0
 	_step_bubbles(dt)
 	for cell: Vector3i in squeak_rest.keys():
 		squeak_rest[cell] = maxf(0.0, float(squeak_rest[cell]) - dt)

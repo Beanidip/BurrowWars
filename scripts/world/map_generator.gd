@@ -124,6 +124,7 @@ static func generate(world: VoxelWorld, map_seed: int, cheese_at_least := 0) -> 
 	_base(world)
 	_more_cheese(world, rng, heights, (cheese_at_least + 1) / 2)
 	_rotate_copy(world)
+	_seal_liquids(world)
 	world.reindex()
 	if _cache.size() >= 3:
 		_cache.clear()
@@ -137,6 +138,26 @@ static func warm(map_seed: int, cheese_at_least: int) -> void:
 	w.visual = false
 	generate(w, map_seed, cheese_at_least)
 	w.free()
+
+
+static func _seal_liquids(world: VoxelWorld) -> void:
+	## Generated water and lava always sit in something: any open air beside or
+	## under them (a pond on a slope, the sewer channel over a cave, a lava pool
+	## against a tunnel) becomes a bank - dirt by water, stone by lava (stone
+	## wins where both meet). Purely local, so the map stays symmetric.
+	var banks := {}
+	for liquid: int in [Blocks.WATER, Blocks.LAVA]:
+		var i := world.data.find(liquid)
+		while i >= 0:
+			var c := Vector3i(i % VoxelWorld.SX, i / (VoxelWorld.SX * VoxelWorld.SZ), (i / VoxelWorld.SX) % VoxelWorld.SZ)
+			for d: Vector3i in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1), Vector3i(0, -1, 0)]:
+				var n := c + d
+				if VoxelWorld.in_bounds(n) and world.get_cell(n) == Blocks.AIR and n.y >= 1:
+					if liquid == Blocks.LAVA or not banks.has(n):
+						banks[n] = Blocks.STONE if liquid == Blocks.LAVA else Blocks.DIRT
+			i = world.data.find(liquid, i + 1)
+	for n: Vector3i in banks:
+		world.set_raw(n.x, n.y, n.z, banks[n])
 
 
 static func _more_cheese(world: VoxelWorld, rng: RandomNumberGenerator, heights: PackedInt32Array, half_target: int) -> void:

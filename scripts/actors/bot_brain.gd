@@ -82,9 +82,11 @@ func _retarget() -> void:
 				mode = "defend"
 				target = other.position
 				return
-	# raid: when clearly behind, half the team goes for the enemy vault instead of digging
+	# raid: when clearly behind, half the team goes for the enemy vault instead of digging -
+	# unless someone has been standing guard in it for a while: then it's not worth it
 	var behind := m.scores[enemy] - m.scores[rat.team]
-	if not m.free_mode and m.scores[enemy] > 0 and rat.carried < rat.capacity() \
+	var guarded := m.guard_t[enemy] >= Config.BOT_RAID_GUARDED
+	if not m.free_mode and m.scores[enemy] > 0 and rat.carried < rat.capacity() and not guarded \
 			and ((mode == "raid" and behind >= 0) or (behind >= 2 and rat.id % 2 == 0 and rat.carried == 0)):
 		mode = "raid"
 		var ez := MapGenerator.base_zone(enemy)

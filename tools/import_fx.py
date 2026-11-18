@@ -44,7 +44,7 @@ EFFECTS = [
     ("break_wood",  "impacts/blunt-hit",         15, 0,   {"palette": WOOD, "dust": "#b47c40", "clod": "#6a421e"}),
     ("break_dark",  "impacts/blunt-hit",         15, 0,   {"palette": DARK, "dust": "#4f3a70", "clod": "#1e1430"}),
     ("dust",        "impacts/heavy-landing",     15, 0,   {}),
-    ("pow",         "explosions/cartoon-pow",    15, 0,   {}),
+    ("dizzy",       "status/stunned",            15, 0,   {}),
     ("collect",     "pickups/collect-burst",     15, 0,   {}),
     ("poof",        "spawn/poof",                15, 0,   {}),
     ("firework",    "explosions/firework-burst", 12, 2.6, {}),

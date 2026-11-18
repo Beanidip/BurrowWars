@@ -98,6 +98,7 @@ func _ready() -> void:
 	var view := MatchView.new()
 	view.m = m
 	view.listener = player
+	view.ctl = ctl
 	add_child(view)
 
 	var toys := ContraptionView.new()

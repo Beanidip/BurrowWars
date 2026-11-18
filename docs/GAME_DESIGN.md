@@ -96,7 +96,8 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
 - **Gear slot** (J): one piece of gear at a time. The Jetpack (14 scrap) lifts you for 1.1 s, then
   needs 5 s to cool down; carrying cheese it lifts half as strongly. Bots buy one when they can
   afford it. Bots also mine scrap they pass near (when not hauling cheese) and bank half of what
-  they mined into the team pool whenever they're at base or beside a stash. The **Rat Knight Shield** (12 scrap) is raised with J for 5 s: bonks, cannonballs
+  they mined into the team pool whenever they're at base or beside a stash. They don't start (or keep up) a vault raid
+  on a base that its team has stood guard in for 20 s. The **Rat Knight Shield** (12 scrap) is raised with J for 5 s: bonks, cannonballs
   and wrecking balls bounce off, so nobody can knock cheese out of your paws, but hauling cheese
   behind it you move a quarter slower. 8 s to ready it again.
 - **Bubble Shoes** (gear, 10 scrap): J switches them on or off. While on, stepping off an edge
@@ -119,6 +120,8 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
 - **Placed traps** (mouse trap, sticky, pitfall, wall spring) take 5 digs for the team that
   placed them and 15 for anyone else (blasts count as anyone else).
 - **Springs** fling anything within a block of their sides, as well as what lands on them.
+- **Wall springs** shove any rat within a block of them (sides or diagonals, at foot or head
+  height, either team) straight away, as well as flinging back what runs into them.
 - **Team gates** cost 7 scrap; Builders pay 3.
 
 ## Hazards and safety valves

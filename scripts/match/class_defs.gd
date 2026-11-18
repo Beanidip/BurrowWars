@@ -73,7 +73,7 @@ const SHOP := [
 	{"id": "pitfall", "name": "Pitfall x2", "kind": "gadget", "qty": 2, "cost": 5, "cat": "Traps",
 		"desc": "Fake turf. Solid for your team, a hole for everyone and everything else."},
 	{"id": "wallspring", "name": "Wall Spring", "kind": "gadget", "qty": 1, "cost": 6, "cat": "Traps",
-		"desc": "Sideways bumper block. Flings back any rat or dynamite that runs into it."},
+		"desc": "Sideways bumper block. Shoves away any rat that comes within a block of it, and flings back dynamite that runs into it."},
 	{"id": "cannon", "name": "Scrap Cannon", "kind": "gadget", "qty": 1, "cost": 26, "max": 2, "cat": "Siege",
 		"desc": "T to pilot it, mouse to aim, left mouse to fire. Hits one block for 3 dig hits and chips the four around it."},
 	{"id": "crane", "name": "Wrecking Crane", "kind": "gadget", "qty": 1, "cost": 30, "max": 2, "cat": "Siege",

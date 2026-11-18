@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Placeholder sounds, synthesised so the effects have something to play:
 splash (into or out of water), sizzle (lava), squeak (Squeaker Pad), pop
-(Bubble Shoes bubbles) and toot (a Cheese Decoy going off), all in assets/sfx/.
+(Bubble Shoes bubbles), toot (a Cheese Decoy going off) and alarm (a vault
+raid: a soft two-tone chime), all in assets/sfx/.
 Drop your own recordings over them (mono or stereo WAV, any rate) any time.
 
     python3 tools/make_sfx.py
@@ -117,6 +118,23 @@ def toot(rng: random.Random) -> np.ndarray:
     return body * env
 
 
+def bell(f: float, length: float) -> np.ndarray:
+    """A small bell: a few inharmonic partials, each fading at its own pace."""
+    t = np.arange(int(length * RATE)) / RATE
+    out = np.zeros_like(t)
+    for ratio, amp, decay in ((1.0, 1.0, 0.55), (2.0, 0.45, 0.3), (2.76, 0.25, 0.2), (5.4, 0.1, 0.08)):
+        out += amp * np.sin(2 * math.pi * f * ratio * t) * np.exp(-t / decay)
+    return out * np.clip(t / 0.004, 0, 1)
+
+
+def alarm(_rng: random.Random) -> np.ndarray:
+    """A vault raid: ding-dong, ding-dong - noticeable, not a klaxon."""
+    out = np.zeros(int(1.6 * RATE))
+    for k, (f, at) in enumerate(((784.0, 0.0), (622.0, 0.32), (784.0, 0.74), (622.0, 1.06))):
+        place(out, bell(f, 0.5), at, 1.0 if k % 2 == 0 else 0.85)
+    return out
+
+
 def save(name: str, x: np.ndarray) -> None:
     x = x / max(1e-6, float(np.max(np.abs(x)))) * 0.8
     fade = min(len(x), int(0.01 * RATE))
@@ -136,3 +154,4 @@ if __name__ == "__main__":
     save("squeak", squeak(random.Random(3)))
     save("pop", pop(random.Random(5)))
     save("toot", toot(random.Random(9)))
+    save("alarm", alarm(random.Random(1)))

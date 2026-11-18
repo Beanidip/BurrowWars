@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -1504,6 +1504,20 @@ func test_bot_gear_and_dash() -> void:
 			dashed = true
 			break
 	check(dashed, "bots dash on long open runs")
+	# ...under exactly the player's rules: never twice within the dash cooldown
+	var starts: Array[float] = []
+	var clock := 0.0
+	runner.stamina = runner.max_stamina()
+	for i in int(25.0 / DT):
+		var was := runner.dash_t
+		m.step(DT)
+		clock += DT
+		if runner.dash_t > was:
+			starts.append(clock)
+	var closest := INF
+	for k in range(1, starts.size()):
+		closest = minf(closest, starts[k] - starts[k - 1])
+	check(starts.size() >= 2 and closest >= 0.6 - DT * 0.5, "bot dashes respect the player dash cooldown (%d dashes, closest %.2f s apart)" % [starts.size(), closest])
 	end(m)
 
 
@@ -3500,3 +3514,77 @@ func test_sound_levels() -> void:
 	check(own > other + 15.0, "and well below your own digging (%.0f dB)" % own)
 	view.free()
 	end(m)
+
+
+func test_pools_springs_raids_sparks() -> void:
+	# generated water and lava always sit in a bank: nothing faces open air
+	for seed_n: int in [4242, 7]:
+		var g := VoxelWorld.new()
+		g.visual = false
+		MapGenerator.generate(g, seed_n, MapGenerator.min_cheese(8))
+		var open := 0
+		for liquid: int in [Blocks.WATER, Blocks.LAVA]:
+			var i := g.data.find(liquid)
+			while i >= 0:
+				var c := Vector3i(i % VoxelWorld.SX, i / (VoxelWorld.SX * VoxelWorld.SZ), (i / VoxelWorld.SX) % VoxelWorld.SZ)
+				for d: Vector3i in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1), Vector3i(0, -1, 0)]:
+					if g.get_cell(c + d) == Blocks.AIR:
+						open += 1
+				i = g.data.find(liquid, i + 1)
+		check(open == 0, "seed %d: generated water and lava never face open air (%d)" % [seed_n, open])
+		g.free()
+	# a wall spring shoves anyone who comes within a block of it
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var wall := ARENA + Vector3i(0, 0, 0)
+	m.world.set_block(wall, Blocks.WALL_SPRING)
+	var beside := arena_rat(m, 0, "scout", Vector3(1.0, 0, 0))       # standing in the cell next to it
+	var corner := arena_rat(m, 1, "digger", Vector3(-1.0, 0, -1.0))  # diagonal
+	var far := arena_rat(m, 0, "builder", Vector3(2.6, 0, 3.0))      # two blocks off
+	m.step(DT)
+	check(beside.vel.x > Config.WALL_SPRING_SPEED * 0.8, "standing right next to a wall spring shoves you away (%s)" % str(beside.vel))
+	check(corner.vel.x < -5.0 and corner.vel.z < -5.0, "diagonally too, either team")
+	check(far.vel.length() < 1.0, "two blocks away is out of its reach")
+	run(m, 1.5)
+	check(beside.position.distance_to(Vector3(wall) + Vector3(0.5, 0, 0.5)) > 2.0, "and the shove carries you clear")
+	end(m)
+	# bots give up raiding a base its team has been guarding for a while
+	m = new_match()
+	m.scores = [0, 3]                       # blue is well behind: blue bots want to raid
+	var raider := m.spawn_rat(0, "scout", true)
+	if raider.id % 2 != 0:
+		raider = m.spawn_rat(0, "scout", true)
+	var brain: BotBrain = null
+	for b in m.bots:
+		if b.rat == raider:
+			brain = b
+	var guard := m.spawn_rat(1, "digger", false)
+	guard.position = MapGenerator.spawn_point(1)
+	run(m, 1.0)
+	check(m.guard_t[1] > 0.9 and m.guard_t[1] < 1.2, "the match times how long red has stood guard at home (%.1f s)" % m.guard_t[1])
+	brain._retarget()
+	check(brain.mode == "raid", "a blue bot well behind goes raiding")
+	m.guard_t[1] = Config.BOT_RAID_GUARDED + 1.0
+	brain._retarget()
+	check(brain.mode != "raid", "but not once red has guarded its base for %.0f s" % Config.BOT_RAID_GUARDED)
+	guard.position = MapGenerator.spawn_point(0)
+	m.step(DT)
+	check(m.guard_t[1] == 0.0, "the clock resets when the guard leaves")
+	end(m)
+	# dig sparks scatter around the crosshair on the face being dug
+	var view := MatchView.new()
+	var aimer := PlayerController.new()
+	view.ctl = aimer
+	var cell := Vector3i(10, 20, 10)
+	aimer.aim = {"cell": cell, "normal": Vector3i(0, 1, 0), "point": Vector3(10.5, 21.0, 10.5)}
+	var spots: Array[Vector3] = []
+	for k in 6:
+		spots.append(view._spark_spot(Vector3(cell) + Vector3(0.5, 0.5, 0.5)))
+	var on_face := true
+	for p in spots:
+		on_face = on_face and absf(p.y - 21.06) < 0.01 and Vector2(p.x - 10.5, p.z - 10.5).length() < 0.45
+	check(on_face and spots[0] != spots[1], "dig sparks scatter around the crosshair on the face (%s)" % str(spots[0]))
+	aimer.free()
+	view.free()
+	# the new bits of art and sound are there; the old POW is gone
+	check(FxSheets.SHEETS.has("dizzy") and not FxSheets.SHEETS.has("pow") and FileAccess.file_exists("res://assets/sfx/alarm.wav"), "bonks show dizzy stars; the raid alarm is the new chime")

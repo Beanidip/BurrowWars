@@ -7,6 +7,7 @@ extends Node3D
 
 var m: Match
 var listener: Rat
+var ctl: PlayerController     # where our crosshair is (dig sparks fly from there); may be null
 
 var _pickups: Dictionary = {}       # uid -> MeshInstance3D
 var _particle_mat: StandardMaterial3D
@@ -184,6 +185,20 @@ func surface(pos: Vector3, liquid: int) -> Vector3:
 	return Vector3(pos.x, c.y + 0.88, pos.z)   # liquid tops sit a little below the cell top
 
 
+func _spark_spot(c: Vector3) -> Vector3:
+	## Where a dig hit's sparks fly from: around our crosshair on the face we
+	## hit (scattered, so each hit looks different), or for someone else's
+	## digging a random spot on the side of the block facing us.
+	var cell := Vector3i(c.floor())
+	if ctl != null and not ctl.aim.is_empty() and ctl.aim.has("point") and Vector3i(ctl.aim["cell"]) == cell:
+		var n := Vector3(Vector3i(ctl.aim["normal"]))
+		var jitter := Vector3(randf_range(-0.3, 0.3), randf_range(-0.3, 0.3), randf_range(-0.3, 0.3))
+		jitter -= n * jitter.dot(n)             # stay on the face
+		return Vector3(ctl.aim["point"]) + jitter + n * 0.06
+	var spot := _facing_viewer(c, 0.56)
+	return spot + Vector3(randf_range(-0.25, 0.25), randf_range(-0.25, 0.25), randf_range(-0.25, 0.25))
+
+
 func _nearest_rat(pos: Vector3) -> Rat:
 	var best: Rat = null
 	var best_d := 2.5
@@ -202,9 +217,10 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"hit":
 			var id := int(data["id"])
 			_dig_sound("mine_" + _material_sound(id), c)
-			_burst(c, Blocks.COLOR[id], 3, 2.5)
-			# the sparks you knock off a block are that block's colour, highlights included
-			_sprite("hit", _facing_viewer(c, 0.62), 0.3, null, -1.0, Blocks.COLOR[id], false, false, 0.85)
+			# sparks and chips fly from around the crosshair, in the block's colour
+			var spot := _spark_spot(c)
+			_burst(spot, Blocks.COLOR[id], 5, 2.5)
+			_sprite("hit", spot, 0.3, null, -1.0, Blocks.COLOR[id], false, false, 0.85)
 			_crack.visible = true
 			_crack.position = c
 			_crack_t = 2.5
@@ -223,7 +239,9 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sound("block_place", c)
 		"bonk":
 			_sound("bonk", pos, 1.0, 3.0)
-			_sprite("pow", pos + Vector3(0, 0.8, 0), 0.45)
+			var dazed := _nearest_rat(pos)
+			if dazed != null:   # stars and birds circling the bonked rat's head
+				_sprite("dizzy", Vector3.ZERO, 0.85, dazed, 1.4, Color(0, 0, 0, 0), false, true)
 			_float_text(pos + Vector3(0, 1.4, 0), "BONK!", Color(1, 0.95, 0.5))
 		"trap":
 			_sound("bonk", pos, 1.5, 2.0)
@@ -337,7 +355,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"ability", "buy":
 			_sound("discovery_chime", pos, 1.0, -3.0)
 		"alarm":
-			Sfx.play("siege_grind", -2.0, 1.9, 0.0)
+			Sfx.play("alarm", -12.0, 1.0, 0.0)   # a soft chime, heard by everyone
 		"respawn":
 			_sound("block_place", pos, 0.7)
 			_sprite("poof", pos, 0.7)

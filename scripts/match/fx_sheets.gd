@@ -14,7 +14,7 @@ const SHEETS := {
 	"break_wood": {"w": 91, "h": 81, "cols": 4, "frames": 14, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
 	"break_dark": {"w": 91, "h": 81, "cols": 4, "frames": 14, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
 	"dust": {"w": 136, "h": 41, "cols": 3, "frames": 22, "fps": 15, "loop": false, "pivot": Vector2(69.0, 27.0)},   # impacts/heavy-landing
-	"pow": {"w": 138, "h": 129, "cols": 4, "frames": 16, "fps": 15, "loop": false, "pivot": Vector2(69.0, 64.0)},   # explosions/cartoon-pow
+	"dizzy": {"w": 50, "h": 39, "cols": 5, "frames": 30, "fps": 15, "loop": true, "pivot": Vector2(24.0, 55.0)},   # status/stunned
 	"collect": {"w": 77, "h": 88, "cols": 5, "frames": 17, "fps": 15, "loop": false, "pivot": Vector2(36.0, 81.0)},   # pickups/collect-burst
 	"poof": {"w": 91, "h": 76, "cols": 5, "frames": 22, "fps": 15, "loop": false, "pivot": Vector2(43.0, 65.0)},   # spawn/poof
 	"firework": {"w": 196, "h": 234, "cols": 7, "frames": 31, "fps": 12, "loop": false, "pivot": Vector2(98.0, 96.0)},   # explosions/firework-burst

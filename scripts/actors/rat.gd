@@ -93,6 +93,7 @@ var free_build := false            # Free Build: gear costs nothing
 var _bubble_y := 0.0               # the level we stand at while a bubble is on its way
 var _bubble_hold := 0.0
 var _bubble_last := Vector3i(-1, -1, -1)
+var _wall_cd := 0.0                 # a wall spring just shoved us: don't shove again at once
 var shield_t := 0.0                # seconds the Rat Knight Shield stays raised
 var shield_raised := false        # this step raised it
 var pounded := false              # this step landed a full double jump flat: a ground pound
@@ -194,6 +195,7 @@ func step_timers(dt: float) -> void:
 	ability_cd[1] = maxf(0.0, ability_cd[1] - dt)
 	gear_cd = maxf(0.0, gear_cd - dt)
 	pound_cd = maxf(0.0, pound_cd - dt)
+	_wall_cd = maxf(0.0, _wall_cd - dt)
 	shield_t = maxf(0.0, shield_t - dt)
 	# An enemy sticky trap underfoot keeps you slowed. This lives here, not in
 	# Match's hazards, because both the server and a remote player's own game
@@ -417,9 +419,31 @@ func _splash_check(fall_speed: float, dt: float) -> void:
 func _spring_sides() -> void:
 	## A spring flings anything standing right next to it (within a block of
 	## its sides), not only what lands on top: up, and away from the spring.
-	if not on_floor or flying:
+	## A wall spring does the same to anyone within a block of it, standing
+	## or not: a hard shove straight away from it.
+	if flying:
 		return
 	var f := feet_cell()
+	if _wall_cd <= 0.0:
+		for dy in 2:
+			for dz in range(-1, 2):
+				for dx in range(-1, 2):
+					if dx == 0 and dz == 0:
+						continue
+					var w := f + Vector3i(dx, dy, dz)
+					if _world.get_cell(w) != Blocks.WALL_SPRING:
+						continue
+					var push := position - (Vector3(w) + Vector3(0.5, 0.0, 0.5))
+					push.y = 0.0
+					push = push.normalized() if push.length() > 0.05 else Vector3(-dx, 0, -dz).normalized()
+					vel = push * Config.WALL_SPRING_SPEED + Vector3(0, 5.5, 0)
+					knock = 0.35
+					on_floor = false
+					landed_on_spring = true
+					_wall_cd = 0.5
+					return
+	if not on_floor:
+		return
 	for dz in range(-1, 2):
 		for dx in range(-1, 2):
 			if dx == 0 and dz == 0:
@@ -486,7 +510,7 @@ func _move(motion: Vector3) -> void:
 			var probe := position
 			probe[axis] += dir * (RADIUS + 0.12)
 			if _world.block_at(probe + Vector3(0, 0.25, 0)) == Blocks.WALL_SPRING or _world.block_at(probe + Vector3(0, 0.75, 0)) == Blocks.WALL_SPRING:
-				vel[axis] = -dir * 13.0
+				vel[axis] = -dir * Config.WALL_SPRING_SPEED
 				vel.y = 5.5
 				knock = 0.35
 				landed_on_spring = true

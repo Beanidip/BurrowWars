@@ -133,6 +133,15 @@ func _run() -> void:
 	check(s != null and s.m.rats.size() == 4, "race starts with 2v2 rats")
 	check(s.m.world.get_child_count() > 20, "terrain chunks were meshed (%d)" % s.m.world.get_child_count())
 	check(s.player.on_floor and s.m.in_base(s.player), "player stands in the base")
+	# the corner panels never sit over the hotbar, even with long gadget and gear names
+	s.player.gear = "bubbles"
+	s.player.gadgets["wallspring"] = 1
+	s.player.equipped = "wallspring"
+	await frames(5)
+	var clear := true
+	for p: Control in s.hud._side_panels:
+		clear = clear and not p.get_global_rect().intersects(s.hud._hotbar.get_global_rect())
+	check(clear, "HUD corner panels don't overlap the hotbar")
 	await shot("04_base_third_person")
 	await press("jump")
 	check(not s.player.on_floor, "Space makes the rat jump")
