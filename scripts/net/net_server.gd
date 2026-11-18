@@ -28,7 +28,7 @@ var _frame := 0
 var _last_input: Dictionary = {}   # peer id -> msec of the last accepted input
 var _dirty_private: Dictionary = {}
 var _fx_t: Dictionary = {}         # "peer:kind" -> msec of the last effect that peer reported
-const CLIENT_FX := ["spring", "jetpack", "dash", "jump", "land", "splash", "splash_out"]
+const CLIENT_FX := ["spring", "jetpack", "dash", "jump", "land", "splash", "splash_out", "shield"]
 
 
 func _ready() -> void:
@@ -186,6 +186,8 @@ func on_input(id: int, pkt: Dictionary) -> void:
 			var key := "%d:%s" % [id, kind]
 			if kind is String and CLIENT_FX.has(kind) and now - int(_fx_t.get(key, 0)) > 150:
 				_fx_t[key] = now      # at most a few per second, whatever a client claims
+				if kind == "shield" and not m.raise_shield(rat):
+					continue          # no shield, or not ready: nothing to show
 				m.fx.emit(String(kind), rat.position, null)
 	rat.net_pre = Match.net_state(rat)
 
@@ -241,6 +243,9 @@ func on_act(id: int, method: String, a: Array) -> void:
 		"try_dig":
 			if _ok(a, [TYPE_VECTOR3I]):
 				m.try_dig(rat, a[0])
+		"ground_pound":
+			if _ok(a, [TYPE_VECTOR3I]):
+				m.ground_pound(rat, a[0])
 		"try_bonk":
 			if _ok(a, [TYPE_INT]):
 				var target := m.rat_by_id(a[0])

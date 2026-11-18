@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+| Change | Files |
+|---|---|
+| Title screen tagline: "Bunker, Build, Bonk! Bring Home The Golden Cheese!" | `ui/main_menu.gd` |
+| Scrap blocks have a pixel-art texture (a jumble of nuts, washers, springs, screws, a red clamp and a yellow plug in oily grime), turned and mirrored per face. Blocks can now have textures: `assets/blocks/<name>.png` | `world/block_textures.gd`, `world/chunk_mesher.gd`, `assets/blocks/scrap.png`, `tools/make_block_textures.py` |
+| Hit sparks take the colour of the block being hit (a hue-shift shader); painted blocks burst in their own colour | `match/fx_sprite.gd`, `match/match_view.gd`, `assets/shaders/fx_hue.gdshader` |
+| Spilled water and lava slope down to the ground at their edges instead of ending in see-through cubes; pools held by banks stay level, and the surface rises to meet liquid stacked above | `world/chunk_mesher.gd`, `world/voxel_world.gd` |
+| TNT visibly cracks Team Gates (two blasts break one) and blows up Team Blocks of either team; the workshop says so | `match/match.gd`, `match/class_defs.gd` |
+| Dash plays a whoosh along the ground (mirrored to the dash direction) | `match/match_view.gd`, `assets/fx/dash.png` |
+| Ground pound: a full double jump landed flat gives the block underfoot a dig hit (TNT lights); server-checked online | `actors/rat.gd`, `match/match.gd`, `net/net_server.gd`, `assets/fx/pound.png` |
+| The jetpack lifts half as strongly while you carry cheese | `actors/rat.gd`, `core/config.gd` |
+| Paint moved to 8 (chisel 9, pantograph 0 as before) | `core/inputs.gd`, `ui/hud.gd` |
+| Rat Knight Shield (gear, 12 scrap): J raises it for 5 s; bonks, cannonballs and wrecking balls bounce off and you keep your cheese, but carrying cheese behind it you move a quarter slower; 8 s cooldown. Server-checked online | `actors/rat.gd`, `match/match.gd`, `match/siege.gd`, `match/class_defs.gd`, `net/net_server.gd`, `ui/hud.gd`, `assets/fx/shield_*.png`, `tools/make_icons.py` |
+
 ## 2.0.0 - Lobby playground, deep caves, pixel effects, art pipeline (2026-11-18)
 
 | Change | Files |

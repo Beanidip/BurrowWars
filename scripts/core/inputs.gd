@@ -17,7 +17,7 @@ const KEYS := {
 	"slot_2": [KEY_2, "Material: stone"],
 	"slot_3": [KEY_3, "Material: ice"],
 	"slot_4": [KEY_4, "Material: obsidian"],
-	"slot_5": [KEY_5, "Painted block / glass (colour)"],
+	"slot_5": [KEY_8, "Painted block / glass (colour)"],
 	"color_picker": [KEY_C, "Colour picker"],
 	"chisel": [KEY_9, "Chisel (microvoxel carving)"],
 	"pantograph": [KEY_0, "Pantograph (copy / paste)"],

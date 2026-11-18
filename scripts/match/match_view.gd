@@ -110,11 +110,21 @@ static func break_sheet(id: int) -> String:
 	return "break_dirt"
 
 
-func _sprite(fx_name: String, at: Vector3, scale_by: float, follow: Node3D = null, seconds := -1.0) -> FxSprite:
+func _sprite(fx_name: String, at: Vector3, scale_by: float, follow: Node3D = null, seconds := -1.0, tint := Color(0, 0, 0, 0),
+		flip := false, in_front := false) -> FxSprite:
 	var where := at if follow == null else follow.position + at
 	if listener != null and listener.position.distance_to(where) > 45.0:
 		return null
-	return FxSprite.play(self, fx_name, at, scale_by, follow, seconds)
+	return FxSprite.play(self, fx_name, at, scale_by, follow, seconds, tint, flip, in_front)
+
+
+func _moving_left(r: Rat) -> bool:
+	## Whether a rat is heading towards the left of the screen (effects drawn
+	## facing right get mirrored to match).
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if r == null or cam == null:
+		return false
+	return Vector3(r.vel.x, 0, r.vel.z).dot(cam.global_basis.x) < 0.0
 
 
 func _facing_viewer(c: Vector3, by: float) -> Vector3:
@@ -162,7 +172,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			var id := int(data["id"])
 			_sound("mine_" + _material_sound(id), c)
 			_burst(c, Blocks.COLOR[id], 3, 2.5)
-			_sprite("hit", _facing_viewer(c, 0.62), 0.3)
+			_sprite("hit", _facing_viewer(c, 0.62), 0.3, null, -1.0, Blocks.COLOR[id])   # sparks in the block's colour
 			_crack.visible = true
 			_crack.position = c
 			_crack_t = 2.5
@@ -171,7 +181,10 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			var bid := int(data)
 			_sound("break_" + _material_sound(bid), c)
 			_burst(c, Blocks.COLOR[bid], 6, 4.0)
-			_sprite(break_sheet(bid), c - Vector3(0, 0.45, 0), 0.7)
+			if Blocks.is_paint(bid):
+				_sprite("break_dirt", c - Vector3(0, 0.45, 0), 0.7, null, -1.0, Blocks.COLOR[bid])   # dyed dirt bursts in its dye
+			else:
+				_sprite(break_sheet(bid), c - Vector3(0, 0.45, 0), 0.7)
 			if _crack.position.distance_to(c) < 0.1:
 				_crack.visible = false
 		"clang":
@@ -198,12 +211,25 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			elif flier == null:
 				_burst(pos + Vector3(0, 0.2, 0), Color(1.0, 0.6, 0.15), 14, 3.0)
 		"dash":
-			_sprite("dust", pos, 0.45)
+			_sound("jetratpack_flame", pos, 2.2, -10.0)
+			_sprite("dash", pos, 0.42, null, -1.0, Color(0, 0, 0, 0), _moving_left(_nearest_rat(pos)))
 		"jump":
 			_sprite("dust", pos, 0.3)
 		"land":
 			_sound("mine_dirt", pos, 0.6, -6.0)
 			_sprite("dust", pos, 0.7)
+		"shield":
+			_sound("mine_obsidian", pos, 1.6, -2.0)
+			var knight := _nearest_rat(pos)
+			if knight != null:
+				_sprite("shield_up", Vector3.ZERO, 0.85, knight, Config.SHIELD_TIME, Color(0, 0, 0, 0), false, true)
+		"shield_block":
+			_sound("mine_obsidian", pos, 1.25, 3.0)
+			_sprite("shield_block", pos, 0.85, null, -1.0, Color(0, 0, 0, 0), false, true)
+			_float_text(pos + Vector3(0, 1.3, 0), "BLOCKED!", Color(0.6, 0.85, 1.0))
+		"pound":
+			_sound("siege_impact", pos, 0.8, -4.0)
+			_sprite("pound", pos, 0.32)
 		"splash":
 			_sound("splash", pos, 1.0 if size >= 1.0 else 1.4, 0.0 if size >= 1.0 else -6.0)
 			_sprite("splash", surface(pos, Blocks.WATER), 0.85 * size)

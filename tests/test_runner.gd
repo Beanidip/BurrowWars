@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -2792,6 +2792,20 @@ func test_effect_sheets() -> void:
 		and MatchView.break_sheet(Blocks.STONE) == "break_stone", "a broken block bursts in its own colours")
 	for kind: String in ["spring", "jetpack", "dash", "jump", "land", "splash", "splash_out"]:
 		check(NetServer.CLIENT_FX.has(kind), "online, a player's game may report '%s'" % kind)
+	# textured blocks: scrap is drawn with its picture, other blocks keep their flat colours
+	check(BlockTextures.flags()[Blocks.SCRAP] == 1 and BlockTextures.flags()[Blocks.DIRT] == 0, "scrap has a texture (assets/blocks/scrap.png)")
+	var w := VoxelWorld.new()
+	w.set_raw(3, 3, 3, Blocks.SCRAP)
+	w.set_raw(5, 3, 3, Blocks.DIRT)
+	var plain := StandardMaterial3D.new()
+	var mesh := ChunkMesher.build(w, Vector3i.ZERO, plain, plain)
+	var textured := -1
+	for i in mesh.get_surface_count():
+		if mesh.surface_get_material(i) == BlockTextures.material(Blocks.SCRAP):
+			textured = i
+	check(textured >= 0 and (mesh.surface_get_arrays(textured)[Mesh.ARRAY_TEX_UV] as PackedVector2Array).size() == 36, "a lone scrap block is six textured faces")
+	check(mesh.get_surface_count() == 2, "and the dirt beside it stays a plain coloured surface")
+	w.free()
 
 
 func test_motion_and_splash_fx() -> void:
@@ -3081,4 +3095,177 @@ func test_lobby_playground() -> void:
 	m.respawn(b)
 	check(b.position.distance_to(c) < 4.5, "respawning brings you back to the plaza")
 	check(not m.over and m.scores == [0, 0], "nobody wins a lobby")
+	end(m)
+
+
+func test_moves_and_blasts() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	# a full double jump landed flat thumps the block below
+	var floor_cell := ARENA + Vector3i(0, -1, 0)
+	m.world.set_block(floor_cell, Blocks.DIRT)
+	var r := arena_rat(m, 0, "scout")
+	run(m, 0.4)
+	var double_jump := func(rat: Rat) -> void:
+		rat.jump_pressed = true
+		m.step(DT)
+		rat.jump_pressed = false
+		var guard := 0
+		while rat.vel.y > 0.5 and guard < 120:
+			m.step(DT)
+			guard += 1
+		rat.jump_pressed = true
+		m.step(DT)
+		rat.jump_pressed = false
+	kinds.clear()
+	double_jump.call(r)
+	run(m, 1.2)
+	check(kinds.has("pound") and kinds.has("hit") and int(m.world.damage.get(floor_cell, 0)) == 1, "a full double jump landed flat gives the dirt below a dig hit (%s)" % str(kinds))
+	m.world.set_block(floor_cell, Blocks.STONE)
+	r.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	r.vel = Vector3.ZERO
+	r.stamina = r.max_stamina()
+	run(m, 1.0)
+	kinds.clear()
+	double_jump.call(r)
+	run(m, 1.2)
+	check(kinds.has("pound") and int(m.world.damage.get(floor_cell, 0)) == 1 and m.world.get_cell(floor_cell) == Blocks.STONE, "on stone it lands one dig hit")
+	kinds.clear()
+	r.jump_pressed = true
+	m.step(DT)
+	r.jump_pressed = false
+	run(m, 1.2)
+	check(not kinds.has("pound"), "a single jump does nothing to the floor")
+	m.world.set_block(ARENA + Vector3i(0, 3, 0), Blocks.STONE)    # a low ceiling
+	r.stamina = r.max_stamina()
+	run(m, 0.6)
+	kinds.clear()
+	double_jump.call(r)
+	run(m, 1.2)
+	check(not kinds.has("pound"), "a double jump cut short by the ceiling doesn't pound")
+	m.world.set_block(ARENA + Vector3i(0, 3, 0), Blocks.AIR)
+	# the jetpack lifts half as high with cheese aboard
+	var light := arena_rat(m, 0, "scout", Vector3(-4, 0, -4))
+	var heavy := arena_rat(m, 1, "scout", Vector3(4, 0, 4))
+	light.gear = "jetpack"
+	heavy.gear = "jetpack"
+	heavy.carried = 1
+	run(m, 0.4)
+	var y0 := [light.position.y, heavy.position.y]
+	light.gear_pressed = true
+	heavy.gear_pressed = true
+	m.step(DT)
+	light.gear_pressed = false
+	heavy.gear_pressed = false
+	run(m, Config.JETPACK_TIME)
+	var lift := [light.position.y - float(y0[0]), heavy.position.y - float(y0[1])]
+	check(lift[1] > 1.0 and lift[1] < lift[0] * 0.65, "carrying cheese, the jetpack lifts about half as far (%.1f vs %.1f)" % [lift[1], lift[0]])
+	# keys: paint, chisel and pantograph sit on 8, 9 and 0
+	check(Inputs.KEYS["slot_5"][0] == KEY_8 and Inputs.KEYS["chisel"][0] == KEY_9 and Inputs.KEYS["pantograph"][0] == KEY_0, "paint 8, chisel 9, pantograph 0")
+	# TNT and team gadgets
+	var o := ARENA + Vector3i(0, 0, 5)
+	m.world.set_block(o + Vector3i(1, 0, 0), Blocks.TEAM_RED)
+	m.world.set_block(o + Vector3i(-1, 0, 0), Blocks.TEAM_BLUE)
+	m.world.set_block(o + Vector3i(0, 0, 1), Blocks.GATE_RED)
+	kinds.clear()
+	m.blast(Vector3(o) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)
+	check(m.world.get_cell(o + Vector3i(1, 0, 0)) == Blocks.AIR and m.world.get_cell(o + Vector3i(-1, 0, 0)) == Blocks.AIR and kinds.count("break") >= 2, "TNT blows up team blocks, either team's")
+	check(m.world.get_cell(o + Vector3i(0, 0, 1)) == Blocks.GATE_RED and kinds.has("hit"), "and cracks a team gate, visibly")
+	m.blast(Vector3(o) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)
+	check(m.world.get_cell(o + Vector3i(0, 0, 1)) == Blocks.AIR, "a second blast breaks the gate")
+	check(String(ClassDefs.shop_item("tnt")["desc"]).contains("Team Blocks") and String(ClassDefs.shop_item("teamblock")["desc"]).contains("TNT"), "the workshop says so")
+	end(m)
+	# hit sparks take the block's colour
+	var holder := Node3D.new()
+	add_child(holder)
+	var spark := FxSprite.play(holder, "hit", Vector3.ZERO, 0.3, null, -1.0, Blocks.COLOR[Blocks.ICE])
+	var mat := spark.material_override as ShaderMaterial
+	check(mat != null and absf(float(mat.get_shader_parameter("hue")) - Blocks.COLOR[Blocks.ICE].h) < 0.001, "hit sparks are recoloured to the block")
+	check(FxSprite.play(holder, "hit", Vector3.ZERO).material_override == null, "untinted effects draw as they are")
+	holder.queue_free()
+	# spilled liquid slopes down to the ground at its edges
+	var w := VoxelWorld.new()
+	var g := 10
+	for x in range(20, 30):
+		for z in range(20, 30):
+			w.set_raw(x, g - 1, z, Blocks.STONE)
+	for x in range(22, 25):
+		for z in range(22, 25):
+			w.set_raw(x, g, z, Blocks.WATER)          # a 3x3 puddle on open ground
+	for x in range(26, 29):
+		for z in range(22, 25):
+			for y in [g, g + 1]:
+				w.set_raw(x, y, z, Blocks.STONE)
+	w.set_raw(27, g + 1, 23, Blocks.WATER)          # a 1x1 pool held by stone walls
+	check(is_equal_approx(ChunkMesher.liquid_corner(w.data, 23, g, 23, Blocks.WATER), ChunkMesher.LIQUID_TOP), "the middle of a puddle is level")
+	check(is_equal_approx(ChunkMesher.liquid_corner(w.data, 22, g, 22, Blocks.WATER), ChunkMesher.LIQUID_EDGE), "its outer edge runs down to the ground")
+	check(is_equal_approx(ChunkMesher.liquid_corner(w.data, 27, g + 1, 23, Blocks.WATER), ChunkMesher.LIQUID_TOP), "water held by walls stays level to the brim")
+	w.set_raw(23, g + 1, 23, Blocks.WATER)
+	check(is_equal_approx(ChunkMesher.liquid_corner(w.data, 23, g, 23, Blocks.WATER), 1.0), "and rises to meet water stacked on it")
+	w.free()
+
+
+func test_knight_shield() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	var knight := arena_rat(m, 0, "digger")
+	knight.position = MapGenerator.spawn_point(0)
+	run(m, 0.3)
+	knight.scrap = 20
+	check(m.try_buy(knight, "shield") == "" and knight.gear == "shield" and knight.scrap == 20 - int(ClassDefs.shop_item("shield")["cost"]), "the Rat Knight Shield is sold as gear")
+	knight.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	knight.carried = 2
+	run(m, 0.3)
+	var walk := knight.move_speed()
+	kinds.clear()
+	knight.gear_pressed = true
+	m.step(DT)
+	knight.gear_pressed = false
+	check(kinds.has("shield") and absf(knight.shield_t - Config.SHIELD_TIME) < 0.05 and knight.gear_cd > Config.SHIELD_TIME + Config.SHIELD_COOLDOWN - 0.1, "J raises it for %.0f s" % Config.SHIELD_TIME)
+	check(absf(knight.move_speed() - walk * Config.SHIELD_CARRY_SPEED) < 0.01, "hauling cheese behind it is a quarter slower")
+	var bully := arena_rat(m, 1, "scout", Vector3(1.0, 0, 0))
+	run(m, 0.2)
+	bully.bonk_cd = 0.0
+	kinds.clear()
+	var before := knight.vel
+	m.try_bonk(bully, knight)
+	check(kinds.has("shield_block") and knight.carried == 2 and knight.knock <= 0.0 and knight.vel.distance_to(before) < 1.0, "a bonk bounces off: no knock, no dropped cheese")
+	# a cannonball glances off too
+	var gun := ARENA + Vector3i(-5, 0, 0)
+	var mc := m.siege.add_fixed(gun, Blocks.CANNON, -PI * 0.5)
+	m.world.set_block(gun, Blocks.CANNON)
+	mc.team = 1
+	mc.pitch = 0.0
+	bully.position = Vector3(gun) + Vector3(-0.5, 0, 0.5)
+	run(m, 0.1)
+	check(m.siege.try_operate(bully, gun) == "", "an enemy mans a cannon")
+	knight.position = m.siege.muzzle(mc) + m.siege.aim_dir(mc) * 3.0 - Vector3(0, 0.45, 0)
+	knight.vel = Vector3.ZERO
+	kinds.clear()
+	m.siege.fire(bully)
+	run(m, 0.6)
+	check(kinds.has("shield_block") and knight.carried == 2, "and a cannonball glances off the shield")
+	m.siege.release(bully)
+	# when it drops, bonks land again
+	run(m, Config.SHIELD_TIME)
+	check(knight.shield_t <= 0.0 and absf(knight.move_speed() - walk) < 0.01, "after %.0f s it drops" % Config.SHIELD_TIME)
+	bully.position = knight.position + Vector3(1.0, 0, 0)
+	bully.bonk_cd = 0.0
+	run(m, 0.05)
+	m.try_bonk(bully, knight)
+	check(knight.vel.length() > 5.0 and knight.carried == 1, "and bonks land again")
+	knight.gear_pressed = true
+	m.step(DT)
+	knight.gear_pressed = false
+	check(knight.shield_t <= 0.0, "it needs %.0f s before it can be raised again" % Config.SHIELD_COOLDOWN)
+	# online the authority checks the player's claim
+	var plain := arena_rat(m, 1, "builder", Vector3(3, 0, 3))
+	check(not m.raise_shield(plain), "no shield, no raising it")
+	plain.gear = "shield"
+	check(m.raise_shield(plain) and plain.shield_t > 0.0 and not m.raise_shield(plain), "a ready shield is raised once, then cools down")
+	check(NetServer.CLIENT_FX.has("shield"), "a player's game reports raising it")
 	end(m)

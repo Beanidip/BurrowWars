@@ -23,6 +23,8 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 	var z0 := k.z * VoxelWorld.CHUNK
 	var opaque := Blocks.OPAQUE
 	var mf := world.micro_flag
+	var textured := BlockTextures.flags()
+	var tex: Dictionary = {}     # block id -> [vertices, colours, uvs] for textured faces
 	var layered := not world.gates.is_empty()
 	for y in range(y0, y0 + VoxelWorld.CHUNK):
 		var depth := clampf(0.58 + 0.42 * float(y) / 28.0, 0.58, 1.0)
@@ -74,7 +76,13 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 						var c := base
 						if id == Blocks.GRASS and f != 2:
 							c = Blocks.COLOR[Blocks.DIRT] * tint * depth
-						if id == Blocks.STONE or id == Blocks.OBSIDIAN or id == Blocks.BRICK:
+						if textured[id] == 1:
+							if not tex.has(id):
+								tex[id] = [PackedVector3Array(), PackedColorArray(), PackedVector2Array()]
+							var shade: float = tint * depth * float(SHADE[f])
+							_face(tex[id][0], tex[id][1], mn, mn + Vector3.ONE, f, Color(shade, shade, shade))
+							_face_uv(tex[id][2], f, ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ (f * 2654435761)) >> 4 & 7)
+						elif id == Blocks.STONE or id == Blocks.OBSIDIAN or id == Blocks.BRICK:
 							_rocky_face(ov, oc, mn, f, _shade(c, SHADE[f]), id, x * 7 + y * 13 + z * 29 + f)
 						else:
 							_face(ov, oc, mn, mn + Vector3.ONE, f, _shade(c, SHADE[f]))
@@ -91,22 +99,8 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 				match id:
 					Blocks.WATER, Blocks.LAVA:
 						var is_lava := id == Blocks.LAVA
-						var top := 0.88
-						if y + 1 < sy and d[x + sx * (z + sz * (y + 1))] == id:
-							top = 1.0
-						for f in 6:
-							var ax2: int = x + NX[f]
-							var ay2: int = y + NY[f]
-							var az2: int = z + NZ[f]
-							if ax2 < 0 or ay2 < 0 or az2 < 0 or ax2 >= sx or ay2 >= sy or az2 >= sz:
-								continue
-							var nid2 := d[ax2 + sx * (az2 + sz * ay2)]
-							if nid2 == id or opaque[nid2] == 1:
-								continue
-							if is_lava:
-								_face(ov, oc, mn, mn + Vector3(1, top, 1), f, _shade(col * tint, 0.8 + 0.2 * SHADE[f]))
-							else:
-								_face(tv, tc, mn, mn + Vector3(1, top, 1), f, _shade(col, SHADE[f]))
+						_liquid_cell(d, x, y, z, id, ov if is_lava else tv, oc if is_lava else tc,
+							col * tint if is_lava else col, is_lava)
 					Blocks.GATE_BLUE, Blocks.GATE_RED:
 						_box(tv, tc, mn + Vector3(0.01, 0.01, 0.01), mn + Vector3(0.99, 0.99, 0.99), col)
 					Blocks.LADDER:
@@ -144,21 +138,121 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 						_box(ov, oc, mn + Vector3(0.42, 0.08, 0.6), mn + Vector3(0.58, 0.2, 0.76), Color(1.0, 0.85, 0.2))
 	var mesh := ArrayMesh.new()
 	_commit(mesh, ov, oc, mat_opaque)
+	for tid: int in tex:
+		_commit(mesh, tex[tid][0], tex[tid][1], BlockTextures.material(tid), tex[tid][2])
 	_commit(mesh, tv, tc, mat_trans)
 	return mesh if mesh.get_surface_count() > 0 else null
+
+
+# --- liquids -------------------------------------------------------------------
+# A liquid's surface is drawn from heights at the corners of the grid, so
+# neighbouring cells always meet. Where liquid has spread onto open ground its
+# edge slopes down to that ground (a wedge, not a cube); against banks and walls
+# it stays level; under more liquid it is full height. Collision is unchanged.
+
+const LIQUID_TOP := 0.88      # the surface of still liquid in its cell
+const LIQUID_EDGE := 0.04     # where an edge meets open ground
+
+
+static func _covered(d: PackedByteArray, x: int, y: int, z: int, id: int) -> bool:
+	return y + 1 < VoxelWorld.SY and d[x + VoxelWorld.SX * (z + VoxelWorld.SZ * (y + 1))] == id
+
+
+static func liquid_corner(d: PackedByteArray, px: int, y: int, pz: int, id: int) -> float:
+	## Surface height at grid point (px, pz) of row y, from the four cells round it.
+	var sx := VoxelWorld.SX
+	var sz := VoxelWorld.SZ
+	var edge := false
+	for k in 4:
+		var cx := px - 1 + (k & 1)
+		var cz := pz - 1 + (k >> 1)
+		if cx < 0 or cz < 0 or cx >= sx or cz >= sz:
+			continue
+		var n := d[cx + sx * (cz + sz * y)]
+		if n == id:
+			if _covered(d, cx, y, cz, id):
+				return 1.0          # rises to meet the liquid stacked above
+		elif Blocks.SOLID[n] == 0 and y > 0:
+			var under := d[cx + sx * (cz + sz * (y - 1))]
+			if under == id or Blocks.SOLID[under] == 1:
+				edge = true         # open ground beside it: the liquid runs out onto it
+	return LIQUID_EDGE if edge else LIQUID_TOP
+
+
+static func _liquid_cell(d: PackedByteArray, x: int, y: int, z: int, id: int, v: PackedVector3Array, c: PackedColorArray,
+		col: Color, lava: bool) -> void:
+	var sx := VoxelWorld.SX
+	var sz := VoxelWorld.SZ
+	var mn := Vector3(x, y, z)
+	var full := _covered(d, x, y, z, id)
+	# this cell's corner heights, indexed by grid point (dx, dz) in {0,1}
+	var h := [1.0, 1.0, 1.0, 1.0] if full else [liquid_corner(d, x, y, z, id), liquid_corner(d, x + 1, y, z, id),
+		liquid_corner(d, x, y, z + 1, id), liquid_corner(d, x + 1, y, z + 1, id)]
+	var shade := func(f: int) -> Color:
+		return _shade(col, 0.8 + 0.2 * SHADE[f]) if lava else _shade(col, SHADE[f])
+	# top
+	if not full:
+		var a := mn + Vector3(0, h[0], 0)
+		var b := mn + Vector3(0, h[2], 1)
+		var cc := mn + Vector3(1, h[3], 1)
+		var dd := mn + Vector3(1, h[1], 0)
+		v.append(a); v.append(cc); v.append(b)
+		v.append(a); v.append(dd); v.append(cc)
+		for i in 6:
+			c.append(shade.call(2))
+	# bottom
+	if y > 0:
+		var below := d[x + sx * (z + sz * (y - 1))]
+		if below != id and Blocks.OPAQUE[below] == 0:
+			_face(v, c, mn, mn + Vector3(1, 1, 1), 3, shade.call(3))
+	# sides: [face, first corner (dx, dz), second corner] in the winding _face uses
+	for side: Array in [[0, 1, 0, 1, 1], [1, 0, 1, 0, 0], [4, 1, 1, 0, 1], [5, 0, 0, 1, 0]]:
+		var f: int = side[0]
+		var nx: int = x + NX[f]
+		var nz: int = z + NZ[f]
+		if nx < 0 or nz < 0 or nx >= sx or nz >= sz:
+			continue
+		var n := d[nx + sx * (nz + sz * y)]
+		if Blocks.OPAQUE[n] == 1 and n != id:
+			continue
+		var i0: int = side[1] + 2 * side[2]
+		var i1: int = side[3] + 2 * side[4]
+		var lo0 := 0.0
+		var lo1 := 0.0
+		if n == id:
+			if full and not _covered(d, nx, y, nz, id):
+				lo0 = liquid_corner(d, x + side[1], y, z + side[2], id)
+				lo1 = liquid_corner(d, x + side[3], y, z + side[4], id)
+			else:
+				continue        # the neighbour's surface meets ours
+		if h[i0] - lo0 < 0.01 and h[i1] - lo1 < 0.01:
+			continue
+		var p0 := mn + Vector3(side[1], 0, side[2])
+		var p1 := mn + Vector3(side[3], 0, side[4])
+		var a := p0 + Vector3(0, lo0, 0)
+		var b := p0 + Vector3(0, h[i0], 0)
+		var cc := p1 + Vector3(0, h[i1], 0)
+		var dd := p1 + Vector3(0, lo1, 0)
+		v.append(a); v.append(cc); v.append(b)
+		v.append(a); v.append(dd); v.append(cc)
+		for i in 6:
+			c.append(shade.call(f))
 
 
 static func _shade(c: Color, s: float) -> Color:
 	return Color(c.r * s, c.g * s, c.b * s, c.a)
 
 
-static func _commit(mesh: ArrayMesh, v: PackedVector3Array, c: PackedColorArray, mat: Material) -> void:
+static func _commit(mesh: ArrayMesh, v: PackedVector3Array, c: PackedColorArray, mat: Material,
+		uv := PackedVector2Array()) -> void:
 	if v.is_empty():
 		return
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = v
 	arrays[Mesh.ARRAY_COLOR] = c
+	if not uv.is_empty():
+		arrays[Mesh.ARRAY_TEX_UV] = uv
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh.surface_set_material(mesh.get_surface_count() - 1, mat)
 
@@ -205,6 +299,23 @@ static func _face(v: PackedVector3Array, c: PackedColorArray, mn: Vector3, mx: V
 	v.append(a); v.append(dd); v.append(cc)
 	for i in 6:
 		c.append(col)
+
+
+static func _face_uv(uv: PackedVector2Array, f: int, variant := 0) -> void:
+	## Texture coordinates for one _face, in its vertex order (a, cc, b, a, dd,
+	## cc). `variant` 0-7 turns (by quarters) and mirrors the picture, so a
+	## run of the same block doesn't look stamped out.
+	var q := PackedVector2Array([Vector2(0, 0), Vector2(0, 1), Vector2(1, 1), Vector2(1, 0)]) if f == 2 or f == 3 \
+		else PackedVector2Array([Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)])
+	for i in 4:
+		var p := q[i] - Vector2(0.5, 0.5)
+		if variant & 4:
+			p.x = -p.x
+		for k in variant & 3:
+			p = Vector2(-p.y, p.x)
+		q[i] = p + Vector2(0.5, 0.5)
+	uv.append(q[0]); uv.append(q[2]); uv.append(q[1])
+	uv.append(q[0]); uv.append(q[3]); uv.append(q[2])
 
 
 static func _rocky_face(v: PackedVector3Array, c: PackedColorArray, mn: Vector3, f: int, col: Color, id: int, seed_i: int) -> void:

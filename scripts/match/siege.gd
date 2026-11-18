@@ -394,7 +394,7 @@ func _swing(mc: Machine, dt: float) -> void:
 		if speed > 2.5:
 			for r in m.rats:
 				var foe := r.team != mc.team or (m.lobby and r.id != mc.operator)
-				if foe and r.knock <= 0.0 and r.center().distance_to(ball) < BALL_RADIUS + 0.45:
+				if foe and r.knock <= 0.0 and r.shield_t <= 0.0 and r.center().distance_to(ball) < BALL_RADIUS + 0.45:
 					r.vel = (tangent * minf(speed, 9.0) + Vector3(0, 5.0, 0)) * m.launch_power()
 					r.knock = 0.5
 					r.on_floor = false
@@ -418,6 +418,9 @@ func _fly(s: Shot, dt: float) -> bool:
 		for r in m.rats:
 			var foe := r.team != s.team or (m.lobby and r.id != s.owner)   # in the playground, anyone but the gunner
 			if foe and r.center().distance_to(s.pos) < 0.6:
+				if r.shield_t > 0.0:
+					m.fx.emit("shield_block", r.position, null)   # the ball glances off the shield
+					return true
 				r.vel = (s.vel.normalized() * 8.0 + Vector3(0, 5.0, 0)) * m.launch_power()
 				r.knock = 0.5
 				r.on_floor = false

@@ -94,7 +94,15 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
   (or at base) to put scrap, dirt, stone, ice and obsidian into your team's shared pool or take
   them out. Cheese never goes in. Only TNT hurts it: 5 blasts break it, and the pool survives.
 - **Gear slot** (J): one piece of gear at a time. The Jetpack (14 scrap) lifts you for 1.1 s, then
-  needs 5 s to cool down. Bots buy one when they can afford it.
+  needs 5 s to cool down; carrying cheese it lifts half as strongly. Bots buy one when they can
+  afford it. The **Rat Knight Shield** (12 scrap) is raised with J for 5 s: bonks, cannonballs
+  and wrecking balls bounce off, so nobody can knock cheese out of your paws, but hauling cheese
+  behind it you move a quarter slower. 8 s to ready it again.
+- **Ground pound**: a double jump taken (nearly) to its full height and landed flat gives the
+  block underfoot one dig hit (dirt cracks, a second pound or a dig breaks it; TNT lights).
+  Ceilings, ladders, water, springs and jetpacks spoil it.
+- **TNT vs team gadgets**: a blast breaks Team Blocks (either team's) and takes half a Team
+  Gate's strength, with cracks showing; two blasts break a gate.
 - **Placed traps** (mouse trap, sticky, pitfall, wall spring) take 5 digs for the team that
   placed them and 15 for anyone else (blasts count as anyone else).
 - **Springs** fling anything within a block of their sides, as well as what lands on them.

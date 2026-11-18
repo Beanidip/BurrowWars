@@ -300,6 +300,21 @@ def _(i):
     i.pts([(4, 12), (5, 12), (10, 12), (11, 12), (4, 13), (11, 13)], ORANGE)
     i.pts([(5, 13), (10, 13), (4, 14), (11, 14)], YEL)
 
+@icon("shield")
+def _(i):
+    # the Rat Knight Shield: a steel-rimmed heater shield with a cheese crest
+    rows = {2: (3, 12), 3: (3, 12), 4: (3, 12), 5: (3, 12), 6: (3, 12), 7: (3, 12), 8: (3, 12),
+            9: (4, 11), 10: (4, 11), 11: (5, 10), 12: (6, 9), 13: (7, 8)}
+    for y, (x0, x1) in rows.items():
+        i.rect(x0, y, x1, y, STEEL_D)
+        if x1 - x0 > 1 and 2 < y < 13:
+            i.rect(x0 + 1, y, x1 - 1, y, BLUE if y < 8 else BLUE_D)
+    i.rect(4, 3, 11, 3, STEEL_L)              # light along the top edge
+    i.rect(7, 3, 8, 12, STEEL)                # the centre band
+    i.rect(6, 5, 9, 7, YEL)                   # cheese crest
+    i.pts([(6, 5), (9, 7)], YEL_D)
+    i.pts([(7, 6)], YEL_D)
+
 # ---------------------------------------------------------------- tools
 @icon("chisel")
 def _(i):

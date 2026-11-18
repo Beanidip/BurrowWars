@@ -329,18 +329,14 @@ func raycast_micro(origin: Vector3, dir: Vector3, max_dist: float) -> Dictionary
 func _mark_dirty(c: Vector3i) -> void:
 	if not visual:
 		return
-	var k := Vector3i(c.x / CHUNK, c.y / CHUNK, c.z / CHUNK)
-	_dirty[k] = true
-	var l := Vector3i(c.x % CHUNK, c.y % CHUNK, c.z % CHUNK)
-	for a in 3:
-		if l[a] == 0:
-			var n := k
-			n[a] -= 1
-			_dirty[n] = true
-		elif l[a] == CHUNK - 1:
-			var n2 := k
-			n2[a] += 1
-			_dirty[n2] = true
+	# every chunk that holds this cell or one of its 26 neighbours (liquid
+	# surfaces read their diagonal neighbours too)
+	for dy in range(-1, 2):
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				var n := c + Vector3i(dx, dy, dz)
+				if n.x >= 0 and n.y >= 0 and n.z >= 0:
+					_dirty[Vector3i(n.x / CHUNK, n.y / CHUNK, n.z / CHUNK)] = true
 
 
 func mark_all_dirty() -> void:

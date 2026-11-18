@@ -31,7 +31,9 @@ GOLD = ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6
 WOOD = ["#160c06", "#2e1a0c", "#4a2c14", "#6a421e", "#8e5c2c", "#b47c40", "#d8a464"]
 LAVA = ["#1a0604", "#4a0e06", "#8a1c08", "#c83a0c", "#ec6a14", "#ffa02a", "#ffd86a", "#fff6d0"]
 
-# name in the game        pixelfx id                    fps  max seconds  options
+# name in the game        pixelfx id                    fps  max seconds  options  [import options]
+# Import options: {"from": s, "to": s, "loop": True} keeps only that stretch of
+# the effect (seconds) and makes it a loop, e.g. a shield held up.
 EFFECTS = [
     ("explosion",   "explosions/dirt-explosion", 15, 2.6, {}),
     ("hit",         "impacts/hit-spark",         20, 0,   {}),
@@ -49,6 +51,10 @@ EFFECTS = [
     ("jetpack",     "scifi/jetpack",             15, 0,   {}),
     ("splash",      "water/splash",              15, 1.8, {"stone": False}),
     ("splash_lava", "water/splash",              15, 1.8, {"stone": False, "palette": LAVA, "seed": 5}),
+    ("dash",        "melee/spear-sweep",         15, 1.0, {}),
+    ("pound",       "impacts/ground-slam",       15, 1.3, {}),
+    ("shield_block", "impacts/shield-block",     15, 0,   {}),
+    ("shield_up",   "impacts/shield-block",      15, 0,   {}, {"from": 0.36, "to": 0.62, "loop": True}),
 ]
 
 
@@ -71,7 +77,9 @@ def main() -> int:
     pixelfx = os.path.abspath(sys.argv[1])
     os.makedirs(OUT, exist_ok=True)
     table = []
-    for name, fx_id, fps, max_t, opts in EFFECTS:
+    for entry in EFFECTS:
+        name, fx_id, fps, max_t, opts = entry[:5]
+        extra = entry[5] if len(entry) > 5 else {}
         tmp = os.path.join(OUT, "_tmp")
         shutil.rmtree(tmp, ignore_errors=True)
         png, js = render(pixelfx, fx_id, fps, opts, tmp)
@@ -80,10 +88,16 @@ def main() -> int:
         w, h = px["frameSize"]
         sheet = Image.open(png).convert("RGBA")
         frames = [sheet.crop((f["frame"]["x"], f["frame"]["y"], f["frame"]["x"] + w, f["frame"]["y"] + h)) for f in meta["frames"]]
+        loop = bool(px["loop"])
+        if "from" in extra:
+            frames = frames[int(round(extra["from"] * px["fps"])): int(round(extra["to"] * px["fps"]))]
+            loop = bool(extra.get("loop", loop))
         if max_t > 0:
             frames = frames[: max(1, int(round(max_t * px["fps"])))]
         while len(frames) > 1 and frames[0].getbbox() is None:
             frames.pop(0)   # start on the first frame that shows something
+        while len(frames) > 1 and frames[-1].getbbox() is None:
+            frames.pop()    # and end on the last
         # crop every frame to the union of what is ever drawn
         box = None
         for f in frames:
@@ -99,7 +113,7 @@ def main() -> int:
             out.alpha_composite(f.crop(box), ((i % cols) * fw, (i // cols) * fh))
         out.save(os.path.join(OUT, name + ".png"))
         pivot = px.get("pivot") or [w / 2, h]
-        table.append((name, fx_id, fw, fh, cols, len(frames), px["fps"], bool(px["loop"]), pivot[0] - box[0], pivot[1] - box[1]))
+        table.append((name, fx_id, fw, fh, cols, len(frames), px["fps"], loop, pivot[0] - box[0], pivot[1] - box[1]))
         print("%-12s %-28s %3d frames %4dx%-4d -> %dx%d" % (name, fx_id, len(frames), fw, fh, out.size[0], out.size[1]))
         shutil.rmtree(tmp, ignore_errors=True)
     with open(os.path.join(ROOT, "scripts", "match", "fx_sheets.gd"), "w") as f:

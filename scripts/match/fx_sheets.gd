@@ -6,19 +6,23 @@ class_name FxSheets
 
 const SHEETS := {
 	"explosion": {"w": 252, "h": 230, "cols": 6, "frames": 39, "fps": 15, "loop": false, "pivot": Vector2(127.0, 197.0)},   # explosions/dirt-explosion
-	"hit": {"w": 119, "h": 71, "cols": 3, "frames": 11, "fps": 20, "loop": false, "pivot": Vector2(34.0, 56.0)},   # impacts/hit-spark
-	"break_dirt": {"w": 91, "h": 81, "cols": 4, "frames": 15, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
-	"break_stone": {"w": 91, "h": 81, "cols": 4, "frames": 15, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
-	"break_ice": {"w": 91, "h": 81, "cols": 4, "frames": 15, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
-	"break_scrap": {"w": 91, "h": 81, "cols": 4, "frames": 15, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
-	"break_wood": {"w": 91, "h": 81, "cols": 4, "frames": 15, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
-	"break_dark": {"w": 91, "h": 81, "cols": 4, "frames": 15, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
-	"dust": {"w": 136, "h": 41, "cols": 3, "frames": 25, "fps": 15, "loop": false, "pivot": Vector2(69.0, 27.0)},   # impacts/heavy-landing
-	"pow": {"w": 138, "h": 129, "cols": 4, "frames": 17, "fps": 15, "loop": false, "pivot": Vector2(69.0, 64.0)},   # explosions/cartoon-pow
-	"collect": {"w": 77, "h": 88, "cols": 5, "frames": 21, "fps": 15, "loop": false, "pivot": Vector2(36.0, 81.0)},   # pickups/collect-burst
-	"poof": {"w": 91, "h": 76, "cols": 5, "frames": 25, "fps": 15, "loop": false, "pivot": Vector2(43.0, 65.0)},   # spawn/poof
+	"hit": {"w": 119, "h": 71, "cols": 3, "frames": 9, "fps": 20, "loop": false, "pivot": Vector2(34.0, 56.0)},   # impacts/hit-spark
+	"break_dirt": {"w": 91, "h": 81, "cols": 4, "frames": 14, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
+	"break_stone": {"w": 91, "h": 81, "cols": 4, "frames": 14, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
+	"break_ice": {"w": 91, "h": 81, "cols": 4, "frames": 14, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
+	"break_scrap": {"w": 91, "h": 81, "cols": 4, "frames": 14, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
+	"break_wood": {"w": 91, "h": 81, "cols": 4, "frames": 14, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
+	"break_dark": {"w": 91, "h": 81, "cols": 4, "frames": 14, "fps": 15, "loop": false, "pivot": Vector2(47.0, 66.0)},   # impacts/blunt-hit
+	"dust": {"w": 136, "h": 41, "cols": 3, "frames": 22, "fps": 15, "loop": false, "pivot": Vector2(69.0, 27.0)},   # impacts/heavy-landing
+	"pow": {"w": 138, "h": 129, "cols": 4, "frames": 16, "fps": 15, "loop": false, "pivot": Vector2(69.0, 64.0)},   # explosions/cartoon-pow
+	"collect": {"w": 77, "h": 88, "cols": 5, "frames": 17, "fps": 15, "loop": false, "pivot": Vector2(36.0, 81.0)},   # pickups/collect-burst
+	"poof": {"w": 91, "h": 76, "cols": 5, "frames": 22, "fps": 15, "loop": false, "pivot": Vector2(43.0, 65.0)},   # spawn/poof
 	"firework": {"w": 196, "h": 234, "cols": 7, "frames": 31, "fps": 12, "loop": false, "pivot": Vector2(98.0, 96.0)},   # explosions/firework-burst
 	"jetpack": {"w": 61, "h": 108, "cols": 8, "frames": 30, "fps": 15, "loop": true, "pivot": Vector2(31.0, 24.0)},   # scifi/jetpack
 	"splash": {"w": 126, "h": 77, "cols": 4, "frames": 24, "fps": 15, "loop": false, "pivot": Vector2(66.0, 56.0)},   # water/splash
 	"splash_lava": {"w": 117, "h": 76, "cols": 4, "frames": 24, "fps": 15, "loop": false, "pivot": Vector2(57.0, 55.0)},   # water/splash
+	"dash": {"w": 172, "h": 73, "cols": 3, "frames": 15, "fps": 15, "loop": false, "pivot": Vector2(79.0, 60.0)},   # melee/spear-sweep
+	"pound": {"w": 244, "h": 145, "cols": 4, "frames": 20, "fps": 15, "loop": false, "pivot": Vector2(122.0, 102.0)},   # impacts/ground-slam
+	"shield_block": {"w": 108, "h": 76, "cols": 4, "frames": 17, "fps": 15, "loop": false, "pivot": Vector2(19.0, 62.0)},   # impacts/shield-block
+	"shield_up": {"w": 106, "h": 66, "cols": 2, "frames": 4, "fps": 15, "loop": true, "pivot": Vector2(17.0, 54.0)},   # impacts/shield-block
 }

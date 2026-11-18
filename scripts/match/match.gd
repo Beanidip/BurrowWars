@@ -238,6 +238,8 @@ func step(dt: float) -> void:
 				if remote != null:   # the server plays these for everyone
 					for kind: String in _motion_fx(r):
 						remote.note_fx(kind)
+					if r.pounded:
+						remote.act("ground_pound", [r.pound_cell])
 		return
 	for r in rats:
 		if r.net_peer != 0:
@@ -256,6 +258,8 @@ func step(dt: float) -> void:
 			r.step(dt)
 			for kind: String in _motion_fx(r):
 				fx.emit(kind, r.position, null)
+			if r.pounded:
+				ground_pound(r, r.pound_cell)
 		_check_rat_hazards(r, dt)
 		_check_raid(r, dt)
 	if lobby:
@@ -290,7 +294,19 @@ static func _motion_fx(r: Rat) -> Array[String]:
 		out.append("splash")
 	if r.splashed_out:
 		out.append("splash_out")
+	if r.shield_raised:
+		out.append("shield")
 	return out
+
+
+func raise_shield(rat: Rat) -> bool:
+	## Online, a player's game says it raised its shield: the authority checks
+	## the gear and cooldown, then raises it here too (bonks are judged here).
+	if rat.gear != "shield" or rat.gear_cd > cd_slack(rat) + 0.3:
+		return false
+	rat.shield_t = Config.SHIELD_TIME
+	rat.gear_cd = Config.SHIELD_TIME + Config.SHIELD_COOLDOWN
+	return true
 
 
 static func net_state(r: Rat) -> Array:
@@ -693,6 +709,10 @@ func paint_material(rat: Rat, micro := 0) -> String:
 func hit_gate(cell: Vector3i, amount: int) -> void:
 	## Gates have their own toughness: Config.GATE_HP wrecking-ball hits, or two TNT blasts.
 	gate_damage[cell] = int(gate_damage.get(cell, 0)) + amount
+	if int(gate_damage[cell]) < Config.GATE_HP:
+		var gid := world.get_cell(cell)
+		fx.emit("hit", Vector3(cell), {"id": gid if Blocks.is_gate(gid) else (Blocks.GATE_BLUE if world.gate_at(cell) == 0 else Blocks.GATE_RED),
+			"ratio": float(gate_damage[cell]) / float(Config.GATE_HP)})   # cracks show how close it is to breaking
 	if int(gate_damage[cell]) >= Config.GATE_HP:
 		gate_damage.erase(cell)
 		var id := world.get_cell(cell)
@@ -1057,6 +1077,9 @@ func try_bonk(rat: Rat, target: Rat) -> bool:
 	rat.bonk_cd = Config.BONK_COOLDOWN
 	rat.dig_cd = 1.0 / Config.DIG_RATE
 	rat.play_action("attack", 0.3)
+	if target.shield_t > 0.0:
+		fx.emit("shield_block", target.position, null)   # it bounces off the Rat Knight Shield
+		return true
 	var dir := target.position - rat.position
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
@@ -1096,6 +1119,31 @@ static func lobby_settings(race: Dictionary) -> Dictionary:
 		s["net"] = race["net"]
 		s["port"] = int(race.get("port", Net.DEFAULT_PORT))
 	return s
+
+
+func ground_pound(rat: Rat, cell: Vector3i) -> void:
+	## A full double jump landed flat: one dig hit to the block underfoot, by
+	## the usual dig rules (TNT lights). Gates, team blocks, machines and
+	## stashes shrug it off. Online the player's game reports it; the block
+	## must really be under their feet.
+	if over or rat.pound_cd > 0.0 or rat.stun > 0.0:
+		return
+	var top := Vector3(cell) + Vector3(0.5, 1.0, 0.5)
+	if absf(top.y - rat.position.y) > 0.6 or Vector2(top.x - rat.position.x, top.z - rat.position.z).length() > 1.0:
+		return
+	rat.pound_cd = Config.POUND_COOLDOWN
+	fx.emit("pound", rat.position, null)
+	var id := world.get_cell(cell)
+	if lobby and lobby_props.has(cell):
+		return
+	if id == Blocks.TNT:
+		light_tnt(cell, 2.0)
+		return
+	if Blocks.HITS[id] == 0 or Blocks.is_gate(id) or Blocks.is_team_block(id) or Blocks.is_machine(id) or Blocks.is_stash(id):
+		return
+	if world.layered_gate(cell) >= 0:
+		return
+	_damage(rat, cell, 1)
 
 
 func spawn_point(team: int, slot := 0) -> Vector3:
@@ -1291,7 +1339,10 @@ func blast(origin: Vector3, radius: float, power: float) -> void:
 				elif Blocks.is_stash(id):
 					hit_stash(c)
 				elif world.gate_at(c) >= 0:
-					hit_gate(c, (Config.GATE_HP + 1) / 2)
+					hit_gate(c, (Config.GATE_HP + 1) / 2)    # team gates: two blasts
+				elif Blocks.is_team_block(id):
+					if _damage(null, c, maxi(1, int(power * (1.0 - d / radius))), true):
+						fx.emit("break", Vector3(c), id)   # team blocks: one blast, whoever's they are
 				else:
 					# breaking goes through set_block, which also discards any carving
 					_damage(null, c, int(power * (1.0 - d / radius)), true)
@@ -1541,6 +1592,7 @@ func try_buy(rat: Rat, item_id: String) -> String:
 		rat.scrap -= cost
 		rat.gear = item_id     # one gear slot: a new piece replaces the old one
 		rat.gear_cd = 0.0
+		rat.shield_t = 0.0
 		fx.emit("buy", rat.position, item_id)
 		return ""
 	if item["kind"] == "gadget":

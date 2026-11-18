@@ -208,7 +208,7 @@ func _build_bottom() -> void:
 		v.add_theme_constant_override("separation", 0)
 		slot.add_child(v)
 		var head := HBoxContainer.new()
-		head.add_child(UiKit.label(str(i + 1), 12, UiKit.BRASS))
+		head.add_child(UiKit.label(Inputs.key_name("slot_%d" % (i + 1)), 12, UiKit.BRASS))
 		head.add_theme_constant_override("separation", 3)
 		head.add_child(Icons.rect("paint" if paint else String(ClassDefs.MATS[i]), 18))
 		if paint:
@@ -337,7 +337,10 @@ func _process(_delta: float) -> void:
 		_gear_state.text = "buy: %s" % Inputs.key_name("workshop")
 	else:
 		_gear_name.text = String(ClassDefs.GEAR.get(rat.gear, rat.gear))
-		_gear_state.text = ("%.0f s" % ceilf(rat.gear_cd)) if rat.gear_cd > 0.0 else "ready"
+		if rat.shield_t > 0.0:
+			_gear_state.text = "raised %.0f s" % ceilf(rat.shield_t)
+		else:
+			_gear_state.text = ("%.0f s" % ceilf(rat.gear_cd)) if rat.gear_cd > 0.0 else "ready"
 	_sync_cheese()
 	var keys := ["ability_1", "ability_2"]
 	var list: Array = rat.cls["abilities"]

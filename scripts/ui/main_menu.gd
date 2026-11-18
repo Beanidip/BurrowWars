@@ -12,11 +12,13 @@ DIG  Hold left mouse. Dirt takes 2 hits, stone 4, scrap 5. Mined dirt, stone, ic
 
 CHEESE  Each golden block is one cheese. Walk over it to pick it up. Carrying cheese slows you down, more for every extra piece (45% / 34% / 25% speed), and your dash (Shift) is weaker (half with one cheese, less with more) and costs 40 stamina instead of 25 - build highways or get an escort. Walk into your base to bank it. G drops one.
 
-BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a cheese and can't grab it back for 2 seconds.
+BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a cheese and can't grab it back for 2 seconds. A Rat Knight Shield (gear, J) raised for 5 s makes you bonk-proof.
+
+GROUND POUND  A full double jump landed flat thumps the block under you like a dig.
 
 SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Conveyors and highways are laid into the floor you aim at; a conveyor runs toward the bright edge of your target square. Aim at a ladder and press Q to extend it up or down. Q places the equipped gadget, R changes it, I opens your pack.
 
-COLOUR  Press C to pick one of 36 colours, including greys and see-through glass. With slot 5, left click dyes a dirt or painted block (anything else is dug as usual) and right mouse places painted blocks (each costs one dirt, or stone when you have no dirt; digging one gives a dirt back); with the chisel (9) right mouse adds painted microvoxels (glass is full blocks only).
+COLOUR  Press C to pick one of 36 colours, including greys and see-through glass. With slot 8, left click dyes a dirt or painted block (anything else is dug as usual) and right mouse places painted blocks (each costs one dirt, or stone when you have no dirt; digging one gives a dirt back); with the chisel (9) right mouse adds painted microvoxels (glass is full blocks only).
 
 RAIDS  Stand inside the ENEMY base for 3 seconds to steal a cheese they already banked. Everyone hears the alarm, and any defender standing in their own base locks the vault - so guard it, gate it, trap it.
 
@@ -116,14 +118,14 @@ func _header(subtitle: String) -> void:
 	var title := UiKit.label("BURROW WARS", 44, UiKit.BRASS)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_page.add_child(title)
-	var sub := UiKit.label(subtitle, 16)
+	var sub := UiKit.label(subtitle, 19, UiKit.PAPER)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_page.add_child(sub)
 
 
 func _show_home() -> void:
 	_clear()
-	_header("Jam Edition  -  dig, build, bonk, and bring home the golden cheese")
+	_header("Bunker, Build, Bonk! Bring Home The Golden Cheese!")
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_theme_constant_override("separation", 8)

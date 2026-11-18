@@ -59,15 +59,15 @@ const SHOP := [
 	{"id": "trap", "name": "Mouse Trap", "kind": "gadget", "qty": 1, "cost": 5, "cat": "Traps",
 		"desc": "Snaps on enemy rats: short stun and they drop a cheese."},
 	{"id": "tnt", "name": "TNT", "kind": "gadget", "qty": 1, "cost": 8, "cat": "Traps",
-		"desc": "Hit it to light a 2 s fuse. Saboteurs detonate remotely. Chains."},
+		"desc": "Hit it to light a 2 s fuse. Blows up Team Blocks and cracks Team Gates (two blasts break one). Saboteurs detonate remotely. Chains."},
 	{"id": "teamblock", "name": "Team Block x4", "kind": "gadget", "qty": 4, "cost": 4, "cat": "Construction",
-		"desc": "A block in team colours: solid floor or wall for your team, thin air for enemies (and nothing they can dig). Dig it to take it back."},
+		"desc": "A block in team colours: solid floor or wall for your team, thin air for enemies (and nothing they can dig). TNT blows it up. Dig it to take it back."},
 	{"id": "stash", "name": "Team Stash", "kind": "gadget", "qty": 1, "cost": 12, "max": 2, "cat": "Construction",
 		"desc": "Place it anywhere outside the bases. Your team deposits and takes scrap, dirt, stone, ice and obsidian here (or at base) with B. Only 5 TNT blasts break it - and the shared pool survives."},
 	{"id": "gate", "name": "Team Gate", "kind": "gadget", "qty": 1, "cost": 7, "cat": "Construction",
-		"desc": "See-through door. Your team walks through; enemies need two TNT blasts. Free for Builders."},
+		"desc": "See-through door. Your team walks through. Two TNT blasts (or ten wrecking-ball hits) break it; cracks show the damage."},
 	{"id": "dynamite", "name": "Mobile TNT x2", "kind": "gadget", "qty": 2, "cost": 7, "cat": "Traps",
-		"desc": "Bouncy dynamite stick, 3 s fuse. Q throws it, Ctrl+Q sets it down gently. Springs launch it, conveyors carry it, ice lets it slide."},
+		"desc": "Bouncy dynamite stick, 3 s fuse: a TNT blast wherever it ends up, Team Blocks and Gates included. Q throws it, Ctrl+Q sets it down gently. Springs launch it, conveyors carry it, ice lets it slide."},
 	{"id": "sticky", "name": "Sticky Trap x2", "kind": "gadget", "qty": 2, "cost": 4, "cat": "Traps",
 		"desc": "Glue pad. Enemy rats wade through at half speed; rolling dynamite stops dead."},
 	{"id": "pitfall", "name": "Pitfall x2", "kind": "gadget", "qty": 2, "cost": 5, "cat": "Traps",
@@ -83,7 +83,9 @@ const SHOP := [
 	{"id": "ice", "name": "Ice x4", "kind": "mat", "qty": 4, "cost": 3, "cat": "Construction",
 		"desc": "Slippery block. Slot 3, place with right mouse."},
 	{"id": "jetpack", "name": "Jetpack", "kind": "gear", "qty": 1, "cost": 14, "cat": "Gear",
-		"desc": "Wear it in your gear slot and press J: a burst of thrust lifts you over trenches and up cliffs. 5 s to cool down after each burst. One piece of gear at a time."},
+		"desc": "Wear it in your gear slot and press J: a burst of thrust lifts you over trenches and up cliffs, half as high while you carry cheese. 5 s to cool down after each burst. One piece of gear at a time."},
+	{"id": "shield", "name": "Rat Knight Shield", "kind": "gear", "qty": 1, "cost": 12, "cat": "Gear",
+		"desc": "Wear it in your gear slot and press J to raise it for 5 s: bonks and cannonballs bounce off, so nobody knocks the cheese out of your paws. Hauling cheese behind it you move a quarter slower. 8 s to ready it again. One piece of gear at a time."},
 ]
 
 const MATS := ["dirt", "stone", "ice", "obsidian"]
@@ -100,7 +102,7 @@ const GADGET_NAME := {
 
 
 ## Gear: one piece worn at a time in the gear slot (J uses it).
-const GEAR := {"jetpack": "Jetpack"}
+const GEAR := {"jetpack": "Jetpack", "shield": "Rat Knight Shield"}
 
 
 static func price(cls: Dictionary, item_id: String, free_mode: bool) -> int:

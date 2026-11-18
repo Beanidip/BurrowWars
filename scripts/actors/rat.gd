@@ -86,6 +86,13 @@ var gear_fired := false           # this step started a jetpack burst
 var dashed := false               # this step started a dash
 var jumped := false               # this step left the ground (jump, double jump, leap out of water)
 var landed_hard := false          # this step hit the ground after a long fall
+var shield_t := 0.0                # seconds the Rat Knight Shield stays raised
+var shield_raised := false        # this step raised it
+var pounded := false              # this step landed a full double jump flat: a ground pound
+var pound_cell := Vector3i.ZERO    # the block it landed on
+var pound_cd := 0.0                # (authority) seconds before another pound counts
+var _dj_from := -1000.0            # height the current double jump started at (-1000 = none)
+var _dj_peak := 0.0
 var splashed_in := false          # this step dropped into water
 var splashed_out := false         # this step jumped up out of water
 var _was_wet := false
@@ -144,6 +151,8 @@ func move_speed() -> float:
 	var s := Config.BASE_SPEED * float(cls["speed"])
 	if carried > 0:
 		s *= float(Config.CARRY_SPEED[mini(carried, Config.CARRY_SPEED.size() - 1)])
+		if shield_t > 0.0:
+			s *= Config.SHIELD_CARRY_SPEED     # hauling cheese behind a raised shield
 	if slow > 0.0:
 		s *= 0.5
 	if in_water:
@@ -177,6 +186,8 @@ func step_timers(dt: float) -> void:
 	ability_cd[0] = maxf(0.0, ability_cd[0] - dt)
 	ability_cd[1] = maxf(0.0, ability_cd[1] - dt)
 	gear_cd = maxf(0.0, gear_cd - dt)
+	pound_cd = maxf(0.0, pound_cd - dt)
+	shield_t = maxf(0.0, shield_t - dt)
 	# An enemy sticky trap underfoot keeps you slowed. This lives here, not in
 	# Match's hazards, because both the server and a remote player's own game
 	# run it: they then agree on `slow`, and the server has nothing to correct.
@@ -191,6 +202,8 @@ func _step_motion(dt: float) -> void:
 	dashed = false
 	jumped = false
 	landed_hard = false
+	pounded = false
+	shield_raised = false
 	splashed_in = false
 	splashed_out = false
 
@@ -268,6 +281,8 @@ func _step_motion(dt: float) -> void:
 				jumps_left -= 1
 				stamina -= Config.DOUBLE_JUMP_COST
 				jumped = true
+				_dj_from = position.y
+				_dj_peak = position.y
 		vel.y = maxf(vel.y, -30.0)
 
 	# dash: a burst along the wish direction (or facing when standing still)
@@ -277,9 +292,15 @@ func _step_motion(dt: float) -> void:
 		gear_cd = Config.JETPACK_TIME + Config.JETPACK_COOLDOWN
 		gear_fired = true
 		play_action("jump", Config.JETPACK_TIME)
+	if gear_pressed and gear == "shield" and gear_cd <= 0.0:
+		shield_t = Config.SHIELD_TIME
+		gear_cd = Config.SHIELD_TIME + Config.SHIELD_COOLDOWN
+		shield_raised = true
+		play_action("use", 0.3)
 	if gear_t > 0.0:
 		gear_t = maxf(0.0, gear_t - dt)
-		vel.y = maxf(vel.y, Config.JETPACK_LIFT)
+		vel.y = maxf(vel.y, Config.JETPACK_LIFT * (Config.JETPACK_CARRY if carried > 0 else 1.0))
+		_dj_from = -1000.0      # a jetpack flight is no double jump
 		on_ladder = false
 		jumps_left = 1
 
@@ -306,9 +327,29 @@ func _step_motion(dt: float) -> void:
 	_move(motion)
 	if was_airborne and on_floor and fall_speed < -11.0:
 		landed_hard = true
+	_pound_check(was_airborne, fall_speed)
 	_splash_check(fall_speed, dt)
 	_spring_sides()
 	_clear_edges()
+
+
+func _pound_check(was_airborne: bool, fall_speed: float) -> void:
+	## A double jump taken (nearly) to its full height and landed flat on a
+	## block thumps that block like a dig. Ceilings, ladders, water, springs
+	## and jetpacks spoil it.
+	if _dj_from < -999.0:
+		return
+	if on_ladder or in_water or flying or landed_on_spring:
+		_dj_from = -1000.0
+		return
+	if not on_floor:
+		_dj_peak = maxf(_dj_peak, position.y)
+		return
+	var full := DOUBLE_JUMP_SPEED * DOUBLE_JUMP_SPEED / (2.0 * GRAVITY)
+	if was_airborne and fall_speed <= -6.0 and _dj_peak - _dj_from >= Config.POUND_HEIGHT * full:
+		pounded = true
+		pound_cell = Vector3i(floori(position.x), floori(position.y - 0.1), floori(position.z))
+	_dj_from = -1000.0
 
 
 func _splash_check(fall_speed: float, dt: float) -> void:

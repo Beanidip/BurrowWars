@@ -33,7 +33,7 @@ See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 |---|---|---|---|
 | WASD / mouse | Move / look | Q | Place equipped gadget |
 | Space | Jump, double jump, climb, swim up | R / wheel | Change the Q slot gadget |
-| J | Use gear (Jetpack) | B | Workshop / Team stash |
+| J | Use gear (Jetpack / Rat Knight Shield) | B | Workshop / Team stash |
 | Shift | Dash | E / F | Class abilities |
 | Left mouse | Dig / bonk | B | Workshop (at base; Builder anywhere) |
 | Right mouse | Place selected material | I | Inventory |
@@ -43,7 +43,7 @@ See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 | N, F5, F9 | Free Build: fly, save map, load map | Mouse wheel | Scroll the Q gadget (Alt + wheel: camera distance) |
 | 9 | Chisel: LMB carve, RMB add a microvoxel | 0 | Pantograph: click 2 corners, RMB paste; X rotate, Z mirror, Y flip, U invert |
 | T | Pilot / leave a siege machine | Ctrl+Q | Set Mobile TNT down gently |
-| 5 / C | Painted block or glass / colour picker (36 colours) | | |
+| 8 / C | Painted block or glass / colour picker (36 colours) | | |
 
 ## Verify
 
@@ -74,6 +74,7 @@ All of the game's 2D art is a handful of PNGs you can paint over (Aseprite, Libr
 | `assets/icons/icons.png` | Every gadget, trap, siege, gear, material, tool, ability and menu icon: 16x16 cells, 8 columns. Which icon is where: `docs/icon_sheet_layout.png`. A separate `assets/icons/<id>.png` overrides one icon. |
 | `assets/ui/panel_frame.png` | The menu panel (wood and the blue/red frame), a 9-slice: the outer 22 px on each side are frame and corners, the middle stretches. |
 | `assets/ui/burrow_*.png` | The masthead and the original UI icons. |
+| `assets/blocks/<name>.png` | Block textures (32x32, tiling). Scrap has one; drop in `dirt.png`, `stone.png`... and list them in `scripts/world/block_textures.gd` to texture other blocks. Each face picks a random quarter-turn or mirror so runs of a block don't look stamped. `tools/make_block_textures.py` redraws scrap. |
 | `assets/fx/<name>.png` | Effect animations (explosion, block breaks per material, hit sparks, dust for dash/jump/landing, water and lava splashes, jetpack flame, pickup, respawn poof, deposit firework): a grid of frames each. Frame size, count, speed and the anchor point are in `scripts/match/fx_sheets.gd`; keep those in step if you redraw one at a different size. |
 
 Tools: `tools/rat_sheets.py` (`preview` shows your rats in both team colours, `pack`/`unpack`
@@ -82,7 +83,7 @@ convert between sheets and single frames, `guide` redraws the layout picture) an
 `tools/import_fx.py /path/to/pixelfx` re-renders the effect sheets from the [pixelfx](https://github.com/patch-gg/pixelfx)
 library (needs Node 18+; edit its list to swap, recolour or add effects; it overwrites `assets/fx/`), and
 `tools/make_liquid_sfx.py` remakes the placeholder `splash` and `sizzle` sounds.
-Blocks, gadgets and siege machines are still drawn in code from flat colours.
+Other blocks, gadgets and siege machines are still drawn in code from flat colours.
 
 ## Credits
 
