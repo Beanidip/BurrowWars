@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 - Knight shield, bubble shoes, decoys, loading screen, scrap texture (2026-11-18)
 
 | Change | Files |
 |---|---|
+| Version 2.1.0, network protocol 8 (new block ids: 2.0 and 2.1 refuse each other with a clear message) | `project.godot`, `export_presets.cfg`, `net/net.gd` |
 | Title screen tagline: "Bunker, Build, Bonk! Bring Home The Golden Cheese!" | `ui/main_menu.gd` |
 | Bubble Shoes (gear, 10 scrap): J switches them on/off; stepping off an edge blows a bubble block under your feet (2 scrap each, pops after 10 s), so you can walk a bridge over a gap. Server-checked online | `actors/rat.gd`, `match/match.gd`, `net/net_server.gd`, `world/blocks.gd` |
 | Cheese Decoy (trap, 12 scrap, single use): looks exactly like Golden Cheese to the other team, name included; digging it dazes them in a stink cloud. Your own team digs it back up | `match/match.gd`, `world/blocks.gd`, `ui/hud.gd` |
