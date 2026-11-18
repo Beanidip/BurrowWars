@@ -13,6 +13,7 @@ uniform float hue = 0.0;
 uniform float sat = 0.0;
 uniform vec3 block_rgb = vec3(1.0);
 uniform float colorize = 0.0;
+uniform vec2 shade = vec2(0.45, 1.3);   // colourised: block colour times this, from the darkest pixel to the brightest
 
 vec3 rgb2hsv(vec3 c) {
 	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -41,7 +42,7 @@ void fragment() {
 	hsv.x = hue;
 	hsv.y = min(hsv.y, sat * 1.2);
 	vec3 base = max(block_rgb, vec3(0.22));                // very dark blocks still throw visible sparks
-	vec3 painted = clamp(base * (0.45 + 0.85 * lum) + vec3(0.12) * lum * lum, 0.0, 1.0);
+	vec3 painted = clamp(base * mix(shade.x, shade.y, lum) + vec3(0.12) * lum * lum * step(1.2, shade.y), 0.0, 1.0);
 	ALBEDO = mix(hsv2rgb(hsv), painted, colorize);
 	ALPHA = c.a;
 }
