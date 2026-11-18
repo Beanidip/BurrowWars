@@ -10,6 +10,7 @@
 | Squeaker Pad (trap, 15 scrap): an enemy stepping on it squeaks for everyone nearby and drops an 8 s beacon for its team; three squeaks, then it's spent | `match/match.gd`, `world/blocks.gd`, `world/chunk_mesher.gd` |
 | Placeholder sounds for the new items (squeak, pop, toot); the sound script is now `tools/make_sfx.py`. New icons. Network protocol 8 (new block ids) | `tools/make_sfx.py`, `tools/make_icons.py`, `net/net.gd` |
 | Block-break bursts take the broken block's colour (hue-shifted like hit sparks, on a sheet as bright or dark as the block) | `match/match_view.gd` |
+| The sparks knocked off a block while digging are fully that block's colour, highlights included (the hue shader can now colourise, not just shift hue) | `assets/shaders/fx_hue.gdshader`, `match/fx_sprite.gd`, `match/match_view.gd` |
 | Bots mine scrap within about 5 blocks when they aren't hauling cheese, and bank half of what they mined into the team stash pool whenever they're at base or beside a stash | `actors/bot_brain.gd` |
 | Bots fall for the other team's Cheese Decoys (and ignore their own) | `actors/bot_brain.gd`, `match/match.gd` |
 | Bubble Shoes out of scrap: the next step off an edge is a plain fall, no hovering; online the cost is counted on your own game straight away | `actors/rat.gd` |

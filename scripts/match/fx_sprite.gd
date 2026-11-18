@@ -26,7 +26,7 @@ var _frame := -1
 
 
 static func play(parent: Node, fx_name: String, at: Vector3, scale_by := 1.0, follow_node: Node3D = null, seconds := -1.0,
-		tint := Color(0, 0, 0, 0), flip := false, in_front := false) -> FxSprite:
+		tint := Color(0, 0, 0, 0), flip := false, in_front := false, colorize := 0.0) -> FxSprite:
 	if not FxSheets.SHEETS.has(fx_name) or parent == null or not parent.is_inside_tree():
 		return null
 	var base := _texture(fx_name)
@@ -42,6 +42,8 @@ static func play(parent: Node, fx_name: String, at: Vector3, scale_by := 1.0, fo
 		mat.set_shader_parameter("tex", base)
 		mat.set_shader_parameter("hue", tint.h)
 		mat.set_shader_parameter("sat", tint.s)
+		mat.set_shader_parameter("block_rgb", Vector3(tint.r, tint.g, tint.b))
+		mat.set_shader_parameter("colorize", colorize)
 		s.material_override = mat
 	s.pixel_size = PX * scale_by
 	s.duration = seconds

@@ -134,11 +134,11 @@ static func break_sheet(id: int) -> String:
 
 
 func _sprite(fx_name: String, at: Vector3, scale_by: float, follow: Node3D = null, seconds := -1.0, tint := Color(0, 0, 0, 0),
-		flip := false, in_front := false) -> FxSprite:
+		flip := false, in_front := false, colorize := 0.0) -> FxSprite:
 	var where := at if follow == null else follow.position + at
 	if listener != null and listener.position.distance_to(where) > 45.0:
 		return null
-	return FxSprite.play(self, fx_name, at, scale_by, follow, seconds, tint, flip, in_front)
+	return FxSprite.play(self, fx_name, at, scale_by, follow, seconds, tint, flip, in_front, colorize)
 
 
 func _moving_left(r: Rat) -> bool:
@@ -195,7 +195,8 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			var id := int(data["id"])
 			_dig_sound("mine_" + _material_sound(id), c)
 			_burst(c, Blocks.COLOR[id], 3, 2.5)
-			_sprite("hit", _facing_viewer(c, 0.62), 0.3, null, -1.0, Blocks.COLOR[id])   # sparks in the block's colour
+			# the sparks you knock off a block are that block's colour, highlights included
+			_sprite("hit", _facing_viewer(c, 0.62), 0.3, null, -1.0, Blocks.COLOR[id], false, false, 0.85)
 			_crack.visible = true
 			_crack.position = c
 			_crack_t = 2.5
@@ -205,7 +206,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_dig_sound("break_" + _material_sound(bid), c)
 			_burst(c, Blocks.COLOR[bid], 6, 4.0)
 			# the shards take the block's own colour: the material's sheet, hue-shifted to the block
-			_sprite(break_sheet(bid), c - Vector3(0, 0.45, 0), 0.7, null, -1.0, Blocks.COLOR[bid])
+			_sprite(break_sheet(bid), c - Vector3(0, 0.45, 0), 0.7, null, -1.0, Blocks.COLOR[bid], false, false, 0.5)
 			if _crack.position.distance_to(c) < 0.1:
 				_crack.visible = false
 		"clang":
@@ -319,7 +320,7 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sound("siege_impact", pos, 1.1, 3.0)
 			_burst(pos, Blocks.COLOR[int(data)], 12, 6.0)
 			_sprite(break_sheet(int(data)), pos - Vector3(0, 0.4, 0), 0.9)
-			_sprite("hit", _facing_viewer(pos, 0.3), 0.45)
+			_sprite("hit", _facing_viewer(pos, 0.3), 0.45, null, -1.0, Blocks.COLOR[int(data)], false, false, 0.6)
 		"thud":
 			_sound("siege_impact", pos, 0.7, 0.0)
 			_sprite("dust", pos - Vector3(0, 0.3, 0), 0.6)

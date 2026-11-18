@@ -2,12 +2,17 @@
 // Each pixel keeps its brightness and alpha, takes the block's hue, and is no
 // more colourful than the block (give or take), so grey stone throws grey
 // sparks, dirt brown ones, ice pale blue ones, paint its own colour.
+// `colorize` goes further: it blends towards the block's own colour scaled by
+// each pixel's brightness, so even white-hot cores and highlights take the
+// block's colour (a light shade of it), with a floor so dark blocks still show.
 shader_type spatial;
 render_mode unshaded, cull_disabled, shadows_disabled;
 
 uniform sampler2D tex : source_color, filter_nearest;
 uniform float hue = 0.0;
 uniform float sat = 0.0;
+uniform vec3 block_rgb = vec3(1.0);
+uniform float colorize = 0.0;
 
 vec3 rgb2hsv(vec3 c) {
 	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -32,8 +37,11 @@ void vertex() {
 void fragment() {
 	vec4 c = texture(tex, UV);
 	vec3 hsv = rgb2hsv(c.rgb);
+	float lum = hsv.z;
 	hsv.x = hue;
 	hsv.y = min(hsv.y, sat * 1.2);
-	ALBEDO = hsv2rgb(hsv);
+	vec3 base = max(block_rgb, vec3(0.22));                // very dark blocks still throw visible sparks
+	vec3 painted = clamp(base * (0.45 + 0.85 * lum) + vec3(0.12) * lum * lum, 0.0, 1.0);
+	ALBEDO = mix(hsv2rgb(hsv), painted, colorize);
 	ALPHA = c.a;
 }
