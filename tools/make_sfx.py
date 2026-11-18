@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Placeholder liquid sounds: assets/sfx/splash.wav (into or out of water) and
-assets/sfx/sizzle.wav (lava), synthesised so the effects have something to play.
+"""Placeholder sounds, synthesised so the effects have something to play:
+splash (into or out of water), sizzle (lava), squeak (Squeaker Pad), pop
+(Bubble Shoes bubbles) and toot (a Cheese Decoy going off), all in assets/sfx/.
 Drop your own recordings over them (mono or stereo WAV, any rate) any time.
 
-    python3 tools/make_liquid_sfx.py
+    python3 tools/make_sfx.py
 """
 import math
 import os
@@ -78,6 +79,44 @@ def sizzle(rng: random.Random) -> np.ndarray:
     return out
 
 
+def squeak(rng: random.Random) -> np.ndarray:
+    """A rubber toy squeezed: a nasal note that bends up, then sags."""
+    n = int(0.36 * RATE)
+    t = np.arange(n) / RATE
+    f = np.interp(t, [0.0, 0.06, 0.2, 0.36], [720.0, 1380.0, 1240.0, 980.0])
+    f = f * (1.0 + 0.015 * np.sin(2 * math.pi * 31 * t))
+    phase = 2 * math.pi * np.cumsum(f) / RATE
+    tone = np.sin(phase) + 0.45 * np.sin(2 * phase) + 0.3 * np.sin(3 * phase) + 0.15 * np.sin(5 * phase)
+    env = np.clip(t / 0.02, 0, 1) * np.clip((0.36 - t) / 0.08, 0, 1)
+    air = lowpass(np.array([rng.uniform(-1, 1) for _ in range(n)]), 3000) * 0.15
+    return (tone + air) * env
+
+
+def pop(rng: random.Random) -> np.ndarray:
+    """A bubble popping: a tiny click and a quick rising plink."""
+    n = int(0.12 * RATE)
+    t = np.arange(n) / RATE
+    click = np.array([rng.uniform(-1, 1) for _ in range(n)]) * np.exp(-t / 0.004)
+    out = highpass(click, 1500) * 0.8
+    tt = np.arange(int(0.06 * RATE)) / RATE
+    place(out, chirp(tt, 900, 2200, 0.06), 0.004, 0.9)
+    return out
+
+
+def toot(rng: random.Random) -> np.ndarray:
+    """A Cheese Decoy going off: a sagging, fluttering raspberry."""
+    n = int(0.75 * RATE)
+    t = np.arange(n) / RATE
+    f = np.interp(t, [0.0, 0.1, 0.75], [150.0, 128.0, 70.0])
+    phase = np.cumsum(f) / RATE
+    saw = 2.0 * (phase % 1.0) - 1.0
+    flutter = 0.6 + 0.4 * np.sign(np.sin(2 * math.pi * np.cumsum(28.0 + 9.0 * np.sin(2 * math.pi * 3.0 * t)) / RATE))
+    breath = lowpass(np.array([rng.uniform(-1, 1) for _ in range(n)]), 900) * 0.6
+    body = lowpass(saw * flutter, 1400) + breath
+    env = np.clip(t / 0.03, 0, 1) * np.clip((0.75 - t) / 0.25, 0, 1)
+    return body * env
+
+
 def save(name: str, x: np.ndarray) -> None:
     x = x / max(1e-6, float(np.max(np.abs(x)))) * 0.8
     fade = min(len(x), int(0.01 * RATE))
@@ -94,3 +133,6 @@ def save(name: str, x: np.ndarray) -> None:
 if __name__ == "__main__":
     save("splash", splash(random.Random(7)))
     save("sizzle", sizzle(random.Random(11)))
+    save("squeak", squeak(random.Random(3)))
+    save("pop", pop(random.Random(5)))
+    save("toot", toot(random.Random(9)))

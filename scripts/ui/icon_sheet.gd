@@ -4,4 +4,4 @@ class_name IconSheet
 
 const CELL := 16
 const COLS := 8
-const IDS := ["dirt", "stone", "ice", "obsidian", "scrap", "paint", "cheese", "ladder", "spring", "highway", "conveyor", "gate", "teamblock", "stash", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "cannon", "crane", "dozer", "jetpack", "shield", "chisel", "pantograph", "superdig", "sniff", "beacon", "patch", "detonate", "plant", "online", "book", "door"]
+const IDS := ["dirt", "stone", "ice", "obsidian", "scrap", "paint", "cheese", "ladder", "spring", "highway", "conveyor", "gate", "teamblock", "stash", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "decoy", "squeaker", "cannon", "crane", "dozer", "jetpack", "shield", "bubbles", "chisel", "pantograph", "superdig", "sniff", "beacon", "patch", "detonate", "plant", "online", "book", "door"]

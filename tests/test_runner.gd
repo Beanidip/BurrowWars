@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -3268,4 +3268,144 @@ func test_knight_shield() -> void:
 	plain.gear = "shield"
 	check(m.raise_shield(plain) and plain.shield_t > 0.0 and not m.raise_shield(plain), "a ready shield is raised once, then cools down")
 	check(NetServer.CLIENT_FX.has("shield"), "a player's game reports raising it")
+	end(m)
+
+
+func test_bubble_shoes() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	# a pit three blocks wide across the arena
+	for dx in range(2, 5):
+		for dz in range(-8, 9):
+			for dy in range(-5, 0):
+				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.AIR)
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	var r := arena_rat(m, 0, "scout", Vector3(-1, 0, 0))
+	r.position = MapGenerator.spawn_point(0)
+	run(m, 0.3)
+	r.scrap = 30
+	check(m.try_buy(r, "bubbles") == "" and r.gear == "bubbles" and r.scrap == 30 - int(ClassDefs.shop_item("bubbles")["cost"]), "Bubble Shoes are sold as gear")
+	r.scrap = 20
+	r.position = Vector3(ARENA) + Vector3(-0.5, 0, 0.5)
+	run(m, 0.3)
+	r.gear_pressed = true
+	m.step(DT)
+	r.gear_pressed = false
+	check(r.bubbles_on, "J switches them on")
+	var low := r.position.y
+	r.wish = Vector3(1, 0, 0)
+	var guard := 0
+	while r.position.x < ARENA.x + 6.5 and guard < 600:
+		m.step(DT)
+		low = minf(low, r.position.y)
+		guard += 1
+	r.wish = Vector3.ZERO
+	var made := 0
+	for dx in range(2, 5):
+		if m.world.get_cell(ARENA + Vector3i(dx, -1, 0)) == Blocks.BUBBLE:
+			made += 1
+	check(made == 3 and low > ARENA.y - 0.05, "walking off the edge, a bubble bridge forms under your feet (%d bubbles, lowest %.2f)" % [made, low - ARENA.y])
+	check(r.scrap == 20 - made * Config.BUBBLE_COST, "each bubble costs %d scrap (%d left)" % [Config.BUBBLE_COST, r.scrap])
+	kinds.clear()
+	run(m, Config.BUBBLE_TIME + 0.2)
+	check(m.world.get_cell(ARENA + Vector3i(3, -1, 0)) == Blocks.AIR and kinds.count("pop") == 3, "after %.0f s the bubbles pop" % Config.BUBBLE_TIME)
+	# switched off, you fall
+	r.gear_pressed = true
+	m.step(DT)
+	r.gear_pressed = false
+	check(not r.bubbles_on, "J again switches them off")
+	r.wish = Vector3(-1, 0, 0)
+	run(m, 0.8)
+	r.wish = Vector3.ZERO
+	check(r.position.y < ARENA.y - 1.0, "and then a step off the edge is a fall")
+	# no scrap, no bubbles
+	r.position = Vector3(ARENA) + Vector3(-0.5, 0, 2.5)
+	r.vel = Vector3.ZERO
+	r.bubbles_on = true
+	r.scrap = 1
+	run(m, 0.3)
+	r.wish = Vector3(1, 0, 0)
+	run(m, 1.0)
+	r.wish = Vector3.ZERO
+	check(r.position.y < ARENA.y - 1.0 and r.scrap == 1, "with less than %d scrap you fall" % Config.BUBBLE_COST)
+	# a jump off the edge is a jump: the shoes don't catch it
+	r.position = Vector3(ARENA) + Vector3(1.2, 0, -2.5)
+	r.vel = Vector3.ZERO
+	r.scrap = 20
+	run(m, 0.3)
+	r.wish = Vector3(1, 0, 0)
+	r.jump_pressed = true
+	m.step(DT)
+	r.jump_pressed = false
+	run(m, 0.25)
+	r.wish = Vector3.ZERO
+	run(m, 1.0)
+	check(r.position.y < ARENA.y - 1.0 and r.scrap == 20, "jumping off on purpose drops you down")
+	# the authority checks a player's request
+	var far := ARENA + Vector3i(3, -1, 6)
+	check(not m.place_bubble(r, far), "no bubble far from your feet")
+	var other := arena_rat(m, 1, "digger", Vector3(-4, 0, -4))
+	check(not m.place_bubble(other, ARENA + Vector3i(-4, -1, -4)), "or without the shoes")
+	end(m)
+
+
+func test_decoy_and_squeaker() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	var blue := arena_rat(m, 0, "builder")
+	var red := arena_rat(m, 1, "scout", Vector3(4, 0, 0))
+	blue.position = MapGenerator.spawn_point(0)
+	run(m, 0.3)
+	blue.scrap = 40
+	check(m.try_buy(blue, "decoy") == "" and int(blue.gadgets.get("decoy", 0)) == 1 and blue.scrap == 28, "a Cheese Decoy costs 12 scrap")
+	check(m.try_buy(blue, "squeaker") == "" and int(blue.gadgets.get("squeaker", 0)) == 1 and blue.scrap == 13, "a Squeaker Pad costs 15")
+	blue.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	run(m, 0.3)
+	# the decoy
+	var spot := ARENA + Vector3i(0, 0, -2)
+	check(m.try_place_gadget(blue, spot, "decoy") == "" and int(blue.gadgets.get("decoy", 0)) == 0, "placed: single use")
+	check(Blocks.is_decoy(m.world.get_cell(spot)) and not m.world.cheese_cells.has(spot), "it's not real cheese")
+	check(Blocks.COLOR[Blocks.DECOY_RED] == Blocks.COLOR[Blocks.CHEESE], "but it looks exactly like it")
+	red.position = Vector3(spot) + Vector3(0.5, 0, 2.0)
+	red.dig_cd = 0.0
+	run(m, 0.1)
+	kinds.clear()
+	m.try_dig(red, spot)
+	check(kinds.has("decoy") and red.stun >= Config.DECOY_STUN - 0.1 and m.world.get_cell(spot) == Blocks.AIR, "an enemy who digs it is dazed, and it's gone")
+	m._give_gadget(blue, "decoy", 1)
+	m.try_place_gadget(blue, spot, "decoy")
+	blue.position = Vector3(spot) + Vector3(0.5, 0, 2.0)
+	blue.dig_cd = 0.0
+	run(m, 0.1)
+	m.try_dig(blue, spot)
+	check(int(blue.gadgets.get("decoy", 0)) == 1 and blue.stun <= 0.0 and m.world.get_cell(spot) == Blocks.AIR, "your own decoy comes back into your pack")
+	# the squeaker
+	var pad := ARENA + Vector3i(3, 0, 3)
+	blue.position = Vector3(pad) + Vector3(-1.5, 0, 0.5)
+	run(m, 0.1)
+	check(m.try_place_gadget(blue, pad, "squeaker") == "" and Blocks.is_squeaker(m.world.get_cell(pad)), "a squeaker pad on the floor")
+	kinds.clear()
+	blue.position = Vector3(pad) + Vector3(0.5, 0, 0.5)
+	run(m, 0.5)
+	check(not kinds.has("squeak"), "its own team walks over it quietly")
+	blue.position = Vector3(ARENA) + Vector3(-5.5, 0, -5.5)
+	var squeaks := 0
+	for k in 3:
+		red.position = Vector3(pad) + Vector3(0.5, 0, 0.5)
+		red.vel = Vector3.ZERO
+		red.stun = 0.0
+		kinds.clear()
+		var marks := m.markers.size()
+		run(m, 0.5)
+		if kinds.has("squeak"):
+			squeaks += 1
+		if k == 0:
+			check(m.markers.size() == marks + 1 and int(m.markers[-1]["team"]) == 0, "an enemy sets it off: a beacon for its team")
+			check(kinds.count("squeak") == 1, "once, not every frame")
+		red.position = Vector3(pad) + Vector3(3.5, 0, 0.5)
+		run(m, Config.SQUEAKER_REST + 0.2)
+	check(squeaks == 3 and m.world.get_cell(pad) == Blocks.AIR, "three squeaks, then it's spent (%d)" % squeaks)
 	end(m)

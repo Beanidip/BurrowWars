@@ -218,6 +218,21 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"land":
 			_sound("mine_dirt", pos, 0.6, -6.0)
 			_sprite("dust", pos, 0.7)
+		"bubble":
+			_sound("pop", c, 0.7, -6.0)
+		"pop":
+			_sound("pop", c, 1.0, 0.0)
+			_sprite("poof", c - Vector3(0, 0.4, 0), 0.45, null, -1.0, Blocks.COLOR[Blocks.BUBBLE])
+		"decoy":
+			_sound("toot", c, 1.0, 2.0)
+			_sprite("poof", c - Vector3(0, 0.5, 0), 0.8, null, -1.0, Color(0.55, 0.75, 0.2))   # a green stink cloud
+			_float_text(c + Vector3(0, 0.6, 0), "DECOY!", Color(0.75, 0.95, 0.35))
+		"squeak":
+			_sound("squeak", pos, 1.0, 4.0)
+			_sprite("collect", pos, 0.4)
+			_float_text(pos + Vector3(0, 0.9, 0), "SQUEAK!", Color(1.0, 0.9, 0.4))
+		"poof":
+			_sprite("poof", pos - Vector3(0, 0.2, 0), 0.5)
 		"shield":
 			_sound("mine_obsidian", pos, 1.6, -2.0)
 			var knight := _nearest_rat(pos)

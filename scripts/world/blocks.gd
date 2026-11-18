@@ -11,7 +11,7 @@ enum {
 	PAINT_0, PAINT_1, PAINT_2, PAINT_3, PAINT_4, PAINT_5, PAINT_6, PAINT_7, PAINT_8, PAINT_9, PAINT_10, PAINT_11,
 	PAINT_12, PAINT_13, PAINT_14, PAINT_15, PAINT_16, PAINT_17, PAINT_18, PAINT_19, PAINT_20, PAINT_21, PAINT_22, PAINT_23,
 	PAINT_24, PAINT_25, PAINT_26, PAINT_27, PAINT_28, PAINT_29, PAINT_30, PAINT_31, PAINT_32, PAINT_33, PAINT_34, PAINT_35,
-	STASH_BLUE, STASH_RED, COUNT
+	STASH_BLUE, STASH_RED, BUBBLE, DECOY_BLUE, DECOY_RED, SQUEAK_BLUE, SQUEAK_RED, COUNT
 }
 
 const OBSIDIAN_HITS := 12   # balance knob: ordinary dig hits to break obsidian
@@ -105,6 +105,14 @@ const DEFS := [
 	# TNT blasts break it (Config.STASH_BLASTS); the pool itself is never lost.
 	["Team Stash", 0, Color(0.30, 0.48, 0.92), true, true, ""],
 	["Team Stash", 0, Color(0.90, 0.32, 0.28), true, true, ""],
+	# A Bubble Shoes bubble: something to stand on for Config.BUBBLE_TIME seconds, then it pops.
+	["Bubble", 1, Color(0.74, 0.92, 1.0, 0.36), true, false, ""],
+	# Cheese Decoys look exactly like Golden Cheese (the other team is even told so).
+	["Cheese Decoy", 3, Color(1.0, 0.82, 0.18), true, true, ""],
+	["Cheese Decoy", 3, Color(1.0, 0.82, 0.18), true, true, ""],
+	# Squeaker Pads: an alarm on the floor, Config.SQUEAKER_USES squeaks then gone.
+	["Squeaker Pad", 1, Color(0.36, 0.56, 0.95), false, false, "item:squeaker"],
+	["Squeaker Pad", 1, Color(0.95, 0.40, 0.36), false, false, "item:squeaker"],
 ]
 
 const PALETTE_SIZE := 36
@@ -212,16 +220,24 @@ static func stash_team(id: int) -> int:
 	return 0 if id == STASH_BLUE else 1
 
 
+static func is_decoy(id: int) -> bool:
+	return id == DECOY_BLUE or id == DECOY_RED
+
+
+static func is_squeaker(id: int) -> bool:
+	return id == SQUEAK_BLUE or id == SQUEAK_RED
+
+
 static func is_placed_trap(id: int) -> bool:
 	## Traps a player places: tough for the other team, quick for their own.
-	return is_trap(id) or is_sticky(id) or is_pit(id) or id == WALL_SPRING
+	return is_trap(id) or is_sticky(id) or is_pit(id) or id == WALL_SPRING or is_squeaker(id)
 
 
 static func trap_team(id: int) -> int:
 	## The team a trap block belongs to by its colour, or -1 (wall springs).
-	if id == TRAP_BLUE or id == STICKY_BLUE or id == PIT_BLUE:
+	if id == TRAP_BLUE or id == STICKY_BLUE or id == PIT_BLUE or id == SQUEAK_BLUE or id == DECOY_BLUE:
 		return 0
-	if id == TRAP_RED or id == STICKY_RED or id == PIT_RED:
+	if id == TRAP_RED or id == STICKY_RED or id == PIT_RED or id == SQUEAK_RED or id == DECOY_RED:
 		return 1
 	return -1
 
@@ -257,5 +273,7 @@ static func rotate180(id: int) -> int:
 		PIT_BLUE: return PIT_RED
 		TEAM_BLUE: return TEAM_RED
 		STASH_BLUE: return STASH_RED
+		DECOY_BLUE: return DECOY_RED
+		SQUEAK_BLUE: return SQUEAK_RED
 	return id
 

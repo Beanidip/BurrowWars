@@ -86,6 +86,13 @@ var gear_fired := false           # this step started a jetpack burst
 var dashed := false               # this step started a dash
 var jumped := false               # this step left the ground (jump, double jump, leap out of water)
 var landed_hard := false          # this step hit the ground after a long fall
+var bubbles_on := false            # Bubble Shoes switched on (J)
+var wants_bubble := false          # this step stepped off an edge: blow a bubble at bubble_cell
+var bubble_cell := Vector3i.ZERO
+var free_build := false            # Free Build: gear costs nothing
+var _bubble_y := 0.0               # the level we stand at while a bubble is on its way
+var _bubble_hold := 0.0
+var _bubble_last := Vector3i(-1, -1, -1)
 var shield_t := 0.0                # seconds the Rat Knight Shield stays raised
 var shield_raised := false        # this step raised it
 var pounded := false              # this step landed a full double jump flat: a ground pound
@@ -204,6 +211,7 @@ func _step_motion(dt: float) -> void:
 	landed_hard = false
 	pounded = false
 	shield_raised = false
+	wants_bubble = false
 	splashed_in = false
 	splashed_out = false
 
@@ -292,6 +300,8 @@ func _step_motion(dt: float) -> void:
 		gear_cd = Config.JETPACK_TIME + Config.JETPACK_COOLDOWN
 		gear_fired = true
 		play_action("jump", Config.JETPACK_TIME)
+	if gear_pressed and gear == "bubbles":
+		bubbles_on = not bubbles_on
 	if gear_pressed and gear == "shield" and gear_cd <= 0.0:
 		shield_t = Config.SHIELD_TIME
 		gear_cd = Config.SHIELD_TIME + Config.SHIELD_COOLDOWN
@@ -324,13 +334,48 @@ func _step_motion(dt: float) -> void:
 		motion += Blocks.conveyor_dir(floor_id) * 3.0 * dt
 	var was_airborne := not on_floor
 	var fall_speed := vel.y
+	var y_before := position.y
 	_move(motion)
+	_bubble_check(not was_airborne, y_before, dt)
 	if was_airborne and on_floor and fall_speed < -11.0:
 		landed_hard = true
 	_pound_check(was_airborne, fall_speed)
 	_splash_check(fall_speed, dt)
 	_spring_sides()
 	_clear_edges()
+
+
+func _bubble_check(was_on_floor: bool, y_before: float, dt: float) -> void:
+	## Bubble Shoes: stepping off an edge (not jumping, not already falling)
+	## asks for a bubble under our feet and holds us level until it is there.
+	## Online the server makes the bubble, so we hold for a moment while it
+	## arrives; if it never does (no scrap), we fall after all.
+	_bubble_hold = maxf(0.0, _bubble_hold - dt)
+	if on_floor:
+		_bubble_last = Vector3i(-1, -1, -1)    # real ground: any cell may be asked for again
+		return
+	if not bubbles_on or gear != "bubbles" or in_water or on_ladder or flying or jumped or vel.y > 0.0:
+		return
+	var holding := _bubble_hold > 0.0 and absf(position.y - _bubble_y) < 0.6
+	if not was_on_floor and not holding:
+		return            # a jump or a drop already under way: the shoes only catch a step off an edge
+	if not free_build and scrap < Config.BUBBLE_COST and not holding:
+		return
+	var level := _bubble_y if holding else y_before
+	var cell := Vector3i(floori(position.x), floori(level + 0.01) - 1, floori(position.z))
+	if _world.get_cell(cell) != Blocks.AIR:
+		return
+	if cell == _bubble_last and not holding:
+		return            # we asked for this one and it never came (refused): fall after all
+	if cell != _bubble_last:
+		wants_bubble = true
+		bubble_cell = cell
+		_bubble_last = cell
+		_bubble_hold = 0.4
+	_bubble_y = level
+	position.y = level
+	vel.y = 0.0
+	on_floor = true
 
 
 func _pound_check(was_airborne: bool, fall_speed: float) -> void:

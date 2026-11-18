@@ -84,6 +84,12 @@ const SHOP := [
 		"desc": "Slippery block. Slot 3, place with right mouse."},
 	{"id": "jetpack", "name": "Jetpack", "kind": "gear", "qty": 1, "cost": 14, "cat": "Gear",
 		"desc": "Wear it in your gear slot and press J: a burst of thrust lifts you over trenches and up cliffs, half as high while you carry cheese. 5 s to cool down after each burst. One piece of gear at a time."},
+	{"id": "bubbles", "name": "Bubble Shoes", "kind": "gear", "qty": 1, "cost": 10, "cat": "Gear",
+		"desc": "Press J to switch them on or off. While on, stepping off an edge blows a bubble under your feet instead of falling: a bridge as you walk, each bubble 2 scrap, popping after 10 s. Jump to drop off on purpose. One piece of gear at a time."},
+	{"id": "decoy", "name": "Cheese Decoy", "kind": "gadget", "qty": 1, "cost": 12, "cat": "Traps",
+		"desc": "Looks exactly like Golden Cheese - even its name, to the other team. An enemy who digs it gets a face full of stink and is dazed. Single use. Dig your own to take it back."},
+	{"id": "squeaker", "name": "Squeaker Pad", "kind": "gadget", "qty": 1, "cost": 15, "cat": "Traps",
+		"desc": "An alarm on the floor: when an enemy steps on it, it squeaks for everyone nearby and drops a beacon your team sees for 8 s. Three squeaks, then it's spent."},
 	{"id": "shield", "name": "Rat Knight Shield", "kind": "gear", "qty": 1, "cost": 12, "cat": "Gear",
 		"desc": "Wear it in your gear slot and press J to raise it for 5 s: bonks and cannonballs bounce off, so nobody knocks the cheese out of your paws. Hauling cheese behind it you move a quarter slower. 8 s to ready it again. One piece of gear at a time."},
 ]
@@ -92,17 +98,18 @@ const MATS := ["dirt", "stone", "ice", "obsidian"]
 const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "ice": Blocks.ICE, "obsidian": Blocks.OBSIDIAN}
 ## Gadgets that can go inside your own team gate (see Blocks.GATE_GADGETS).
 const GATE_GADGETS := ["ladder", "spring", "highway", "conveyor", "wallspring"]
-const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "gate", "teamblock", "stash", "cannon", "crane", "dozer"]
+const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "decoy", "squeaker", "gate", "teamblock", "stash", "cannon", "crane", "dozer"]
 const GADGET_NAME := {
 	"ladder": "Ladder", "spring": "Spring", "highway": "Highway", "conveyor": "Conveyor",
 	"trap": "Mouse Trap", "tnt": "TNT", "gate": "Team Gate",
 	"dynamite": "Mobile TNT", "sticky": "Sticky Trap", "pitfall": "Pitfall", "wallspring": "Wall Spring",
 	"cannon": "Scrap Cannon", "crane": "Wrecking Crane", "dozer": "Bulldozer", "teamblock": "Team Block", "stash": "Team Stash",
+	"decoy": "Cheese Decoy", "squeaker": "Squeaker Pad",
 }
 
 
 ## Gear: one piece worn at a time in the gear slot (J uses it).
-const GEAR := {"jetpack": "Jetpack", "shield": "Rat Knight Shield"}
+const GEAR := {"jetpack": "Jetpack", "shield": "Rat Knight Shield", "bubbles": "Bubble Shoes"}
 
 
 static func price(cls: Dictionary, item_id: String, free_mode: bool) -> int:
@@ -135,6 +142,8 @@ static func gadget_block(id: String, team: int, facing: Vector3) -> int:
 		"sticky": return Blocks.STICKY_BLUE if team == 0 else Blocks.STICKY_RED
 		"pitfall": return Blocks.PIT_BLUE if team == 0 else Blocks.PIT_RED
 		"wallspring": return Blocks.WALL_SPRING
+		"decoy": return Blocks.DECOY_BLUE if team == 0 else Blocks.DECOY_RED
+		"squeaker": return Blocks.SQUEAK_BLUE if team == 0 else Blocks.SQUEAK_RED
 		"cannon": return Blocks.CANNON
 		"crane": return Blocks.CRANE
 		"dozer": return Blocks.DOZER

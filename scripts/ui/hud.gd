@@ -339,6 +339,8 @@ func _process(_delta: float) -> void:
 		_gear_name.text = String(ClassDefs.GEAR.get(rat.gear, rat.gear))
 		if rat.shield_t > 0.0:
 			_gear_state.text = "raised %.0f s" % ceilf(rat.shield_t)
+		elif rat.gear == "bubbles":
+			_gear_state.text = "on" if rat.bubbles_on else "off"
 		else:
 			_gear_state.text = ("%.0f s" % ceilf(rat.gear_cd)) if rat.gear_cd > 0.0 else "ready"
 	_sync_cheese()
@@ -378,7 +380,15 @@ func _process(_delta: float) -> void:
 			extra = "  -  indestructible"
 		elif not m.free_mode:
 			extra = "  -  %d / %d hits" % [int(m.world.damage.get(ctl.aim["cell"], 0)), hits]
-		_target.text = Blocks.block_name(id) + extra
+		var shown := Blocks.block_name(id)
+		if Blocks.is_decoy(id):
+			if Blocks.trap_team(id) == rat.team:
+				shown = "Your Cheese Decoy"
+				extra = "  -  dig it to take it back"
+			else:
+				shown = Blocks.block_name(Blocks.CHEESE)      # the other team sees Golden Cheese
+				extra = "  -  %d / %d hits" % [0, int(Blocks.HITS[Blocks.CHEESE])] if not m.free_mode else ""
+		_target.text = shown + extra
 	if rat.carried > 0 and not m.free_mode:
 		_target.text += "   |   Carrying cheese: get to your base!"
 	if rat.raid_t > 0.0:

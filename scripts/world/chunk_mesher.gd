@@ -40,8 +40,8 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 					# a gate holding a gadget: the see-through gate box wraps the gadget
 					var gcol: Color = Blocks.COLOR[Blocks.GATE_BLUE if int(world.gates[Vector3i(x, y, z)]) == 0 else Blocks.GATE_RED]
 					_box(tv, tc, mn - Vector3(0.012, 0.012, 0.012), mn + Vector3(1.012, 1.012, 1.012), gcol)
-				if Blocks.is_glass(id):
-					# glass: one see-through face wherever it meets something it can be seen through
+				if Blocks.is_glass(id) or id == Blocks.BUBBLE:
+					# glass (and bubbles): one see-through face wherever it meets something it can be seen through
 					for f in 6:
 						var gx: int = x + NX[f]
 						var gy: int = y + NY[f]
@@ -58,7 +58,7 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 					_micro_block(world, ov, oc, Vector3i(x, y, z), id, tint * depth)
 					continue
 				if opaque[id] == 1:
-					var glow := id == Blocks.CHEESE or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED or Blocks.is_team_block(id) or Blocks.is_paint(id)
+					var glow := id == Blocks.CHEESE or Blocks.is_decoy(id) or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED or Blocks.is_team_block(id) or Blocks.is_paint(id)
 					var base := col * (tint if glow else tint * depth)
 					for f in 6:
 						var ax: int = x + NX[f]
@@ -132,6 +132,12 @@ static func build(world: VoxelWorld, k: Vector3i, mat_opaque: Material, mat_tran
 						_box(ov, oc, mn + Vector3(0, 0.9, 0), mn + Vector3(1, 1, 1), Blocks.COLOR[Blocks.GRASS] * tint * 0.97)
 						var pip: Color = Blocks.COLOR[Blocks.BASE_BLUE if id == Blocks.PIT_BLUE else Blocks.BASE_RED]
 						_box(ov, oc, mn + Vector3(0.44, 1.0, 0.44), mn + Vector3(0.56, 1.02, 0.56), pip)
+					Blocks.SQUEAK_BLUE, Blocks.SQUEAK_RED:
+						# a rubber pad with a squeaky bulb in the middle
+						_box(ov, oc, mn + Vector3(0.1, 0, 0.1), mn + Vector3(0.9, 0.07, 0.9), col * 0.85)
+						_box(ov, oc, mn + Vector3(0.18, 0.07, 0.18), mn + Vector3(0.82, 0.1, 0.82), col)
+						_box(ov, oc, mn + Vector3(0.38, 0.1, 0.38), mn + Vector3(0.62, 0.24, 0.62), Color(1.0, 0.88, 0.3))
+						_box(ov, oc, mn + Vector3(0.44, 0.24, 0.44), mn + Vector3(0.56, 0.28, 0.56), Color(1.0, 0.96, 0.7))
 					Blocks.TRAP_BLUE, Blocks.TRAP_RED:
 						_box(ov, oc, mn + Vector3(0.12, 0, 0.12), mn + Vector3(0.88, 0.08, 0.88), Color(0.78, 0.62, 0.38))
 						_box(ov, oc, mn + Vector3(0.2, 0.08, 0.42), mn + Vector3(0.8, 0.16, 0.58), col)

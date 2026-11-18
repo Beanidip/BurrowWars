@@ -246,6 +246,9 @@ func on_act(id: int, method: String, a: Array) -> void:
 		"ground_pound":
 			if _ok(a, [TYPE_VECTOR3I]):
 				m.ground_pound(rat, a[0])
+		"place_bubble":
+			if _ok(a, [TYPE_VECTOR3I]):
+				m.place_bubble(rat, a[0])
 		"try_bonk":
 			if _ok(a, [TYPE_INT]):
 				var target := m.rat_by_id(a[0])

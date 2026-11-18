@@ -98,6 +98,16 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
   afford it. The **Rat Knight Shield** (12 scrap) is raised with J for 5 s: bonks, cannonballs
   and wrecking balls bounce off, so nobody can knock cheese out of your paws, but hauling cheese
   behind it you move a quarter slower. 8 s to ready it again.
+- **Bubble Shoes** (gear, 10 scrap): J switches them on or off. While on, stepping off an edge
+  (not jumping) blows a bubble block under your feet instead of falling, 2 scrap each, so
+  walking out over a gap builds a bridge. Bubbles pop after 10 s; anyone can stand on them or
+  dig one. With less than 2 scrap you fall. Online the server makes each bubble.
+- **Cheese Decoy** (trap, 12 scrap, single use): looks exactly like Golden Cheese, and the other
+  team's aim label even calls it that. An enemy who digs it is dazed for 1.5 s in a stink cloud
+  and it's gone; your own team digs it back into the pack. Blasts just destroy it.
+- **Squeaker Pad** (trap, 15 scrap): a floor pad. An enemy stepping on it squeaks for everyone
+  nearby and drops a beacon only its team sees (8 s). At most one squeak per 2 s; the third
+  spends it. Like other placed traps: 5 digs for its team, 15 for anyone else.
 - **Ground pound**: a double jump taken (nearly) to its full height and landed flat gives the
   block underfoot one dig hit (dirt cracks, a second pound or a dig breaks it; TNT lights).
   Ceilings, ladders, water, springs and jetpacks spoil it.

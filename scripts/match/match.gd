@@ -44,6 +44,9 @@ var tnt: Dictionary = {}        # Vector3i -> {"owner": rat id, "fuse": seconds 
 var gate_damage: Dictionary = {}
 var trap_owner: Dictionary = {}      # Vector3i -> team that placed the trap there
 var stash_hits: Dictionary = {}      # Vector3i -> TNT blasts a team stash has taken
+var bubbles: Dictionary = {}         # Vector3i -> seconds before that Bubble Shoes bubble pops
+var squeaks: Dictionary = {}         # Vector3i -> squeaks a Squeaker Pad has left
+var squeak_rest: Dictionary = {}     # Vector3i -> seconds before that pad can squeak again
 ## Each team's shared pool (scrap and building materials), reached at any of
 ## the team's stashes or at base. It survives its stashes being blown up.
 var team_bank: Array[Dictionary] = [{"scrap": 0, "dirt": 0, "stone": 0, "ice": 0, "obsidian": 0},
@@ -113,6 +116,8 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 		MapGenerator.generate(world, map_seed, need)
 	for cell: Vector3i in _find_blocks(Blocks.TNT):
 		tnt[cell] = {"owner": -1, "fuse": -1.0}
+	for cell: Vector3i in _find_blocks(Blocks.BUBBLE):
+		bubbles[cell] = Config.BUBBLE_TIME     # bubbles in a loaded map still pop
 	Log.info("match setup: mode=%s seed=%d goal=%d cheese_on_map=%d" % [
 		settings.get("mode", "race"), map_seed, goal, world.cheese_cells.size()])
 
@@ -125,6 +130,9 @@ func _on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 	gate_damage.erase(cell)
 	trap_owner.erase(cell)
 	stash_hits.erase(cell)
+	if not Blocks.is_squeaker(new_id):
+		squeaks.erase(cell)          # a new pad in this cell starts with all its squeaks
+		squeak_rest.erase(cell)
 
 
 func _find_blocks(id: int) -> Array[Vector3i]:
@@ -155,6 +163,7 @@ func spawn_rat(team: int, class_id: String, is_bot: bool, fixed_id := -1) -> Rat
 	rat.scrap = 6
 	if free_mode:
 		rat.flying = false
+		rat.free_build = true
 	if lobby:
 		rat.gear = "jetpack"     # everyone flies in the playground
 	add_child(rat)
@@ -240,6 +249,8 @@ func step(dt: float) -> void:
 						remote.note_fx(kind)
 					if r.pounded:
 						remote.act("ground_pound", [r.pound_cell])
+					if r.wants_bubble:
+						remote.act("place_bubble", [r.bubble_cell])
 		return
 	for r in rats:
 		if r.net_peer != 0:
@@ -260,10 +271,15 @@ func step(dt: float) -> void:
 				fx.emit(kind, r.position, null)
 			if r.pounded:
 				ground_pound(r, r.pound_cell)
+			if r.wants_bubble:
+				place_bubble(r, r.bubble_cell)
 		_check_rat_hazards(r, dt)
 		_check_raid(r, dt)
 	if lobby:
 		_lobby_step(dt)
+	_step_bubbles(dt)
+	for cell: Vector3i in squeak_rest.keys():
+		squeak_rest[cell] = maxf(0.0, float(squeak_rest[cell]) - dt)
 	_step_pickups(dt)
 	_step_tnt(dt)
 	dynamite.step(dt)
@@ -380,6 +396,8 @@ func _check_rat_hazards(r: Rat, dt: float) -> void:
 	if r.position.y < -4.0:
 		respawn(r)
 		return
+	if Blocks.is_squeaker(here) and not r.flying and Blocks.trap_team(here) != r.team:
+		_squeak(r, Vector3i(floori(r.position.x), floori(r.position.y + 0.2), floori(r.position.z)), here)
 	if Blocks.is_trap(here) and not r.flying:
 		var trap_team := 0 if here == Blocks.TRAP_BLUE else 1
 		if trap_team != r.team:
@@ -464,6 +482,9 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 		return false
 	if id == Blocks.TNT:
 		light_tnt(cell, 2.0)
+		return true
+	if Blocks.is_decoy(id):
+		_dig_decoy(rat, cell, id)
 		return true
 	if Blocks.is_gate(id):
 		if Blocks.gate_team(id) == rat.team:
@@ -1121,6 +1142,73 @@ static func lobby_settings(race: Dictionary) -> Dictionary:
 	return s
 
 
+func _dig_decoy(rat: Rat, cell: Vector3i, id: int) -> void:
+	## Your own Cheese Decoy comes back into your pack; anyone else who digs
+	## at it gets a face full of stink: dazed, and it's gone.
+	world.set_block(cell, Blocks.AIR)
+	if Blocks.trap_team(id) == rat.team:
+		_give_gadget(rat, "decoy", 1)
+		fx.emit("break", Vector3(cell), id)
+		return
+	rat.stun = maxf(rat.stun, Config.DECOY_STUN)
+	rat.vel = Vector3(rat.vel.x * 0.2, 3.5, rat.vel.z * 0.2)
+	fx.emit("decoy", Vector3(cell), null)
+	toast.emit("%s dug into a Cheese Decoy. Pee-yew!" % rat.display_name, -1)
+
+
+func _squeak(r: Rat, cell: Vector3i, id: int) -> void:
+	## An enemy on a Squeaker Pad: a squeak everyone nearby hears, and a
+	## beacon for the pad's team. Spent after Config.SQUEAKER_USES squeaks.
+	if float(squeak_rest.get(cell, 0.0)) > 0.0:
+		return
+	var owner := Blocks.trap_team(id)
+	var left := int(squeaks.get(cell, Config.SQUEAKER_USES)) - 1
+	squeak_rest[cell] = Config.SQUEAKER_REST
+	var spot := Vector3(cell) + Vector3(0.5, 0.2, 0.5)
+	add_marker(spot, "SQUEAK! %s" % r.display_name, owner, Config.SQUEAKER_MARK)
+	fx.emit("squeak", spot, owner)
+	toast.emit("A squeaker pad caught %s!" % r.display_name, owner)
+	if left <= 0:
+		squeaks.erase(cell)
+		squeak_rest.erase(cell)
+		world.set_block(cell, Blocks.AIR)
+		fx.emit("poof", spot, null)
+	else:
+		squeaks[cell] = left
+
+
+func place_bubble(rat: Rat, cell: Vector3i) -> bool:
+	## Bubble Shoes: a bubble block right under the rat's feet, for scrap. Online
+	## the player's game asks; the cell must really be under them.
+	if rat.gear != "bubbles" or over or not VoxelWorld.in_bounds(cell) or world.get_cell(cell) != Blocks.AIR:
+		return false
+	var top := Vector3(cell) + Vector3(0.5, 1.0, 0.5)
+	if absf(top.y - rat.position.y) > 0.6 or Vector2(top.x - rat.position.x, top.z - rat.position.z).length() > 1.2:
+		return false
+	if MapGenerator.in_any_base(cell) and not free_mode:
+		return false
+	if not free_mode:
+		if rat.scrap < Config.BUBBLE_COST:
+			return false
+		rat.scrap -= Config.BUBBLE_COST
+	world.set_block(cell, Blocks.BUBBLE)
+	bubbles[cell] = Config.BUBBLE_TIME
+	fx.emit("bubble", Vector3(cell), null)
+	return true
+
+
+func _step_bubbles(dt: float) -> void:
+	for cell: Vector3i in bubbles.keys():
+		var t := float(bubbles[cell]) - dt
+		if t > 0.0:
+			bubbles[cell] = t
+			continue
+		bubbles.erase(cell)
+		if world.get_cell(cell) == Blocks.BUBBLE:
+			world.set_block(cell, Blocks.AIR)
+			fx.emit("pop", Vector3(cell), null)
+
+
 func ground_pound(rat: Rat, cell: Vector3i) -> void:
 	## A full double jump landed flat: one dig hit to the block underfoot, by
 	## the usual dig rules (TNT lights). Gates, team blocks, machines and
@@ -1593,6 +1681,7 @@ func try_buy(rat: Rat, item_id: String) -> String:
 		rat.gear = item_id     # one gear slot: a new piece replaces the old one
 		rat.gear_cd = 0.0
 		rat.shield_t = 0.0
+		rat.bubbles_on = false
 		fx.emit("buy", rat.position, item_id)
 		return ""
 	if item["kind"] == "gadget":

@@ -261,6 +261,29 @@ def _(i):
     i.rect(11, 3, 12, 12, GREEN)
     i.rect(13, 3, 13, 12, GREEN_D)
 
+@icon("decoy")
+def _(i):
+    # a cheese wedge that isn't: green stink curling off it
+    i.rect(2, 8, 12, 13, YEL)
+    i.line(2, 7, 8, 4, YEL); i.rect(3, 5, 8, 7, YEL); i.rect(8, 4, 12, 7, YEL)
+    i.rect(2, 12, 12, 13, YEL_D)
+    i.disc(5.5, 10, 1.1, YEL_D); i.disc(9.5, 9.5, 0.9, YEL_D)
+    i.pts([(12, 3), (13, 2), (14, 3), (13, 1), (14, 0)], GOO)
+    i.pts([(10, 2), (11, 1), (10, 0)], GOO_L)
+
+@icon("squeaker")
+def _(i):
+    # a rubber pad with a squeaky bulb, and the squeak
+    i.rect(1, 11, 14, 13, BLUE_D)
+    i.rect(2, 11, 13, 11, BLUE)
+    i.rect(5, 8, 10, 10, YEL)
+    i.rect(6, 7, 9, 7, YEL)
+    i.pts([(6, 8), (7, 7)], WHITE)
+    i.pts([(3, 4), (2, 5), (3, 6)], WHITE)      # sound arcs
+    i.pts([(12, 4), (13, 5), (12, 6)], WHITE)
+    i.pts([(1, 3), (0, 5), (1, 7)], STEEL_L)
+    i.pts([(14, 3), (15, 5), (14, 7)], STEEL_L)
+
 # ---------------------------------------------------------------- siege
 @icon("cannon")
 def _(i):
@@ -314,6 +337,20 @@ def _(i):
     i.rect(6, 5, 9, 7, YEL)                   # cheese crest
     i.pts([(6, 5), (9, 7)], YEL_D)
     i.pts([(7, 6)], YEL_D)
+
+@icon("bubbles")
+def _(i):
+    # a shoe stepping onto a bubble
+    i.disc(8, 11.5, 3.6, BLUE_L)
+    i.disc(8, 11.5, 2.6, ICE_L)
+    i.pts([(6, 10), (7, 9)], WHITE)
+    i.rect(3, 4, 10, 7, RED)                   # the shoe
+    i.rect(3, 4, 5, 2, RED)
+    i.rect(3, 2, 5, 3, RED)
+    i.rect(3, 7, 11, 8, WHITE)                 # its sole
+    i.pts([(4, 5), (6, 5)], WHITE)             # laces
+    i.disc(13, 4, 1.4, BLUE_L); i.put(12, 3, WHITE)
+    i.disc(13.5, 8.5, 0.9, BLUE_L)
 
 # ---------------------------------------------------------------- tools
 @icon("chisel")

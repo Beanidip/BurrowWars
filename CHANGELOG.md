@@ -5,6 +5,10 @@
 | Change | Files |
 |---|---|
 | Title screen tagline: "Bunker, Build, Bonk! Bring Home The Golden Cheese!" | `ui/main_menu.gd` |
+| Bubble Shoes (gear, 10 scrap): J switches them on/off; stepping off an edge blows a bubble block under your feet (2 scrap each, pops after 10 s), so you can walk a bridge over a gap. Server-checked online | `actors/rat.gd`, `match/match.gd`, `net/net_server.gd`, `world/blocks.gd` |
+| Cheese Decoy (trap, 12 scrap, single use): looks exactly like Golden Cheese to the other team, name included; digging it dazes them in a stink cloud. Your own team digs it back up | `match/match.gd`, `world/blocks.gd`, `ui/hud.gd` |
+| Squeaker Pad (trap, 15 scrap): an enemy stepping on it squeaks for everyone nearby and drops an 8 s beacon for its team; three squeaks, then it's spent | `match/match.gd`, `world/blocks.gd`, `world/chunk_mesher.gd` |
+| Placeholder sounds for the new items (squeak, pop, toot); the sound script is now `tools/make_sfx.py`. New icons. Network protocol 8 (new block ids) | `tools/make_sfx.py`, `tools/make_icons.py`, `net/net.gd` |
 | Scrap blocks have a pixel-art texture (a jumble of nuts, washers, springs, screws, a red clamp and a yellow plug in oily grime), turned and mirrored per face. Blocks can now have textures: `assets/blocks/<name>.png` | `world/block_textures.gd`, `world/chunk_mesher.gd`, `assets/blocks/scrap.png`, `tools/make_block_textures.py` |
 | Hit sparks take the colour of the block being hit (a hue-shift shader); painted blocks burst in their own colour | `match/fx_sprite.gd`, `match/match_view.gd`, `assets/shaders/fx_hue.gdshader` |
 | Spilled water and lava slope down to the ground at their edges instead of ending in see-through cubes; pools held by banks stay level, and the surface rises to meet liquid stacked above | `world/chunk_mesher.gd`, `world/voxel_world.gd` |

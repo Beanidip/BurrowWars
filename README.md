@@ -33,7 +33,7 @@ See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 |---|---|---|---|
 | WASD / mouse | Move / look | Q | Place equipped gadget |
 | Space | Jump, double jump, climb, swim up | R / wheel | Change the Q slot gadget |
-| J | Use gear (Jetpack / Rat Knight Shield) | B | Workshop / Team stash |
+| J | Use gear (Jetpack / Rat Knight Shield / Bubble Shoes on-off) | B | Workshop / Team stash |
 | Shift | Dash | E / F | Class abilities |
 | Left mouse | Dig / bonk | B | Workshop (at base; Builder anywhere) |
 | Right mouse | Place selected material | I | Inventory |
@@ -82,7 +82,7 @@ convert between sheets and single frames, `guide` redraws the layout picture) an
 `tools/make_icons.py` (regenerates the icon sheet; it overwrites hand edits, so only rerun it to add icons).
 `tools/import_fx.py /path/to/pixelfx` re-renders the effect sheets from the [pixelfx](https://github.com/patch-gg/pixelfx)
 library (needs Node 18+; edit its list to swap, recolour or add effects; it overwrites `assets/fx/`), and
-`tools/make_liquid_sfx.py` remakes the placeholder `splash` and `sizzle` sounds.
+`tools/make_sfx.py` remakes the placeholder `splash`, `sizzle`, `squeak`, `pop` and `toot` sounds.
 Other blocks, gadgets and siege machines are still drawn in code from flat colours.
 
 ## Credits
@@ -91,5 +91,5 @@ Rat sprites, UI icons, sound effects and music are the project owner's own asset
 carried over from Burrow Wars v0.15.1. All code in this repository is new.
 
 Effect animations in `assets/fx/` are rendered from [pixelfx](https://github.com/patch-gg/pixelfx)
-by Patch and Hugo Duprez, MIT License (see `assets/fx/LICENSE-pixelfx.txt`); some recoloured. The `splash` and `sizzle` sounds are
-synthesised placeholders made by `tools/make_liquid_sfx.py`.
+by Patch and Hugo Duprez, MIT License (see `assets/fx/LICENSE-pixelfx.txt`); some recoloured. The `splash`, `sizzle`, `squeak`, `pop` and `toot` sounds are
+synthesised placeholders made by `tools/make_sfx.py`.
