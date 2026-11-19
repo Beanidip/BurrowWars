@@ -89,6 +89,8 @@ Other blocks, gadgets and siege machines are still drawn in code from flat colou
 
 ## Credits
 
+The full list of every asset, its source and licence is in [docs/ASSET_LICENSES.md](docs/ASSET_LICENSES.md); the sizes and layouts new art and sound must follow are in [docs/ART_SPEC.md](docs/ART_SPEC.md). The game's own Credits & Licences page (main menu) shows the notices it ships with.
+
 Rat sprites, UI icons, sound effects and music are the project owner's own assets,
 carried over from Burrow Wars v0.15.1. All code in this repository is new.
 
