@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4204,3 +4204,54 @@ func test_display_and_audio_settings() -> void:
 		Config.set_value(k, keep[k])
 	Config.apply_audio()
 	Config.apply_display()
+
+
+func _mesh_vertex_count(w: VoxelWorld, k: Vector3i) -> int:
+	var mi: MeshInstance3D = w._chunks.get(k)
+	if mi == null or mi.mesh == null:
+		return -1
+	var n := 0
+	for i in mi.mesh.get_surface_count():
+		n += (mi.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	return n
+
+
+func test_threaded_remesh() -> void:
+	## Digging re-meshes on worker threads: the main thread only starts the
+	## job and installs the result, and edits made meanwhile are not lost.
+	var w := VoxelWorld.new()
+	add_child(w)
+	MapGenerator.generate(w, 4242, 3)
+	var cell := Vector3i(40, 30, 40)
+	var k := Vector3i(cell.x / VoxelWorld.CHUNK, cell.y / VoxelWorld.CHUNK, cell.z / VoxelWorld.CHUNK)
+	w._dirty.clear()
+	w._rebuild_chunk(k)
+	var before := _mesh_vertex_count(w, k)
+	w.set_block(cell, Blocks.AIR)
+	check(w._dirty.has(k), "an edit marks its chunk dirty")
+	var t0 := Time.get_ticks_usec()
+	w._process(0.016)
+	var start_us := Time.get_ticks_usec() - t0
+	check(w._job >= 0 and not w._dirty.has(k), "the chunk goes to a worker")
+	# carve another block in the same chunk while the first job runs
+	var cell2 := cell + Vector3i(1, 0, 0)
+	w.set_block(cell2, Blocks.AIR)
+	check(w._dirty.has(k), "an edit during the job marks the chunk dirty again")
+	var frames := 0
+	var worst_us := start_us
+	while w.remesh_busy() and frames < 600:
+		OS.delay_msec(1)
+		var t1 := Time.get_ticks_usec()
+		w._process(0.016)
+		worst_us = maxi(worst_us, Time.get_ticks_usec() - t1)
+		frames += 1
+	check(not w.remesh_busy(), "the new meshes arrive (%d frames)" % frames)
+	var expect := 0
+	for surf: Array in ChunkMesher.build_arrays(w, k):
+		expect += (surf[0] as PackedVector3Array).size()
+	var got := _mesh_vertex_count(w, k)
+	check(got == expect and got != before, "the final mesh includes both edits (%d -> %d vertices)" % [before, got])
+	check(worst_us < 8000, "the main thread never meshes: worst frame %.2f ms" % (worst_us / 1000.0))
+	print("    remesh: start %.2f ms, worst frame %.2f ms, %d frames" % [start_us / 1000.0, worst_us / 1000.0, frames])
+	remove_child(w)
+	w.free()

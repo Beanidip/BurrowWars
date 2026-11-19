@@ -44,13 +44,22 @@ var _pre_lock: Mutex
 var _pre_task := -1
 var _pre_snap: VoxelWorld
 var _pre_next := 0
+# runtime re-meshing after edits: batches of dirty chunks meshed on worker threads
+const REMESH_BATCH := 12
+var threaded_remesh := true        # false: mesh dirty chunks on the main thread, 6 a frame (as before)
+var _job := -1                     # WorkerThreadPool group task, or -1
+var _job_keys: Array[Vector3i] = []
+var _job_results: Array = []
+var _job_lock := Mutex.new()
+var _job_snap: VoxelWorld
 var _mat_opaque: StandardMaterial3D
 var _mat_trans: StandardMaterial3D
 
 
-func _init() -> void:
-	data.resize(SX * SY * SZ)
-	micro_flag.resize(SX * SY * SZ)
+func _init(allocate := true) -> void:
+	if allocate:   # (a frozen copy for the meshing workers shares the live arrays instead)
+		data.resize(SX * SY * SZ)
+		micro_flag.resize(SX * SY * SZ)
 
 
 func _ready() -> void:
@@ -384,8 +393,84 @@ func _process(_delta: float) -> void:
 	if _pre_task >= 0:
 		_prebuild_place()
 		return
-	if visual and not _dirty.is_empty():
-		rebuild_dirty(6)
+	if not visual:
+		return
+	if _job >= 0:
+		if not WorkerThreadPool.is_group_task_completed(_job):
+			return
+		_finish_job()
+	if not _dirty.is_empty():
+		if threaded_remesh:
+			_start_job()
+		else:
+			rebuild_dirty(6)
+
+
+func remesh_busy() -> bool:
+	## Chunks waiting for (or getting) a new mesh.
+	return _job >= 0 or not _dirty.is_empty()
+
+
+func _start_job() -> void:
+	## Dig, blast or flow: mesh the dirty chunks nearest the camera on worker
+	## threads, from a frozen copy of the world (the arrays are copy-on-write,
+	## so this costs nothing until the next edit). Edits made meanwhile mark
+	## their chunks dirty again for the next batch, so nothing is lost.
+	var keys: Array[Vector3i] = []
+	for k: Vector3i in _dirty.keys():
+		if k.x >= 0 and k.y >= 0 and k.z >= 0 and k.x < SX / CHUNK and k.y < SY / CHUNK and k.z < SZ / CHUNK:
+			keys.append(k)
+		else:
+			_dirty.erase(k)
+	if keys.is_empty():
+		return
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam != null and keys.size() > REMESH_BATCH:
+		var eye := cam.global_position
+		keys.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
+			return ((Vector3(a) + Vector3(0.5, 0.5, 0.5)) * CHUNK).distance_squared_to(eye) \
+				< ((Vector3(b) + Vector3(0.5, 0.5, 0.5)) * CHUNK).distance_squared_to(eye))
+	keys.resize(mini(keys.size(), REMESH_BATCH))
+	for k in keys:
+		_dirty.erase(k)
+	_job_snap = _frozen_copy()
+	_job_keys = keys
+	_job_results = []
+	_job_results.resize(keys.size())
+	_job = WorkerThreadPool.add_group_task(_remesh_one.bind(keys.duplicate(), _job_snap), keys.size(), -1, true)
+
+
+func _remesh_one(i: int, keys: Array[Vector3i], snap: VoxelWorld) -> void:
+	var surfaces := ChunkMesher.build_arrays(snap, keys[i])
+	_job_lock.lock()
+	_job_results[i] = surfaces
+	_job_lock.unlock()
+
+
+func _finish_job() -> void:
+	if _job < 0:
+		return
+	WorkerThreadPool.wait_for_group_task_completion(_job)
+	_job = -1
+	for i in _job_keys.size():
+		if _job_results[i] != null:
+			_place_chunk(_job_keys[i], _job_results[i])
+	_job_keys = []
+	_job_results = []
+	if _job_snap != null:
+		_job_snap.free()
+		_job_snap = null
+
+
+func _frozen_copy() -> VoxelWorld:
+	## A detached, read-only copy for worker threads to mesh from.
+	var snap := VoxelWorld.new(false)
+	snap.visual = false
+	snap.data = data
+	snap.micro_flag = micro_flag
+	snap.micro = micro.duplicate()      # the masks are copy-on-write: later carving makes new ones
+	snap.gates = gates.duplicate()
+	return snap
 
 
 func _rebuild_chunk(k: Vector3i) -> void:
@@ -410,6 +495,7 @@ func start_prebuild(centre: Vector3) -> void:
 	## (edits meanwhile are safe: they mark chunks dirty again for later);
 	## finished meshes go in a few at a time each frame; then `prebuilt`.
 	BlockTextures.flags()            # its lazy set-up must not race on the workers
+	_finish_job()
 	_pre_keys.clear()
 	for k: Vector3i in _dirty.keys():
 		if k.x >= 0 and k.y >= 0 and k.z >= 0 and k.x < SX / CHUNK and k.y < SY / CHUNK and k.z < SZ / CHUNK:
@@ -422,12 +508,7 @@ func start_prebuild(centre: Vector3) -> void:
 	var near := func(a: Vector3i, b: Vector3i) -> bool:
 		return (Vector3(a) * CHUNK).distance_squared_to(centre) < (Vector3(b) * CHUNK).distance_squared_to(centre)
 	_pre_keys.sort_custom(near)
-	_pre_snap = VoxelWorld.new()
-	_pre_snap.visual = false
-	_pre_snap.data = data
-	_pre_snap.micro_flag = micro_flag
-	_pre_snap.micro = micro.duplicate(true)
-	_pre_snap.gates = gates.duplicate()
+	_pre_snap = _frozen_copy()
 	_pre_results = []
 	_pre_results.resize(_pre_keys.size())
 	_pre_lock = Mutex.new()
@@ -473,6 +554,7 @@ func _end_prebuild() -> void:
 
 func _exit_tree() -> void:
 	_end_prebuild()      # leaving mid-load (quit to menu): let the workers finish, then tidy up
+	_finish_job()
 
 
 # ---------------------------------------------------------------- persistence
