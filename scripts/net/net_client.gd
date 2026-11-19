@@ -136,6 +136,8 @@ func on_snap(s: Dictionary) -> void:
 	_apply_shots(s.get("sh", []))
 	_apply_sticks(s.get("st", []))
 	m.windup.apply(s.get("wd", []))
+	var pads: Variant = s.get("tp", [])
+	m.tele_net = pads if pads is Array else []
 
 
 func _apply_rats(list: Array) -> void:

@@ -17,6 +17,7 @@ const TIPS := [
 	"Squeaker Pads tell your team when someone sneaks past.",
 	"Carrying cheese leaves a crumb trail. Follow the crumbs!",
 	"That carrier might be a Wind-up Decoy. Bonk it and find out...",
+	"Teleporters are one way, and cheese won't fit through.",
 ]
 
 var progress := 0.0              # 0..1

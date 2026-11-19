@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -3890,4 +3890,152 @@ func test_rat_views() -> void:
 	check(sprite.view == "front" and sprite.texture == RatSprite._frame("digger", 0, "dig", 0),
 		"digging toward you: the side art (no front dig drawn)")
 	cam.queue_free()
+	end(m)
+
+
+func stand_on(m: Match, r: Rat, cell: Vector3i, seconds: float) -> void:
+	r.position = Vector3(cell) + Vector3(0.5, 0.0, 0.5)
+	r.vel = Vector3.ZERO
+	run(m, seconds)
+
+
+func test_teleporters() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var kinds: Array[String] = []
+	var said: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, d: Variant) -> void:
+		kinds.append(kind)
+		if kind == "tele_no":
+			said.append(String(d)))
+	var eng := arena_rat(m, 0, "builder")
+	var mate := arena_rat(m, 0, "scout", Vector3(0, 0, 3))
+	var foe := arena_rat(m, 1, "digger", Vector3(0, 0, -3))
+	eng.position = MapGenerator.spawn_point(0)
+	run(m, 0.3)
+	eng.scrap = 40
+	check(m.try_buy(eng, "teleporter") == "" and int(eng.gadgets.get("teleporter", 0)) == 2 and eng.scrap == 24, "a Teleporter Set is two pads for 16 scrap")
+	check(m.try_buy(eng, "teleporter") != "" and eng.scrap == 24, "one set per rat")
+	m.set_equipped(eng, "teleporter")
+	check(m.tele_next(eng) == "entrance", "the first pad is the entrance")
+	eng.position = Vector3(ARENA) + Vector3(-4.5, 0, 0.5)
+	run(m, 0.2)
+	var a := ARENA + Vector3i(-3, 0, 0)
+	var b := ARENA + Vector3i(5, 0, 5)
+	check(m.try_use_equipped(eng, {"cell": a + Vector3i(0, -1, 0), "normal": Vector3i(0, 1, 0)}, Vector3(1, 0, 0), false) == "",
+		"Q puts down the entrance")
+	check(Blocks.is_tele_in(m.world.get_cell(a)) and m.tele_next(eng) == "exit" and kinds.has("tele_place"), "...and the next one is the exit")
+	check(m.try_place_gadget(eng, ARENA + Vector3i(-4, 3, 2), "teleporter") != "", "a pad needs a floor")
+	eng.position = Vector3(b) + Vector3(-1.5, 0, 0.5)
+	run(m, 0.2)
+	check(m.try_use_equipped(eng, {"cell": b + Vector3i(0, -1, 0), "normal": Vector3i(0, 1, 0)}, Vector3(1, 0, 0), false) == ""
+		and m.world.get_cell(b) == Blocks.TELE_OUT_BLUE and int(eng.gadgets["teleporter"]) == 0, "then the exit")
+	m._give_gadget(eng, "teleporter", 1)
+	check(m.try_place_gadget(eng, b + Vector3i(-2, 0, -2), "teleporter") != "" and m.world.get_cell(b + Vector3i(-2, 0, -2)) == Blocks.AIR,
+		"no third pad: one set per rat")
+	eng.gadgets["teleporter"] = 0
+	check(not m.world.solid_point(Vector3(a) + Vector3(0.5, 0.5, 0.5)), "you walk onto a pad, not into it")
+	# a teammate standing on the entrance is sent to the exit
+	kinds.clear()
+	stand_on(m, mate, a, 0.2)
+	check(mate.position.distance_to(Vector3(a) + Vector3(0.5, 0, 0.5)) < 0.2, "not at once: you stand on it a moment")
+	run(m, Config.TELE_WAIT)
+	check(mate.position.distance_to(Vector3(b) + Vector3(0.5, 0, 0.5)) < 0.3 and kinds.has("tele_go") and kinds.has("tele_arrive"),
+		"a teammate on the entrance pops out at the exit")
+	run(m, 1.0)
+	check(mate.position.distance_to(Vector3(b) + Vector3(0.5, 0, 0.5)) < 0.3, "one way: the exit sends nobody back")
+	# it recharges
+	var ready_pad := func() -> bool:
+		for p: Array in m.tele_pads():
+			if p[0] == a:
+				return bool(p[3])
+		return false
+	check(not ready_pad.call(), "the entrance recharges after a trip")
+	stand_on(m, mate, a, Config.TELE_WAIT + 0.5)
+	check(mate.position.distance_to(Vector3(a) + Vector3(0.5, 0, 0.5)) < 0.3, "and sends nobody while it does")
+	run(m, Config.TELE_CHARGE)
+	check(not ready_pad.call() and mate.position.distance_to(Vector3(b) + Vector3(0.5, 0, 0.5)) < 0.3, "once charged it sends whoever waits on it")
+	# the owner uses it too; the other team can't
+	stand_on(m, foe, a, Config.TELE_CHARGE + 1.0)
+	check(foe.position.distance_to(Vector3(a) + Vector3(0.5, 0, 0.5)) < 0.3, "the other team can't use it")
+	foe.position = Vector3(ARENA) + Vector3(-6.5, 0, -6.5)
+	# no cheese through teleporters
+	said.clear()
+	mate.carried = 1
+	stand_on(m, mate, a, 1.5)
+	check(mate.position.distance_to(Vector3(a) + Vector3(0.5, 0, 0.5)) < 0.3 and mate.carried == 1, "cheese can't go through")
+	check(said.size() == 1 and said[0].contains("cheese"), "you're told why, once (%s)" % str(said))
+	mate.carried = 0
+	mate.position = Vector3(ARENA) + Vector3(6.5, 0, -6.5)
+	run(m, 0.1)
+	stand_on(m, mate, a, Config.TELE_WAIT + 0.2)
+	check(mate.position.distance_to(Vector3(b) + Vector3(0.5, 0, 0.5)) < 0.3, "without it, off you go")
+	# a blocked exit
+	m.world.set_block(b + Vector3i(0, 1, 0), Blocks.STONE)
+	m.world.set_block(b + Vector3i(0, 0, 0), Blocks.AIR)
+	check(not m.tele_out.has(eng.id) and m.tele_next(eng) == "exit", "a pad dug or built over is gone from the set")
+	# the owner digs a pad back into the pack; anyone else just breaks it
+	eng.position = Vector3(a) + Vector3(-1.5, 0, 0.5)
+	eng.dig_cd = 0.0
+	run(m, 0.1)
+	m.try_dig(eng, a)
+	check(m.world.get_cell(a) == Blocks.AIR and int(eng.gadgets["teleporter"]) == 1 and not m.tele_in.has(eng.id), "your own pad digs straight back into your pack")
+	m.world.set_block(b + Vector3i(0, 1, 0), Blocks.AIR)
+	eng.position = Vector3(a) + Vector3(-1.5, 0, 0.5)
+	run(m, 0.1)
+	m.try_place_gadget(eng, a, "teleporter")
+	m._give_gadget(eng, "teleporter", 1)
+	eng.position = Vector3(b) + Vector3(-1.5, 0, 0.5)
+	run(m, 0.1)
+	m.try_place_gadget(eng, b, "teleporter")
+	check(m.tele_in.get(eng.id) == a and m.tele_out.get(eng.id) == b, "and goes down again")
+	foe.position = Vector3(b) + Vector3(0, 0, -1.5) + Vector3(0.5, 0, 0.5)
+	var hits := 0
+	while m.world.get_cell(b) == Blocks.TELE_OUT_BLUE and hits < 40:
+		foe.dig_cd = 0.0
+		m.try_dig(foe, b)
+		hits += 1
+	check(m.world.get_cell(b) == Blocks.AIR and hits == Config.TRAP_HITS_ENEMY and int(foe.gadgets.get("teleporter", 0)) == 0,
+		"the other team needs %d hits to break one, and gets nothing (%d)" % [Config.TRAP_HITS_ENEMY, hits])
+	said.clear()
+	stand_on(m, mate, a, Config.TELE_CHARGE + 1.0)
+	check(mate.position.distance_to(Vector3(a) + Vector3(0.5, 0, 0.5)) < 0.3 and said.has("No exit yet"), "no exit, no trip")
+	# a lost pad: buying tops the set up, at half price
+	eng.gadgets["teleporter"] = 0
+	eng.position = MapGenerator.spawn_point(0)
+	eng.scrap = 20
+	run(m, 0.2)
+	check(m.try_buy(eng, "teleporter") == "" and int(eng.gadgets["teleporter"]) == 1 and eng.scrap == 12, "a broken pad is replaced for half the set's price")
+	# online: the server moves a remote player (and so corrects their game), and sends the pads
+	eng.position = Vector3(b) + Vector3(-1.5, 0, 0.5)
+	run(m, 0.1)
+	m.try_place_gadget(eng, b, "teleporter")
+	mate.position = Vector3(ARENA) + Vector3(6.5, 0, -6.5)     # (step off: it told us "no exit" last time)
+	run(m, Config.TELE_CHARGE)
+	mate.net_peer = 9
+	mate.position = Vector3(a) + Vector3(0.5, 0, 0.5)
+	mate.vel = Vector3.ZERO
+	var moved := false
+	for i in int((Config.TELE_WAIT + 0.3) / DT):
+		m.step(DT)
+		if Match.net_state(mate) != mate.net_pre:
+			moved = true
+			break
+		mate.position = Vector3(a) + Vector3(0.5, 0, 0.5)   # (their game keeps them standing there)
+	check(moved and mate.position.distance_to(Vector3(b) + Vector3(0.5, 0, 0.5)) < 0.3, "a remote player is sent too, and told so")
+	mate.net_peer = 0
+	var ns := NetServer.new()
+	ns.m = m
+	var snap: Dictionary = ns._snapshot()
+	ns.free()
+	var pads: Array = snap.get("tp", [])
+	check(pads.size() == 2, "the pads go out in each snapshot")
+	var rep := Match.new()
+	rep.auto_step = false
+	add_child(rep)
+	rep.setup({"mode": "race", "seed": 4242, "goal": 3}, false, true)
+	rep.tele_net = pads
+	check(rep.tele_pads().size() == 2 and rep.tele_next(eng) == "", "a player's game knows them (and that the set is out)")
+	remove_child(rep)
+	rep.free()
 	end(m)

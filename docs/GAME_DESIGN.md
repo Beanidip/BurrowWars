@@ -119,6 +119,16 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
   early; your own team's bonks pass through it (everyone's do in the lobby). Your team sees it
   labelled "Wind-up Decoy". Bots can't tell: they chase it like a carrier and bonk it. At most
   8 march at once. It is not a rat: it never scores, raids, picks anything up or takes a seat.
+- **Teleporter Set** (construction, 16 scrap): a one-way pair of floor pads, in the spirit of
+  TF2's. Q puts down the entrance, Q again the exit (each needs a floor; not inside bases).
+  Anyone on the owner's team who stands on a charged entrance for 0.5 s (`Config.TELE_WAIT`)
+  pops out at the exit, which never sends anyone back. Then the entrance recharges for 6 s
+  (`Config.TELE_CHARGE`) and goes dark; a charged one glows with rings rising off it. Cheese
+  can't go through: a carrier is told so and stays put (one message per visit). The other team
+  can't use them, but can see and break them (15 digs, like placed traps; 5 for the owner's
+  team; TNT works too). One set per rat: dig your own pad to pick it up and move it; a third pad
+  can't go down. If one of yours is broken, buying tops you up to a full set at the price per
+  missing pad (8 scrap). With no exit placed, or the exit blocked, the entrance says so.
 - **Squeaker Pad** (trap, 15 scrap): a floor pad. An enemy stepping on it squeaks for everyone
   nearby and drops a beacon only its team sees (8 s). At most one squeak per 2 s; the third
   spends it. Like other placed traps: 5 digs for its team, 15 for anyone else.

@@ -364,6 +364,9 @@ func _process(_delta: float) -> void:
 	if rat.equipped != "":
 		_q_name.text = ClassDefs.GADGET_NAME[rat.equipped]
 		_q_count.text = "unlimited" if m.free_mode else "x%d   (%s: next)" % [int(rat.gadgets.get(rat.equipped, 0)), Inputs.key_name("cycle_gadget")]
+		if rat.equipped == "teleporter":
+			var nxt := m.tele_next(rat)
+			_q_count.text = "Q: %s" % nxt if nxt != "" else "set is out"
 	else:
 		_q_name.text = "empty"
 		_q_count.text = "buy: %s" % Inputs.key_name("workshop")
@@ -419,6 +422,15 @@ func _process(_delta: float) -> void:
 		elif not m.free_mode:
 			extra = "  -  %d / %d hits" % [int(m.world.damage.get(ctl.aim["cell"], 0)), hits]
 		var shown := Blocks.block_name(id)
+		if Blocks.is_teleporter(id):
+			for p: Array in m.tele_pads():
+				if p[0] == ctl.aim["cell"]:
+					var mine := int(p[4]) == rat.id
+					shown = ("Your " if mine else "") + shown
+					if not bool(p[1]) and not bool(p[3]):
+						shown += " (recharging)"
+					if mine:
+						extra = "  -  dig it to pick it up"
 		if Blocks.is_decoy(id):
 			if Blocks.trap_team(id) == rat.team:
 				shown = "Your Cheese Decoy"

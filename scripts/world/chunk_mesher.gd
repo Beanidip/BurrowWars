@@ -159,6 +159,16 @@ static func build_arrays(world: VoxelWorld, k: Vector3i) -> Array:
 						_box(ov, oc, mn + Vector3(0.18, 0.07, 0.18), mn + Vector3(0.82, 0.1, 0.82), col)
 						_box(ov, oc, mn + Vector3(0.38, 0.1, 0.38), mn + Vector3(0.62, 0.24, 0.62), Color(1.0, 0.88, 0.3))
 						_box(ov, oc, mn + Vector3(0.44, 0.24, 0.44), mn + Vector3(0.56, 0.28, 0.56), Color(1.0, 0.96, 0.7))
+					Blocks.TELE_IN_BLUE, Blocks.TELE_IN_RED, Blocks.TELE_OUT_BLUE, Blocks.TELE_OUT_RED:
+						# a round metal pad on three feet, a team-coloured ring; the
+						# entrance's spinner and the exit's glow are drawn by TeleporterView
+						var metal := Color(0.42, 0.42, 0.48) * depth
+						_box(ov, oc, mn + Vector3(0.08, 0, 0.2), mn + Vector3(0.92, 0.1, 0.8), metal)
+						_box(ov, oc, mn + Vector3(0.2, 0, 0.08), mn + Vector3(0.8, 0.1, 0.92), metal)
+						_box(ov, oc, mn + Vector3(0.14, 0.1, 0.26), mn + Vector3(0.86, 0.14, 0.74), col)
+						_box(ov, oc, mn + Vector3(0.26, 0.1, 0.14), mn + Vector3(0.74, 0.14, 0.86), col)
+						var core := Color(0.2, 0.2, 0.24) if Blocks.is_tele_in(id) else col.lightened(0.45)
+						_box(ov, oc, mn + Vector3(0.3, 0.14, 0.3), mn + Vector3(0.7, 0.16, 0.7), core)
 					Blocks.TRAP_BLUE, Blocks.TRAP_RED:
 						_box(ov, oc, mn + Vector3(0.12, 0, 0.12), mn + Vector3(0.88, 0.08, 0.88), Color(0.78, 0.62, 0.38))
 						_box(ov, oc, mn + Vector3(0.2, 0.08, 0.42), mn + Vector3(0.8, 0.16, 0.58), col)

@@ -15,6 +15,7 @@ var _crack: MeshInstance3D
 var _crack_t := 0.0
 var _t := 0.0
 var crumbs: CrumbTrail
+var teleporters: TeleporterView
 
 
 func _ready() -> void:
@@ -22,6 +23,10 @@ func _ready() -> void:
 	crumbs = CrumbTrail.new()
 	crumbs.name = "Crumbs"
 	add_child(crumbs)
+	teleporters = TeleporterView.new()
+	teleporters.name = "Teleporters"
+	teleporters.m = m
+	add_child(teleporters)
 	m.won.connect(func(_team: int) -> void: Sfx.play("team_victory_fanfare", 0.0, 1.0, 0.0))
 	_particle_mat = StandardMaterial3D.new()
 	_particle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -342,6 +347,16 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sound("block_place", pos, 1.5)
 		"crumb":
 			crumbs.add(pos)
+		"tele_place":
+			_sound("block_place", c, 0.8)
+			_float_text(c + Vector3(0, 0.4, 0), String(data), Color(0.75, 0.9, 1.0))
+		"tele_go", "tele_arrive":
+			var team_col: Color = UiKit.TEAM[clampi(int(data), 0, 1)]
+			_sound("teleport", pos, 1.0 if kind == "tele_go" else 1.25, -2.0)
+			_sprite("tele_beam", pos, 0.55, null, -1.0, team_col, false, false, 0.85)
+		"tele_no":
+			_sound("mine_obsidian", pos, 0.8, -4.0)
+			_float_text(pos + Vector3(0, 0.9, 0), String(data), Color(1.0, 0.6, 0.45), 1.3)
 		"windup":
 			_sound("windup", pos, 1.0, -4.0)
 			_sprite("dust", pos, 0.45)

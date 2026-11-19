@@ -11,7 +11,8 @@ enum {
 	PAINT_0, PAINT_1, PAINT_2, PAINT_3, PAINT_4, PAINT_5, PAINT_6, PAINT_7, PAINT_8, PAINT_9, PAINT_10, PAINT_11,
 	PAINT_12, PAINT_13, PAINT_14, PAINT_15, PAINT_16, PAINT_17, PAINT_18, PAINT_19, PAINT_20, PAINT_21, PAINT_22, PAINT_23,
 	PAINT_24, PAINT_25, PAINT_26, PAINT_27, PAINT_28, PAINT_29, PAINT_30, PAINT_31, PAINT_32, PAINT_33, PAINT_34, PAINT_35,
-	STASH_BLUE, STASH_RED, BUBBLE, DECOY_BLUE, DECOY_RED, SQUEAK_BLUE, SQUEAK_RED, COUNT
+	STASH_BLUE, STASH_RED, BUBBLE, DECOY_BLUE, DECOY_RED, SQUEAK_BLUE, SQUEAK_RED,
+	TELE_IN_BLUE, TELE_IN_RED, TELE_OUT_BLUE, TELE_OUT_RED, COUNT
 }
 
 const OBSIDIAN_HITS := 12   # balance knob: ordinary dig hits to break obsidian
@@ -113,6 +114,12 @@ const DEFS := [
 	# Squeaker Pads: an alarm on the floor, Config.SQUEAKER_USES squeaks then gone.
 	["Squeaker Pad", 1, Color(0.36, 0.56, 0.95), false, false, "item:squeaker"],
 	["Squeaker Pad", 1, Color(0.95, 0.40, 0.36), false, false, "item:squeaker"],
+	# Teleporters: a one-way pair of floor pads per rat (Match.tele_*). Walk-through,
+	# like any pad; only the owner gets one back by digging it.
+	["Teleporter Entrance", 1, Color(0.36, 0.56, 0.95), false, false, ""],
+	["Teleporter Entrance", 1, Color(0.95, 0.40, 0.36), false, false, ""],
+	["Teleporter Exit", 1, Color(0.36, 0.56, 0.95), false, false, ""],
+	["Teleporter Exit", 1, Color(0.95, 0.40, 0.36), false, false, ""],
 ]
 
 const PALETTE_SIZE := 36
@@ -228,6 +235,18 @@ static func is_squeaker(id: int) -> bool:
 	return id == SQUEAK_BLUE or id == SQUEAK_RED
 
 
+static func is_teleporter(id: int) -> bool:
+	return id >= TELE_IN_BLUE and id <= TELE_OUT_RED
+
+
+static func is_tele_in(id: int) -> bool:
+	return id == TELE_IN_BLUE or id == TELE_IN_RED
+
+
+static func tele_team(id: int) -> int:
+	return 0 if id == TELE_IN_BLUE or id == TELE_OUT_BLUE else 1
+
+
 static func is_placed_trap(id: int) -> bool:
 	## Traps a player places: tough for the other team, quick for their own.
 	return is_trap(id) or is_sticky(id) or is_pit(id) or id == WALL_SPRING or is_squeaker(id)
@@ -275,5 +294,7 @@ static func rotate180(id: int) -> int:
 		STASH_BLUE: return STASH_RED
 		DECOY_BLUE: return DECOY_RED
 		SQUEAK_BLUE: return SQUEAK_RED
+		TELE_IN_BLUE: return TELE_IN_RED
+		TELE_OUT_BLUE: return TELE_OUT_RED
 	return id
 

@@ -271,6 +271,16 @@ def _(i):
     i.pts([(12, 3), (13, 2), (14, 3), (13, 1), (14, 0)], GOO)
     i.pts([(10, 2), (11, 1), (10, 0)], GOO_L)
 
+@icon("teleporter")
+def _(i):
+    # a round pad with a beam of light rising off it
+    i.rect(2, 12, 13, 14, STEEL_D)
+    i.rect(3, 12, 12, 12, STEEL)
+    i.rect(4, 11, 11, 11, BLUE)
+    i.rect(5, 3, 10, 10, BLUE_L)
+    i.rect(6, 2, 9, 10, WHITE)
+    i.pts([(3, 6), (12, 4), (2, 9), (13, 8), (4, 2), (11, 1)], BLUE_L)
+
 @icon("windup")
 def _(i):
     # a clockwork mouse with a brass key in its back

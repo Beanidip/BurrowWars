@@ -88,6 +88,8 @@ const SHOP := [
 		"desc": "Press J to switch them on or off. While on, stepping off an edge blows a bubble under your feet instead of falling: a bridge as you walk, each bubble 2 scrap, popping after 10 s. Jump to drop off on purpose. One piece of gear at a time."},
 	{"id": "decoy", "name": "Cheese Decoy", "kind": "gadget", "qty": 1, "cost": 12, "cat": "Traps",
 		"desc": "Looks exactly like Golden Cheese - even its name, to the other team. An enemy who digs it gets a face full of stink and is dazed. Single use. Dig your own to take it back."},
+	{"id": "teleporter", "name": "Teleporter Set", "kind": "gadget", "qty": 2, "cost": 16, "max": 2, "cat": "Construction",
+		"desc": "A one-way pair of pads. Q puts down the entrance, then Q again the exit. Your team stands on the entrance for half a second and pops out at the exit; then it recharges for 6 s. Cheese can't go through. One set per rat: dig a pad of yours to pick it up and move it; if one gets broken, buying tops you up for half price."},
 	{"id": "windup", "name": "Wind-up Decoy", "kind": "gadget", "qty": 1, "cost": 14, "cat": "Traps",
 		"desc": "A clockwork rat in your colours, wearing your name and holding a Golden Cheese high. Q sets it marching the way you face: it hops up steps, turns at walls and drops crumbs like a real carrier. An enemy who bonks it gets a TNT blast. Left alone it goes off after 20 s."},
 	{"id": "squeaker", "name": "Squeaker Pad", "kind": "gadget", "qty": 1, "cost": 15, "cat": "Traps",
@@ -100,13 +102,13 @@ const MATS := ["dirt", "stone", "ice", "obsidian"]
 const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "ice": Blocks.ICE, "obsidian": Blocks.OBSIDIAN}
 ## Gadgets that can go inside your own team gate (see Blocks.GATE_GADGETS).
 const GATE_GADGETS := ["ladder", "spring", "highway", "conveyor", "wallspring"]
-const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "decoy", "windup", "squeaker", "gate", "teamblock", "stash", "cannon", "crane", "dozer"]
+const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "decoy", "windup", "squeaker", "gate", "teamblock", "stash", "teleporter", "cannon", "crane", "dozer"]
 const GADGET_NAME := {
 	"ladder": "Ladder", "spring": "Spring", "highway": "Highway", "conveyor": "Conveyor",
 	"trap": "Mouse Trap", "tnt": "TNT", "gate": "Team Gate",
 	"dynamite": "Mobile TNT", "sticky": "Sticky Trap", "pitfall": "Pitfall", "wallspring": "Wall Spring",
 	"cannon": "Scrap Cannon", "crane": "Wrecking Crane", "dozer": "Bulldozer", "teamblock": "Team Block", "stash": "Team Stash",
-	"decoy": "Cheese Decoy", "squeaker": "Squeaker Pad", "windup": "Wind-up Decoy",
+	"decoy": "Cheese Decoy", "squeaker": "Squeaker Pad", "windup": "Wind-up Decoy", "teleporter": "Teleporter",
 }
 
 

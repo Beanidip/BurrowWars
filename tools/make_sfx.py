@@ -2,8 +2,8 @@
 """Placeholder sounds, synthesised so the effects have something to play:
 splash (into or out of water), sizzle (lava), squeak (Squeaker Pad), pop
 (Bubble Shoes bubbles), toot (a Cheese Decoy going off), alarm (a vault
-raid: a soft two-tone chime) and windup (a clockwork key being wound), all
-in assets/sfx/.
+raid: a soft two-tone chime), windup (a clockwork key being wound) and
+teleport (a teleporter sending someone), all in assets/sfx/.
 Drop your own recordings over them (mono or stereo WAV, any rate) any time.
 
     python3 tools/make_sfx.py
@@ -150,6 +150,23 @@ def windup(rng: random.Random) -> np.ndarray:
     return out
 
 
+def teleport(rng: random.Random) -> np.ndarray:
+    """A teleporter sending someone: a rising shimmer that pops shut."""
+    n = int(0.7 * RATE)
+    t = np.arange(n) / RATE
+    out = np.zeros(n)
+    for k, ratio in enumerate((1.0, 1.5, 2.01, 3.02)):
+        f = (320.0 + 1500.0 * (t / 0.7) ** 1.6) * ratio
+        phase = 2 * math.pi * np.cumsum(f) / RATE
+        out += np.sin(phase) * (0.9 / (k + 1)) * (0.6 + 0.4 * np.sin(2 * math.pi * 23 * t + k))
+    env = np.clip(t / 0.05, 0, 1) * np.clip((0.7 - t) / 0.08, 0, 1)
+    air = highpass(np.array([rng.uniform(-1, 1) for _ in range(n)]), 4000) * 0.25 * env
+    out = out * env + air
+    tt = np.arange(int(0.08 * RATE)) / RATE
+    place(out, chirp(tt, 2400, 900, 0.08), 0.62, 0.8)
+    return out
+
+
 def save(name: str, x: np.ndarray) -> None:
     x = x / max(1e-6, float(np.max(np.abs(x)))) * 0.8
     fade = min(len(x), int(0.01 * RATE))
@@ -171,3 +188,4 @@ if __name__ == "__main__":
     save("toot", toot(random.Random(9)))
     save("alarm", alarm(random.Random(1)))
     save("windup", windup(random.Random(13)))
+    save("teleport", teleport(random.Random(17)))

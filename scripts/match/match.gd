@@ -49,6 +49,13 @@ var bubbles: Dictionary = {}         # Vector3i -> seconds before that Bubble Sh
 var squeaks: Dictionary = {}         # Vector3i -> squeaks a Squeaker Pad has left
 var squeak_rest: Dictionary = {}     # Vector3i -> seconds before that pad can squeak again
 var decoys: Dictionary = {}          # Vector3i -> team of a Cheese Decoy there (bots of the other team fall for them)
+# Teleporters: each rat owns at most one entrance and one exit. One way, team only, no cheese.
+var tele_in: Dictionary = {}         # rat id -> cell of its entrance
+var tele_out: Dictionary = {}        # rat id -> cell of its exit
+var tele_owner: Dictionary = {}      # pad cell -> rat id
+var tele_charge: Dictionary = {}     # entrance cell -> seconds until it can send again
+var tele_net: Array = []             # replica: the pads, as the server last sent them (see tele_pads)
+var _tele_wait: Dictionary = {}      # rat id -> seconds stood on a ready entrance (-1: told why not, this visit)
 var guard_t: Array[float] = [0.0, 0.0]   # seconds each team has had a rat standing in its own base, without a break
 ## Each team's shared pool (scrap and building materials), reached at any of
 ## the team's stashes or at base. It survives its stashes being blown up.
@@ -137,6 +144,14 @@ func _on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 		world.set_block(above, Blocks.AIR)
 	gate_damage.erase(cell)
 	trap_owner.erase(cell)
+	if tele_owner.has(cell):   # a teleporter pad dug up, blown up or built over
+		var owner := int(tele_owner[cell])
+		tele_owner.erase(cell)
+		tele_charge.erase(cell)
+		if tele_in.get(owner) == cell:
+			tele_in.erase(owner)
+		if tele_out.get(owner) == cell:
+			tele_out.erase(owner)
 	stash_hits.erase(cell)
 	if not Blocks.is_squeaker(new_id):
 		squeaks.erase(cell)          # a new pad in this cell starts with all its squeaks
@@ -286,6 +301,7 @@ func step(dt: float) -> void:
 			if r.wants_bubble:
 				place_bubble(r, r.bubble_cell)
 		_check_rat_hazards(r, dt)
+		_tele_check(r, dt)
 		_check_raid(r, dt)
 	if lobby:
 		_lobby_step(dt)
@@ -297,6 +313,8 @@ func step(dt: float) -> void:
 				break
 		guard_t[t] = guard_t[t] + dt if guarded else 0.0
 	_step_bubbles(dt)
+	for cell: Vector3i in tele_charge.keys():
+		tele_charge[cell] = maxf(0.0, float(tele_charge[cell]) - dt)
 	for cell: Vector3i in squeak_rest.keys():
 		squeak_rest[cell] = maxf(0.0, float(squeak_rest[cell]) - dt)
 	_step_pickups(dt)
@@ -536,6 +554,11 @@ func try_dig(rat: Rat, cell: Vector3i) -> bool:
 	if Blocks.is_decoy(id):
 		_dig_decoy(rat, cell, id)
 		return true
+	if Blocks.is_teleporter(id) and int(tele_owner.get(cell, -1)) == rat.id:
+		world.set_block(cell, Blocks.AIR)    # your own pad: straight back into your pack
+		_give_gadget(rat, "teleporter", 1)
+		fx.emit("break", Vector3(cell), id)
+		return true
 	if Blocks.is_gate(id):
 		if Blocks.gate_team(id) == rat.team:
 			world.set_block(cell, Blocks.AIR)
@@ -614,8 +637,8 @@ func _spring_beside(cell: Vector3i) -> Variant:
 func hits_for(rat: Rat, cell: Vector3i, id: int) -> int:
 	## Dig hits a block takes from this rat (null = a blast or machine). Placed
 	## traps are quick for their own team to clear and tough for everyone else.
-	if Blocks.is_placed_trap(id):
-		var owner := int(trap_owner.get(cell, Blocks.trap_team(id)))
+	if Blocks.is_placed_trap(id) or Blocks.is_teleporter(id):
+		var owner := int(trap_owner.get(cell, Blocks.tele_team(id) if Blocks.is_teleporter(id) else Blocks.trap_team(id)))
 		return Config.TRAP_HITS_OWN if rat != null and owner >= 0 and rat.team == owner else Config.TRAP_HITS_ENEMY
 	return int(Blocks.HITS[id])
 
@@ -804,6 +827,8 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 		return "Mobile TNT is thrown, not placed"
 	if g == "windup":
 		return "A Wind-up Decoy is set down with Q"
+	if g == "teleporter":
+		return _place_teleporter(rat, cell, reach)
 	if not free_mode and int(rat.gadgets.get(g, 0)) <= 0:
 		return "Out of %s" % ClassDefs.GADGET_NAME[g]
 	var facing := Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
@@ -882,6 +907,105 @@ func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, di
 	if g == "conveyor" and normal.y == 1 and _is_floor_material(aimed):
 		return try_place_gadget(rat, aimed, g, dir, -1.0, true)
 	return try_place_gadget(rat, aimed + normal, g, dir)
+
+
+func _place_teleporter(rat: Rat, cell: Vector3i, reach := -1.0) -> String:
+	## Your first pad is the entrance, the second the exit. One set per rat.
+	if not free_mode and int(rat.gadgets.get("teleporter", 0)) <= 0:
+		return "Out of Teleporters"
+	var exit := tele_in.has(rat.id)
+	if exit and tele_out.has(rat.id):
+		return "You already have a set of teleporters - dig one up to move it"
+	if Blocks.SOLID[world.get_cell(cell + Vector3i(0, -1, 0))] == 0:
+		return "A teleporter needs a floor to stand on"
+	var block := (Blocks.TELE_OUT_BLUE if rat.team == 0 else Blocks.TELE_OUT_RED) if exit \
+		else (Blocks.TELE_IN_BLUE if rat.team == 0 else Blocks.TELE_IN_RED)
+	var why := can_place_at(rat, cell, block, reach)
+	if why != "":
+		return why
+	if not free_mode:
+		rat.gadgets["teleporter"] = int(rat.gadgets["teleporter"]) - 1
+	world.set_block(cell, block)
+	tele_owner[cell] = rat.id
+	if exit:
+		tele_out[rat.id] = cell
+	else:
+		tele_in[rat.id] = cell
+		tele_charge[cell] = 0.0
+	trap_owner[cell] = rat.team
+	rat.play_action("build", 0.3)
+	fx.emit("tele_place", Vector3(cell), "Exit" if exit else "Entrance")
+	return ""
+
+
+func tele_next(rat: Rat) -> String:
+	## Which pad Q puts down next: "entrance", "exit" or "" (a full set is out).
+	var placed_in := false
+	var placed_out := false
+	for p: Array in tele_pads():
+		if int(p[4]) == rat.id:
+			placed_in = placed_in or not bool(p[1])
+			placed_out = placed_out or bool(p[1])
+	if not placed_in:
+		return "entrance"
+	return "exit" if not placed_out else ""
+
+
+func tele_pads() -> Array:
+	## Every teleporter pad: [cell, is_exit, team, ready, owner id]. Online
+	## players get this list in each snapshot (for the view and the HUD).
+	if replica:
+		return tele_net
+	var out: Array = []
+	for cell: Vector3i in tele_owner:
+		var id := world.get_cell(cell)
+		out.append([cell, not Blocks.is_tele_in(id), Blocks.tele_team(id), float(tele_charge.get(cell, 0.0)) <= 0.0,
+			int(tele_owner[cell])])
+	return out
+
+
+func _tele_check(r: Rat, dt: float) -> void:
+	## Stand still on a charged entrance of your team for Config.TELE_WAIT s
+	## and you're sent to its owner's exit. One way; cheese can't come along.
+	var cell := Vector3i(floori(r.position.x), floori(r.position.y + 0.2), floori(r.position.z))
+	var id := world.get_cell(cell)
+	if over or r.flying or not Blocks.is_tele_in(id) or Blocks.tele_team(id) != r.team or not tele_owner.has(cell):
+		_tele_wait.erase(r.id)
+		return
+	var wait := float(_tele_wait.get(r.id, 0.0))
+	if wait < 0.0:
+		return            # already told why not, until they step off
+	var exit: Variant = tele_out.get(int(tele_owner[cell]))
+	var spot := Vector3(cell) + Vector3(0.5, 0.3, 0.5)
+	var why := ""
+	if exit == null:
+		why = "No exit yet"
+	elif r.carried > 0:
+		why = "No cheese through teleporters!"
+	if why != "":
+		_tele_wait[r.id] = -1.0
+		fx.emit("tele_no", spot, why)
+		return
+	if float(tele_charge.get(cell, 0.0)) > 0.0:
+		return            # still recharging: wait on it
+	wait += dt
+	_tele_wait[r.id] = wait
+	if wait < Config.TELE_WAIT:
+		return
+	var to := Vector3(exit) + Vector3(0.5, 0.02, 0.5)
+	if r.blocked_at(to):
+		_tele_wait[r.id] = -1.0
+		fx.emit("tele_no", spot, "The exit is blocked")
+		return
+	siege.release(r)
+	fx.emit("tele_go", r.position, r.team)
+	r.position = to
+	r.vel = Vector3.ZERO
+	r.knock = 0.0
+	r.on_floor = false
+	tele_charge[cell] = Config.TELE_CHARGE
+	_tele_wait[r.id] = -1.0          # step off and back on for the next trip
+	fx.emit("tele_arrive", to, r.team)
 
 
 func _is_floor_material(cell: Vector3i) -> bool:
@@ -1726,6 +1850,20 @@ func try_buy(rat: Rat, item_id: String) -> String:
 	if not can_shop(rat):
 		return "Return to your base to use the workshop"
 	var cost := ClassDefs.price(rat.cls, item_id, free_mode)
+	if item_id == "teleporter" and not free_mode:
+		# one set per rat: buying tops you up to a full set, at the price per missing pad
+		var missing := int(item["qty"]) - int(rat.gadgets.get("teleporter", 0)) - int(tele_in.has(rat.id)) - int(tele_out.has(rat.id))
+		if missing <= 0:
+			return "You already have a set of teleporters"
+		cost = cost * missing / int(item["qty"])
+		if rat.scrap < cost:
+			return "Need %d scrap (you have %d)" % [cost, rat.scrap]
+		rat.scrap -= cost
+		_give_gadget(rat, "teleporter", missing)
+		if rat.equipped == "":
+			rat.equipped = item_id
+		fx.emit("buy", rat.position, item_id)
+		return ""
 	if rat.scrap < cost:
 		return "Need %d scrap (you have %d)" % [cost, rat.scrap]
 	var qty := int(item["qty"])
