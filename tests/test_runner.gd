@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -3838,4 +3838,56 @@ func test_windup_replica() -> void:
 	red.net_peer = 0
 	remove_child(rep)
 	rep.free()
+	end(m)
+
+
+func test_rat_views() -> void:
+	## You can tell which way a rat faces: front, side (mirrored) or back.
+	var away := Vector3(0, 0, -1)          # the rat faces -z...
+	check(RatSprite.pick_view(away, Vector3(0, 0, -1), "side") == "front", "facing the camera: front view")
+	check(RatSprite.pick_view(away, Vector3(0, 0, 1), "side") == "back", "facing away: back view")
+	check(RatSprite.pick_view(away, Vector3(1, 0, 0), "front") == "side", "side on: side view")
+	var edge := Vector3(sin(deg_to_rad(54.0)), 0, -cos(deg_to_rad(54.0)))
+	check(RatSprite.pick_view(away, edge, "front") == "front" and RatSprite.pick_view(away, edge, "side") == "side",
+		"near the boundary it keeps the view it has (no flicker)")
+	for cls: String in ["digger", "scout", "builder", "saboteur"]:
+		for v: String in ["front", "back"]:
+			var ok := ResourceLoader.exists(RatSprite.sheet_path(cls, v))
+			for anim: String in ["idle", "run", "jump"]:
+				for f in int(RatSprite.FRAMES[anim]):
+					ok = ok and RatSprite._frame(cls, 1, anim, f, v) != null
+			check(ok, "%s has a %s view for idle, run and jump" % [cls, v])
+	check(RatSprite._frame("digger", 0, "dig", 0, "front") == null and RatSprite._frame("digger", 0, "dig", 0) != null,
+		"an empty cell falls back to the side view (digging shows the side)")
+	check(RatSprite.sheet_path("maestro", "back") == RatSprite.sheet_path("builder", "back"), "the Maestro wears the Builder's art")
+	# in a scene: the sprite follows the camera
+	var m := new_match()
+	var cam := Camera3D.new()
+	add_child(cam)
+	cam.current = true
+	var r := arena_rat(m, 0, "digger")
+	var sprite := RatSprite.new()
+	sprite.rat = r
+	r.add_child(sprite)
+	cam.global_position = r.position + Vector3(0, 1.0, -5.0)
+	cam.look_at(r.position + Vector3(0, 0.5, 0))
+	r.yaw = 0.0                            # facing -z, toward the camera
+	sprite._process(0.02)
+	check(sprite.view == "front" and sprite.texture != null and not sprite.flip_h, "a rat looking at you shows its face")
+	r.yaw = PI
+	sprite._process(0.02)
+	check(sprite.view == "back", "turned away it shows its back")
+	r.yaw = PI / 2.0                       # facing -x
+	sprite._process(0.02)
+	var left := Vector3(-1, 0, 0).dot(cam.global_transform.basis.x) < 0.0
+	check(sprite.view == "side" and sprite.flip_h == left, "side on it shows its side, mirrored to the way it faces")
+	r.yaw = -PI / 2.0
+	sprite._process(0.02)
+	check(sprite.view == "side" and sprite.flip_h != left, "and the other way round")
+	r.yaw = 0.0
+	r.play_action("dig", 0.3)
+	sprite._process(0.02)
+	check(sprite.view == "front" and sprite.texture == RatSprite._frame("digger", 0, "dig", 0),
+		"digging toward you: the side art (no front dig drawn)")
+	cam.queue_free()
 	end(m)

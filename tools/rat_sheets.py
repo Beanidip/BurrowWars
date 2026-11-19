@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Rat sprite sheets: ONE PNG per class, e.g. assets/rats/digger.png.
 
+That sheet is the SIDE view. assets/rats/<class>_front.png and <class>_back.png
+use exactly the same layout for the rat facing the camera and facing away
+(drawn by tools/rat_views.py); a cell left empty there shows the side view.
+
 Layout (must match RatSprite in scripts/actors/rat_sprite.gd):
   - every cell is 72 x 72 pixels, transparent background, the rat standing on
     the bottom of the cell and facing the viewer's right;

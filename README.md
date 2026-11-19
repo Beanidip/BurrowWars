@@ -70,7 +70,8 @@ All of the game's 2D art is a handful of PNGs you can paint over (Aseprite, Libr
 
 | File | What it is |
 |---|---|
-| `assets/rats/<class>.png` | One sprite sheet per class (digger, scout, builder, saboteur): 72x72 cells, 4 columns, one row per animation (idle, run, jump, dig, attack, hurt, build, use, down). Paint team-coloured parts in **magenta**: the game makes the Blue and Red rats from the one drawing. Layout: `docs/rat_sheet_layout.png`. |
+| `assets/rats/<class>.png` | One sprite sheet per class (digger, scout, builder, saboteur): 72x72 cells, 4 columns, one row per animation (idle, run, jump, dig, attack, hurt, build, use, down). Paint team-coloured parts in **magenta**: the game makes the Blue and Red rats from the one drawing. Layout: `docs/rat_sheet_layout.png`. This is the **side** view (turned to the right; mirrored for the left). |
+| `assets/rats/<class>_front.png`, `<class>_back.png` | The same rat facing you and facing away, same layout, so players can see whether they're being looked at. Drawn by `tools/rat_views.py` for idle, run and jump; any empty cell (digging, bonking...) shows the side view instead. Paint over them or fill in more rows. |
 | `assets/icons/icons.png` | Every gadget, trap, siege, gear, material, tool, ability and menu icon: 16x16 cells, 8 columns. Which icon is where: `docs/icon_sheet_layout.png`. A separate `assets/icons/<id>.png` overrides one icon. |
 | `assets/ui/panel_frame.png` | The menu panel (wood and the blue/red frame), a 9-slice: the outer 22 px on each side are frame and corners, the middle stretches. |
 | `assets/ui/burrow_*.png` | The masthead and the original UI icons. |
@@ -80,6 +81,7 @@ All of the game's 2D art is a handful of PNGs you can paint over (Aseprite, Libr
 Tools: `tools/rat_sheets.py` (`preview` shows your rats in both team colours, `pack`/`unpack`
 convert between sheets and single frames, `guide` redraws the layout picture) and
 `tools/make_icons.py` (regenerates the icon sheet; it overwrites hand edits, so only rerun it to add icons).
+`tools/rat_views.py` redraws the front and back sheets (it overwrites them; `preview DIR` lays the three views side by side).
 `tools/import_fx.py /path/to/pixelfx` re-renders the effect sheets from the [pixelfx](https://github.com/patch-gg/pixelfx)
 library (needs Node 18+; edit its list to swap, recolour or add effects; it overwrites `assets/fx/`), and
 `tools/make_sfx.py` remakes the placeholder `splash`, `sizzle`, `squeak`, `pop` and `toot` sounds.

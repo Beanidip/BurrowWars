@@ -1,12 +1,13 @@
 # Changelog
 
-## Unreleased - Cheese crumbs, Wind-up Decoy
+## Unreleased - Cheese crumbs, Wind-up Decoy, rats seen from the front and back
 
 | Change | Files |
 |---|---|
 | Cheese crumbs: everyone carrying cheese drops a little pile of crumbs on the ground every 1.4 blocks, so a trail leads to them. Everyone sees it; crumbs last 25 s, then shrink away. None in water or mid-air. One MultiMesh draws them all | `match/match.gd`, `match/crumb_trail.gd`, `match/match_view.gd`, `core/config.gd` |
 | Wind-up Decoy (trap, 14 scrap, single use): Q sets down a clockwork rat in your colours, with your class, your name and a Golden Cheese held high. It marches the way you face at a carrier's pace, hops up steps, turns at walls and leaves crumbs. An enemy's bonk sets it off like TNT; left alone it goes off after 20 s (with a "!!" warning); other blasts, lava and enemy mouse traps set it off early. Your team sees it labelled "Wind-up Decoy". Its body is an ordinary rat body outside the rat list, so it moves by the same rules but never scores, raids or takes a seat. Sent to online players in each snapshot; their bonks are checked by the server | `match/windup.gd`, `match/match.gd`, `match/class_defs.gd`, `actors/player_controller.gd`, `actors/rat_sprite.gd`, `match/game_session.gd`, `net/net_server.gd`, `net/net_client.gd` |
 | Bots run after an enemy hauling cheese within 10 blocks (at about their height) when their own paws are empty, so they fall for Wind-up Decoys too and bonk them | `actors/bot_brain.gd` |
+| Rats have a front and a back view as well as the side view, so you can see whether someone is looking at you: a rat facing your camera shows its face (both eyes, nose, whiskers), one facing away shows the back of its head and its tail, and side on it shows its side, now mirrored to whichever way it faces (it always faced right before). Your own rat is seen from behind. Idle, run and jump are drawn for every class (`assets/rats/<class>_front.png`, `_back.png`, made by `tools/rat_views.py`); other animations show the side view | `actors/rat_sprite.gd`, `tools/rat_views.py`, `assets/rats/` |
 | Wind-up icon and a ratchet sound (`assets/sfx/windup.wav`); new loading-screen tips. Network protocol 9 | `tools/make_icons.py`, `tools/make_sfx.py`, `ui/loading_screen.gd`, `net/net.gd` |
 
 ## 2.1.0 - Knight shield, bubble shoes, decoys, loading screen, scrap texture (2026-11-18)
