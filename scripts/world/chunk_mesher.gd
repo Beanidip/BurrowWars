@@ -46,6 +46,11 @@ static func build_arrays(world: VoxelWorld, k: Vector3i) -> Array:
 	var textured := BlockTextures.flags()
 	var colors := Blocks.COLOR      # local copies: worker threads meshing side by side don't fight over the shared tables
 	var tex: Dictionary = {}     # block id -> [vertices, colours, uvs] for textured faces
+	# Plain block faces are not emitted one by one: they go into a mask per face
+	# direction and slice, and identical neighbours are merged into one quad at
+	# the end (terrain.gdshader adds back each block's own shading).
+	var gm := PackedInt32Array()
+	gm.resize(6 * 4096)
 	var layered := not world.gates.is_empty()
 	for y in range(y0, y0 + VoxelWorld.CHUNK):
 		var depth := clampf(0.58 + 0.42 * float(y) / 28.0, 0.58, 1.0)
@@ -79,8 +84,6 @@ static func build_arrays(world: VoxelWorld, k: Vector3i) -> Array:
 					_micro_block(world, ov, oc, Vector3i(x, y, z), id, tint * depth)
 					continue
 				if opaque[id] == 1:
-					var glow := id == Blocks.CHEESE or Blocks.is_decoy(id) or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED or Blocks.is_team_block(id) or Blocks.is_paint(id)
-					var base := col * (tint if glow else tint * depth)
 					for f in 6:
 						var ax: int = x + NX[f]
 						var ay: int = y + NY[f]
@@ -94,19 +97,16 @@ static func build_arrays(world: VoxelWorld, k: Vector3i) -> Array:
 							continue  # world edge walls are never visible
 						if opaque[nid] == 1 and mf[ax + sx * (az + sz * ay)] == 0:
 							continue
-						var c := base
-						if id == Blocks.GRASS and f != 2:
-							c = colors[Blocks.DIRT] * tint * depth
 						if textured[id] == 1:
 							if not tex.has(id):
 								tex[id] = [PackedVector3Array(), PackedColorArray(), PackedVector2Array()]
 							var shade: float = tint * depth * float(SHADE[f])
 							_face(tex[id][0], tex[id][1], mn, mn + Vector3.ONE, f, Color(shade, shade, shade))
 							_face_uv(tex[id][2], f, ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ (f * 2654435761)) >> 4 & 7)
-						elif id == Blocks.STONE or id == Blocks.OBSIDIAN or id == Blocks.BRICK:
-							_rocky_face(ov, oc, mn, f, _shade(c, SHADE[f]), id, x * 7 + y * 13 + z * 29 + f)
 						else:
-							_face(ov, oc, mn, mn + Vector3.ONE, f, _shade(c, SHADE[f]))
+							# grass sides are dirt, so they merge with dirt
+							var key_id: int = Blocks.DIRT if id == Blocks.GRASS and f != 2 else id
+							gm[_gidx(f, x - x0, y - y0, z - z0)] = key_id + 1
 					if id == Blocks.WALL_SPRING:
 						for wf in [0, 1, 4, 5]:
 							var o: Vector3 = Vector3(NX[wf], 0, NZ[wf]) * 0.045
@@ -173,9 +173,12 @@ static func build_arrays(world: VoxelWorld, k: Vector3i) -> Array:
 						_box(ov, oc, mn + Vector3(0.12, 0, 0.12), mn + Vector3(0.88, 0.08, 0.88), Color(0.78, 0.62, 0.38))
 						_box(ov, oc, mn + Vector3(0.2, 0.08, 0.42), mn + Vector3(0.8, 0.16, 0.58), col)
 						_box(ov, oc, mn + Vector3(0.42, 0.08, 0.6), mn + Vector3(0.58, 0.2, 0.76), Color(1.0, 0.85, 0.2))
+	var ou := PackedVector2Array()
+	ou.resize(ov.size())          # everything so far is shaded as given (mode 0)
+	_emit_merged(gm, ov, oc, ou, x0, y0, z0, colors)
 	var out: Array = []
 	if not ov.is_empty():
-		out.append([ov, oc, PackedVector2Array(), -1])
+		out.append([ov, oc, ou, -1])
 	for tid: int in tex:
 		out.append([tex[tid][0], tex[tid][1], tex[tid][2], tid])
 	if not tv.is_empty():
@@ -278,6 +281,74 @@ static func _liquid_cell(d: PackedByteArray, x: int, y: int, z: int, id: int, v:
 			c.append(shade.call(f))
 
 
+static func _gidx(f: int, lx: int, ly: int, lz: int) -> int:
+	## Mask index for a face: direction, slice along it, then the two in-plane axes.
+	if f < 2:
+		return f * 4096 + lx * 256 + ly * 16 + lz
+	if f < 4:
+		return f * 4096 + ly * 256 + lz * 16 + lx
+	return f * 4096 + lz * 256 + ly * 16 + lx
+
+
+static func shade_mode(id: int) -> int:
+	## How terrain.gdshader finishes a merged face of this block (see there).
+	if id == Blocks.STONE or id == Blocks.BRICK:
+		return 3
+	if id == Blocks.OBSIDIAN:
+		return 4
+	if id == Blocks.CHEESE or Blocks.is_decoy(id) or id == Blocks.GLOW or id == Blocks.BASE_BLUE or id == Blocks.BASE_RED \
+			or Blocks.is_team_block(id) or Blocks.is_paint(id):
+		return 2
+	return 1
+
+
+static func _emit_merged(gm: PackedInt32Array, v: PackedVector3Array, c: PackedColorArray, uv: PackedVector2Array,
+		x0: int, y0: int, z0: int, colors: Array[Color]) -> void:
+	## Greedy meshing: each run of identical faces in a slice becomes one quad.
+	for f in 6:
+		for slice in 16:
+			var off := f * 4096 + slice * 256
+			for b in 16:
+				var a := 0
+				while a < 16:
+					var key := gm[off + b * 16 + a]
+					if key == 0:
+						a += 1
+						continue
+					var w := 1
+					while a + w < 16 and gm[off + b * 16 + a + w] == key:
+						w += 1
+					var h := 1
+					var grow := true
+					while grow and b + h < 16:
+						for i in w:
+							if gm[off + (b + h) * 16 + a + i] != key:
+								grow = false
+								break
+						if grow:
+							h += 1
+					for hh in h:
+						for i in w:
+							gm[off + (b + hh) * 16 + a + i] = 0
+					var mn: Vector3
+					var mx: Vector3
+					if f < 2:      # slice x; a = z, b = y
+						mn = Vector3(x0 + slice, y0 + b, z0 + a)
+						mx = Vector3(x0 + slice + 1, y0 + b + h, z0 + a + w)
+					elif f < 4:    # slice y; a = x, b = z
+						mn = Vector3(x0 + a, y0 + slice, z0 + b)
+						mx = Vector3(x0 + a + w, y0 + slice + 1, z0 + b + h)
+					else:          # slice z; a = x, b = y
+						mn = Vector3(x0 + a, y0 + b, z0 + slice)
+						mx = Vector3(x0 + a + w, y0 + b + h, z0 + slice + 1)
+					var id := key - 1
+					_face(v, c, mn, mx, f, _shade(colors[id], SHADE[f]))
+					var tag := Vector2(shade_mode(id), f)
+					for i in 6:
+						uv.append(tag)
+					a += w
+
+
 static func _shade(c: Color, s: float) -> Color:
 	return Color(c.r * s, c.g * s, c.b * s, c.a)
 
@@ -355,22 +426,6 @@ static func _face_uv(uv: PackedVector2Array, f: int, variant := 0) -> void:
 		q[i] = p + Vector2(0.5, 0.5)
 	uv.append(q[0]); uv.append(q[2]); uv.append(q[1])
 	uv.append(q[0]); uv.append(q[3]); uv.append(q[2])
-
-
-static func _rocky_face(v: PackedVector3Array, c: PackedColorArray, mn: Vector3, f: int, col: Color, id: int, seed_i: int) -> void:
-	## Stone, brick and obsidian get a chunky 2x2 mottled face so they read as
-	## rock; obsidian picks up the occasional purple glint.
-	var u := Vector3(0, 0, 0.5) if f < 2 else Vector3(0.5, 0, 0)
-	var w := Vector3(0, 0.5, 0) if f != 2 and f != 3 else Vector3(0, 0, 0.5)
-	var flat := Vector3(NX[f], NY[f], NZ[f]).abs()
-	for i in 4:
-		var h := float(((seed_i + i * 37) * 2654435761) >> 8 & 255) / 255.0
-		var k := 0.86 + 0.26 * h
-		var tile := Color(col.r * k, col.g * k, col.b * k)
-		if id == Blocks.OBSIDIAN and h > 0.72:
-			tile = Color(col.r * 1.9 + 0.08, col.g * 1.1, col.b * 2.1 + 0.1)
-		var a := mn + u * float(i % 2) + w * float(i / 2)
-		_face(v, c, a, a + u + w + flat, f, tile)
 
 
 static func _micro_block(world: VoxelWorld, v: PackedVector3Array, c: PackedColorArray, cell: Vector3i, id: int, shade: float) -> void:

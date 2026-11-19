@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4253,5 +4253,61 @@ func test_threaded_remesh() -> void:
 	check(got == expect and got != before, "the final mesh includes both edits (%d -> %d vertices)" % [before, got])
 	check(worst_us < 8000, "the main thread never meshes: worst frame %.2f ms" % (worst_us / 1000.0))
 	print("    remesh: start %.2f ms, worst frame %.2f ms, %d frames" % [start_us / 1000.0, worst_us / 1000.0, frames])
+	remove_child(w)
+	w.free()
+
+
+func test_merged_terrain_faces() -> void:
+	## Plain block faces are merged into big quads: the same surface area,
+	## far fewer triangles, each tagged for terrain.gdshader.
+	var w := VoxelWorld.new()
+	w.visual = false
+	add_child(w)
+	var k := Vector3i(2, 1, 2)
+	var o := k * VoxelWorld.CHUNK
+	for x in 16:
+		for z in 16:
+			for y in 6:
+				var id := Blocks.STONE if y < 3 else Blocks.DIRT
+				if y == 5:
+					id = Blocks.GRASS
+				w.set_raw(o.x + x, o.y + y, o.z + z, id)
+	w.set_raw(o.x + 4, o.y + 6, o.z + 4, Blocks.CHEESE)
+	w.set_raw(o.x + 9, o.y + 6, o.z + 9, Blocks.OBSIDIAN)
+	w.set_raw(o.x + 12, o.y + 6, o.z + 3, Blocks.STONE)
+	# count every exposed face of every block, the old way
+	var faces := 0
+	for x in 16:
+		for y in 16:
+			for z in 16:
+				var c := o + Vector3i(x, y, z)
+				var id := w.get_cell(c)
+				if id == Blocks.AIR:
+					continue
+				for f in 6:
+					var n := c + Vector3i(ChunkMesher.NX[f], ChunkMesher.NY[f], ChunkMesher.NZ[f])
+					if n.y < 0 or not VoxelWorld.in_bounds(n):
+						continue
+					if Blocks.OPAQUE[w.get_cell(n)] == 0:
+						faces += 1
+	var area := 0.0
+	var tris := 0
+	var modes := {}
+	for surf: Array in ChunkMesher.build_arrays(w, k):
+		if int(surf[3]) != -1:
+			continue
+		var v: PackedVector3Array = surf[0]
+		var uv: PackedVector2Array = surf[2]
+		check(uv.size() == v.size(), "every opaque vertex carries a shading tag")
+		for i in range(0, v.size(), 3):
+			if uv[i].x < 0.5:
+				continue
+			tris += 1
+			area += (v[i + 1] - v[i]).cross(v[i + 2] - v[i]).length() * 0.5
+			modes[int(uv[i].x)] = true
+	check(absf(area - float(faces)) < 0.01, "merged quads cover exactly the exposed faces (%.0f vs %d)" % [area, faces])
+	check(tris * 4 < faces * 2, "with far fewer triangles (%d instead of %d)" % [tris, faces * 2])
+	check(modes.has(1) and modes.has(2) and modes.has(3) and modes.has(4),
+		"dirt and grass, cheese, stone and obsidian each get their own shading (%s)" % str(modes.keys()))
 	remove_child(w)
 	w.free()

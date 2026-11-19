@@ -52,7 +52,8 @@ var _job_keys: Array[Vector3i] = []
 var _job_results: Array = []
 var _job_lock := Mutex.new()
 var _job_snap: VoxelWorld
-var _mat_opaque: StandardMaterial3D
+const TERRAIN_SHADER := preload("res://assets/shaders/terrain.gdshader")
+var _mat_opaque: ShaderMaterial
 var _mat_trans: StandardMaterial3D
 
 
@@ -63,9 +64,8 @@ func _init(allocate := true) -> void:
 
 
 func _ready() -> void:
-	_mat_opaque = StandardMaterial3D.new()
-	_mat_opaque.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_mat_opaque.vertex_color_use_as_albedo = true
+	_mat_opaque = ShaderMaterial.new()      # merged faces get their per-block shading here
+	_mat_opaque.shader = TERRAIN_SHADER
 	_mat_trans = StandardMaterial3D.new()
 	_mat_trans.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat_trans.vertex_color_use_as_albedo = true
