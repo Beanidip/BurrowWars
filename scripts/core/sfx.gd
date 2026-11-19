@@ -26,6 +26,16 @@ func _ready() -> void:
 	_music.finished.connect(_music.play)
 
 
+func _exit_tree() -> void:
+	# closing: stop and let go of every stream so nothing is left playing
+	_music.stop()
+	_music.stream = null
+	for p in _players:
+		p.stop()
+		p.stream = null
+	_cache.clear()
+
+
 func play(sound: String, volume_db := 0.0, pitch := 1.0, jitter := 0.08) -> void:
 	var stream := _load(DIR + sound + ".wav")
 	if stream == null:

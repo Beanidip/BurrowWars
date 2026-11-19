@@ -34,6 +34,12 @@ static var _cache: Dictionary = {}
 static var _sheets: Dictionary = {}   # "path:team" -> team-coloured sheet
 static var _filled: Dictionary = {}   # path -> {Vector2i(column, row): true} for cells with something drawn
 
+
+static func clear_caches() -> void:
+	_cache.clear()
+	_sheets.clear()
+	_filled.clear()
+
 var rat: Rat
 var celebrate := false
 var tag_shown := true            # the session hides enemy names you cannot see

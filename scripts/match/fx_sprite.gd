@@ -16,6 +16,10 @@ const PX := 0.9 / 38.0
 const HUE_SHADER := preload("res://assets/shaders/fx_hue.gdshader")
 static var _tex: Dictionary = {}
 
+
+static func clear_cache() -> void:
+	_tex.clear()
+
 var sheet: Dictionary
 var follow: Node3D
 var follow_offset := Vector3.ZERO

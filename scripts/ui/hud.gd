@@ -36,7 +36,6 @@ var _stash_labels: Dictionary = {}   # resource -> Label in the stash section
 var _q_count: Label
 var _status: Label
 var _cheese_row: HBoxContainer
-var _abilities: Label
 var _bottom: VBoxContainer      # target line, stamina and the hotbar, centred at the bottom
 var _hotbar: HBoxContainer
 var _side_panels: Array[Control] = []   # the corner panels; lifted above the hotbar when it would run under them
@@ -277,7 +276,6 @@ func _build_bottom() -> void:
 	var rv := VBoxContainer.new()
 	rv.add_theme_constant_override("separation", 2)
 	right.add_child(rv)
-	_abilities = UiKit.label("", 15)
 	_ability_box = VBoxContainer.new()
 	_ability_box.add_theme_constant_override("separation", 2)
 	rv.add_child(_ability_box)
@@ -822,7 +820,20 @@ func _fill_pause(v: VBoxContainer) -> void:
 	if not m.replica:   # offline or hosting: you hold the real map
 		h.add_child(UiKit.button("Export map", export_map, Vector2(180, 44)))
 	h.add_child(UiKit.button("Quit to menu", _exit, Vector2(180, 44)))
+	if not OS.has_feature("web"):   # (a browser tab has no desktop to quit to)
+		var quit := UiKit.button("Quit game", func() -> void: pass, Vector2(180, 44))
+		quit.pressed.connect(_quit_pressed.bind(quit))
+		h.add_child(quit)
 	v.add_child(h)
+
+
+func _quit_pressed(button: Button) -> void:
+	## Asks once: the first press arms it, the second quits to the desktop.
+	if button.text != "Really quit?":
+		button.text = "Really quit?"
+		return
+	get_tree().paused = false
+	get_tree().quit()
 
 
 func export_map() -> String:

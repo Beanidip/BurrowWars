@@ -562,23 +562,31 @@ func _exit_tree() -> void:
 func save_to(path: String, extra: Dictionary = {}) -> bool:
 	## Format: header, sizes, zstd block data, then one Variant holding the
 	## carved-block masks and any extra state (siege machines).
+	## Written to a temporary file first and swapped in, so a crash mid-save
+	## never leaves a broken map.
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f == null:
-		Log.warn("map save failed: %s (error %d)" % [path, FileAccess.get_open_error()])
-		return false
-	f.store_pascal_string(SAVE_MAGIC)
-	f.store_32(SX)
-	f.store_32(SY)
-	f.store_32(SZ)
-	var packed := data.compress(FileAccess.COMPRESSION_ZSTD)
-	f.store_32(packed.size())
-	f.store_buffer(packed)
 	var masks := {}
 	for c: Vector3i in micro:
 		masks[c.x + SX * (c.z + SZ * c.y)] = micro[c]
-	f.store_var({"micro": masks, "gates": _gates_by_index(), "extra": extra}, false)
-	f.close()
+	var tail := {"micro": masks, "gates": _gates_by_index(), "extra": extra}
+	var err := Config.write_atomic(path, func(tmp: String) -> int:
+		var f := FileAccess.open(tmp, FileAccess.WRITE)
+		if f == null:
+			return FileAccess.get_open_error()
+		f.store_pascal_string(SAVE_MAGIC)
+		f.store_32(SX)
+		f.store_32(SY)
+		f.store_32(SZ)
+		var packed := data.compress(FileAccess.COMPRESSION_ZSTD)
+		f.store_32(packed.size())
+		f.store_buffer(packed)
+		f.store_var(tail, false)
+		var bad := f.get_error()
+		f.close()
+		return bad)
+	if err != OK:
+		Log.warn("map save failed: %s (error %d)" % [path, err])
+		return false
 	return true
 
 

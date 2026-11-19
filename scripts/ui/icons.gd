@@ -12,6 +12,10 @@ const SHEET := "res://assets/icons/icons.png"
 static var _cache: Dictionary = {}
 
 
+static func clear_cache() -> void:
+	_cache.clear()
+
+
 static func tex(id: String) -> Texture2D:
 	if id == "":
 		return null

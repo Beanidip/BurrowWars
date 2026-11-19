@@ -144,10 +144,26 @@ func set_key(action: String, keycode: int) -> void:
 	_cfg.set_value("keys", action, keycode)
 
 
+const SETTINGS_VERSION := 1
+
+
 func save() -> void:
-	var err := _cfg.save(PATH)
+	_cfg.set_value("meta", "version", SETTINGS_VERSION)
+	var err := write_atomic(PATH, func(tmp: String) -> int: return _cfg.save(tmp))
 	if err != OK:
 		Log.warn("could not save settings (error %d)" % err)
+
+
+static func write_atomic(path: String, writer: Callable) -> int:
+	## Write to `path.tmp`, then swap it in, so a crash or power cut mid-save
+	## leaves the old file intact instead of a half-written one. `writer`
+	## takes the temporary path and returns an Error.
+	var tmp := path + ".tmp"
+	var err: int = writer.call(tmp)
+	if err != OK:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+		return err
+	return DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(path))
 
 
 func apply_audio() -> void:

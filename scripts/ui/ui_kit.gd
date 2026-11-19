@@ -16,6 +16,11 @@ const TEAM := [Color(0.35, 0.58, 0.98), Color(0.95, 0.38, 0.33)]
 static var _theme: Theme
 static var _panel_style: StyleBoxTexture
 
+
+static func clear_cache() -> void:
+	_theme = null
+	_panel_style = null
+
 const PANEL_TEX := 256       # generated texture size
 const PANEL_EDGE := 22       # 9-slice margin (border + rounded corner)
 const PANEL_RADIUS := 14.0

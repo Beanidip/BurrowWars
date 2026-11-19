@@ -13,6 +13,10 @@ static var _flags := PackedByteArray()
 static var _mats: Dictionary = {}       # block id -> StandardMaterial3D
 
 
+static func clear_cache() -> void:
+	_mats.clear()
+
+
 static func flags() -> PackedByteArray:
 	## One byte per block id: 1 when that block has a texture.
 	if _flags.is_empty():

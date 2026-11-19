@@ -139,7 +139,8 @@ func _show_home() -> void:
 	col.add_child(Icons.on_button(UiKit.button("How to Play", _show_help, Vector2(320, 44)), "book"))
 	col.add_child(Icons.on_button(UiKit.button("Settings & Controls", _show_settings, Vector2(320, 44)), "gear"))
 	col.add_child(Icons.on_button(UiKit.button("Credits & Licences", _show_credits, Vector2(320, 44)), "book"))
-	col.add_child(Icons.on_button(UiKit.button("Quit", func() -> void: get_tree().quit(), Vector2(320, 44)), "door"))
+	if not OS.has_feature("web"):
+		col.add_child(Icons.on_button(UiKit.button("Quit", func() -> void: get_tree().quit(), Vector2(320, 44)), "door"))
 	if _message != "":
 		var msg := UiKit.wrapped(_message, 15, UiKit.TEAM[1].lightened(0.3))
 		msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

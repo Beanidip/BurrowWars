@@ -28,6 +28,17 @@ func _ready() -> void:
 	show_menu()
 
 
+func _exit_tree() -> void:
+	# The game is closing: let go of the shared texture and map caches, so the
+	# engine shuts down cleanly instead of reporting them as leaked.
+	RatSprite.clear_caches()
+	Icons.clear_cache()
+	FxSprite.clear_cache()
+	BlockTextures.clear_cache()
+	UiKit.clear_cache()
+	MapGenerator.clear_cache()
+
+
 func show_menu(message := "") -> void:
 	_clear()
 	if Net.is_online():

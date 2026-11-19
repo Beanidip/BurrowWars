@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4311,3 +4311,35 @@ func test_merged_terrain_faces() -> void:
 		"dirt and grass, cheese, stone and obsidian each get their own shading (%s)" % str(modes.keys()))
 	remove_child(w)
 	w.free()
+
+
+func test_safe_saves_and_exit() -> void:
+	## Saves go to a temporary file first and are swapped in whole.
+	var path := "user://test_atomic.cfg"
+	var cfg := ConfigFile.new()
+	cfg.set_value("a", "b", 42)
+	check(Config.write_atomic(path, func(tmp: String) -> int: return cfg.save(tmp)) == OK, "an atomic write succeeds")
+	var back := ConfigFile.new()
+	check(back.load(path) == OK and int(back.get_value("a", "b", 0)) == 42, "and the file reads back")
+	check(not FileAccess.file_exists(path + ".tmp"), "with no temporary file left behind")
+	# a failing writer leaves the old file untouched
+	check(Config.write_atomic(path, func(_tmp: String) -> int: return ERR_CANT_CREATE) != OK, "a failed write reports an error")
+	back = ConfigFile.new()
+	check(back.load(path) == OK and int(back.get_value("a", "b", 0)) == 42, "and the old file survives it")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	# maps too
+	var m := new_match()
+	var map_path := "user://maps/test_atomic.bwmap"
+	check(m.world.save_to(map_path), "a map saves")
+	check(VoxelWorld.file_ok(map_path) and not FileAccess.file_exists(map_path + ".tmp"), "whole, with no temporary file left")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(map_path))
+	end(m)
+	# the shared caches can be emptied at exit and fill again on demand
+	check(Icons.tex("cheese") != null, "icons load")
+	RatSprite.clear_caches()
+	Icons.clear_cache()
+	FxSprite.clear_cache()
+	BlockTextures.clear_cache()
+	UiKit.clear_cache()
+	check(Icons.tex("cheese") != null and RatSprite._frame("digger", 0, "idle", 0) != null and UiKit.theme() != null,
+		"after clearing, everything loads again")

@@ -35,6 +35,10 @@ const CAVE_LAVA_Y := 4             # cave cells this deep fill with lava
 static var _cache: Dictionary = {}   # seed -> [data, points of interest]
 
 
+static func clear_cache() -> void:
+	_cache.clear()
+
+
 # ---------------------------------------------------------------- geometry
 
 static func rot_cell(c: Vector3i) -> Vector3i:
