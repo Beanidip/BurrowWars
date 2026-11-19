@@ -14,11 +14,14 @@ var _music: AudioStreamPlayer
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	Config.apply_audio()   # makes sure the Music and SFX buses exist
 	for i in POOL:
 		var p := AudioStreamPlayer.new()
+		p.bus = "SFX"
 		add_child(p)
 		_players.append(p)
 	_music = AudioStreamPlayer.new()
+	_music.bus = "Music"
 	add_child(_music)
 	_music.finished.connect(_music.play)
 
@@ -40,12 +43,12 @@ func play_music(path: String) -> void:
 	if stream == null:
 		return
 	_music.stream = stream
-	_music.volume_db = linear_to_db(maxf(float(Config.get_value("music_volume")), 0.0001))
 	_music.play()
 
 
 func set_music_volume(v: float) -> void:
-	_music.volume_db = linear_to_db(maxf(v, 0.0001))
+	## (The Music bus carries the volume; Config holds the value.)
+	Config.apply_audio()
 	_music.stream_paused = v <= 0.001
 
 

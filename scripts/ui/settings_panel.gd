@@ -11,11 +11,27 @@ var _notice: Label
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 8)
+	add_child(UiKit.label("Display", 18, UiKit.BRASS))
+	if Config.display_supported():
+		_choice_row("Window", "window_mode", Config.WINDOW_MODES, ["Windowed", "Fullscreen", "Exclusive fullscreen"])
+		var vs := CheckBox.new()
+		vs.text = "V-Sync (no tearing; caps the frame rate at the screen's)"
+		vs.button_pressed = bool(Config.get_value("vsync"))
+		vs.toggled.connect(func(on: bool) -> void: _store("vsync", on))
+		add_child(vs)
+	var fps_names: Array = []
+	for cap: int in Config.FPS_CAPS:
+		fps_names.append("No limit" if cap == 0 else "%d fps" % cap)
+	_choice_row("Frame rate limit", "max_fps", Config.FPS_CAPS, fps_names)
+	_slider_row("3D resolution (lower is faster; the HUD stays sharp)", "render_scale", 0.5, 1.0, 0.05)
+	add_child(UiKit.label("Audio", 18, UiKit.BRASS))
+	_slider_row("Master volume", "master_volume", 0.0, 1.0, 0.01)
+	_slider_row("Music volume", "music_volume", 0.0, 1.0, 0.01)
+	_slider_row("Sound effects volume", "sfx_volume", 0.0, 1.0, 0.01)
+	add_child(UiKit.label("Mouse & camera", 18, UiKit.BRASS))
 	_slider_row("Mouse sensitivity", "mouse_sensitivity", 0.0005, 0.008, 0.0001)
 	_slider_row("Field of view", "fov", 60.0, 110.0, 1.0)
 	_slider_row("Third-person camera distance", "camera_distance", 2.0, 7.0, 0.1)
-	_slider_row("Master volume", "master_volume", 0.0, 1.0, 0.01)
-	_slider_row("Music volume", "music_volume", 0.0, 1.0, 0.01)
 	var inv := CheckBox.new()
 	inv.text = "Invert mouse Y"
 	inv.button_pressed = bool(Config.get_value("invert_y"))
@@ -48,12 +64,24 @@ func _slider_row(text: String, key: String, lo: float, hi: float, step: float) -
 	add_child(UiKit.row(UiKit.label(text, 15), s))
 
 
+func _choice_row(text: String, key: String, values: Array, names: Array) -> void:
+	var pick := OptionButton.new()
+	for i in names.size():
+		pick.add_item(String(names[i]), i)
+	pick.selected = maxi(0, values.find(Config.get_value(key)))
+	pick.custom_minimum_size = Vector2(220, 32)
+	pick.item_selected.connect(func(i: int) -> void: _store(key, values[i]))
+	add_child(UiKit.row(UiKit.label(text, 15), pick))
+
+
 func _store(key: String, value: Variant) -> void:
 	Config.set_value(key, value)
 	Config.save()
 	Config.apply_audio()
 	if key == "music_volume":
 		Sfx.set_music_volume(float(value))
+	if key in ["window_mode", "vsync", "max_fps", "render_scale"]:
+		Config.apply_display()
 	changed.emit()
 
 

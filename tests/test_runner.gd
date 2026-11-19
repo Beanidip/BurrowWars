@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4157,3 +4157,50 @@ func test_credits_and_licences() -> void:
 	check(t.contains("pixelfx") and t.contains("Permission is hereby granted"), "pixelfx's MIT licence is in the credits")
 	check(not t.contains("licence file missing"), "the pixelfx licence file is packed with the game")
 	check(t.contains(String(ProjectSettings.get_setting("application/config/version"))), "and the game version")
+
+
+func test_display_and_audio_settings() -> void:
+	## Music and sound effects have their own buses and sliders; display
+	## settings apply without a window (headless) and are stored like the rest.
+	var keep := {}
+	for k: String in ["sfx_volume", "music_volume", "max_fps", "render_scale"]:
+		keep[k] = Config.get_value(k)
+	Config.apply_audio()
+	check(AudioServer.get_bus_index("Music") > 0 and AudioServer.get_bus_index("SFX") > 0, "Music and SFX buses exist")
+	check(AudioServer.get_bus_send(AudioServer.get_bus_index("SFX")) == &"Master", "and feed the master bus")
+	Config.set_value("sfx_volume", 0.25)
+	Config.set_value("music_volume", 0.0)
+	Config.apply_audio()
+	var sfx := AudioServer.get_bus_index("SFX")
+	check(absf(AudioServer.get_bus_volume_db(sfx) - linear_to_db(0.25)) < 0.01, "the SFX slider sets the SFX bus")
+	check(AudioServer.is_bus_mute(AudioServer.get_bus_index("Music")), "music at zero mutes the music bus")
+	var sfx_players := 0
+	var music_players := 0
+	for c in Sfx.get_children():
+		if c is AudioStreamPlayer:
+			if (c as AudioStreamPlayer).bus == &"SFX":
+				sfx_players += 1
+			elif (c as AudioStreamPlayer).bus == &"Music":
+				music_players += 1
+	check(sfx_players >= 8 and music_players == 1, "sound effects and music play on their own buses")
+	Config.set_value("max_fps", 60)
+	Config.set_value("render_scale", 0.7)
+	Config.apply_display()
+	check(Engine.max_fps == 60 and absf(get_tree().root.scaling_3d_scale - 0.7) < 0.01, "frame cap and 3D resolution apply")
+	check(not Config.display_supported(), "(headless: no window to change, and nothing breaks)")
+	var panel := SettingsPanel.new()
+	add_child(panel)
+	var texts: Array[String] = []
+	var stack: Array[Node] = [panel]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is Label:
+			texts.append((n as Label).text)
+		stack.append_array(n.get_children())
+	check(texts.has("Sound effects volume") and texts.has("Frame rate limit") and texts.has("Display"),
+		"the settings panel has the display and audio rows")
+	panel.queue_free()
+	for k: String in keep:
+		Config.set_value(k, keep[k])
+	Config.apply_audio()
+	Config.apply_display()

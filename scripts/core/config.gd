@@ -84,6 +84,11 @@ const DEFAULTS := {
 	"fov": 80.0,
 	"master_volume": 0.8,
 	"music_volume": 0.45,
+	"sfx_volume": 0.9,
+	"window_mode": "fullscreen",     # windowed | fullscreen (borderless) | exclusive
+	"vsync": true,
+	"max_fps": 0,                    # 0 = no cap
+	"render_scale": 1.0,             # 3D resolution, 0.5..1.0 (the HUD stays sharp)
 	"camera_distance": 4.0,
 	"goal": 8,
 	"team_size": 2,
@@ -95,6 +100,10 @@ const DEFAULTS := {
 	"host_lobby": true,
 }
 
+const WINDOW_MODES := ["windowed", "fullscreen", "exclusive"]
+const FPS_CAPS := [0, 30, 60, 90, 120, 144, 165, 240]
+const AUDIO_BUSES := ["Music", "SFX"]
+
 var _cfg := ConfigFile.new()
 
 
@@ -104,6 +113,19 @@ func _ready() -> void:
 		Log.warn("settings.cfg unreadable (error %d); using defaults" % err)
 		_cfg = ConfigFile.new()
 	apply_audio()
+	apply_display()
+
+
+func _input(event: InputEvent) -> void:
+	# Alt+Enter or F11: fullscreen <-> window, remembered like the setting
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.echo or not display_supported():
+		return
+	if k.keycode == KEY_F11 or (k.keycode == KEY_ENTER and k.alt_pressed):
+		get_viewport().set_input_as_handled()
+		set_value("window_mode", "windowed" if String(get_value("window_mode")) != "windowed" else "fullscreen")
+		save()
+		apply_display()
 
 
 func get_value(key: String) -> Variant:
@@ -129,6 +151,50 @@ func save() -> void:
 
 
 func apply_audio() -> void:
-	var v := float(get_value("master_volume"))
-	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(v, 0.0001)))
-	AudioServer.set_bus_mute(0, v <= 0.001)
+	## Master, Music and SFX buses (Sfx routes its players to the last two).
+	for bus: String in AUDIO_BUSES:
+		if AudioServer.get_bus_index(bus) < 0:
+			AudioServer.add_bus()
+			var i := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, bus)
+			AudioServer.set_bus_send(i, "Master")
+	_set_bus("Master", float(get_value("master_volume")))
+	_set_bus("Music", float(get_value("music_volume")))
+	_set_bus("SFX", float(get_value("sfx_volume")))
+
+
+static func _set_bus(bus: String, v: float) -> void:
+	var i := AudioServer.get_bus_index(bus)
+	AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v, 0.0001)))
+	AudioServer.set_bus_mute(i, v <= 0.001)
+
+
+static func display_supported() -> bool:
+	## Window mode and v-sync are the platform's business on the web and
+	## meaningless headless.
+	return DisplayServer.get_name() != "headless" and not OS.has_feature("web")
+
+
+func apply_display() -> void:
+	Engine.max_fps = maxi(0, int(get_value("max_fps")))
+	if is_inside_tree():
+		get_tree().root.scaling_3d_scale = clampf(float(get_value("render_scale")), 0.5, 1.0)
+	if not display_supported():
+		return
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(get_value("vsync")) else DisplayServer.VSYNC_DISABLED)
+	var mode := String(get_value("window_mode"))
+	var want := DisplayServer.WINDOW_MODE_WINDOWED
+	if mode == "fullscreen":
+		want = DisplayServer.WINDOW_MODE_FULLSCREEN
+	elif mode == "exclusive":
+		want = DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+	if DisplayServer.window_get_mode() == want:
+		return
+	DisplayServer.window_set_mode(want)
+	if want == DisplayServer.WINDOW_MODE_WINDOWED:
+		# back to a window: a comfortable size, centred on the screen it's on
+		var screen := DisplayServer.screen_get_usable_rect(DisplayServer.window_get_current_screen())
+		var size := Vector2i(1280, 720) if screen.size.x < 2400 else Vector2i(1920, 1080)
+		size = Vector2i(mini(size.x, screen.size.x), mini(size.y, screen.size.y))
+		DisplayServer.window_set_size(size)
+		DisplayServer.window_set_position(screen.position + (screen.size - size) / 2)
