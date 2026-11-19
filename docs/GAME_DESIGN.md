@@ -109,6 +109,16 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
   team's aim label even calls it that. An enemy who digs it is dazed for 1.5 s in a stink cloud
   and it's gone; your own team digs it back into the pack. Blasts just destroy it. Bots fall for
   the other team's decoys too.
+- **Wind-up Decoy** (trap, 14 scrap, single use): a clockwork rat in your team's colours, with
+  your class, your name over its head and a Golden Cheese held high, so to the other team it
+  looks like you running off with the cheese. Q sets it down facing the way you look and it
+  marches off at a carrier's pace: it hops up single steps, turns at walls and drops a crumb
+  trail like a real carrier. An enemy who bonks it gets a TNT blast (same radius and power as
+  stationary TNT, so they're thrown and drop any cheese). Left alone it goes off after 20 s,
+  with "!!" over it for the last 1.5 s. Other blasts, lava and enemy mouse traps set it off
+  early; your own team's bonks pass through it (everyone's do in the lobby). Your team sees it
+  labelled "Wind-up Decoy". Bots can't tell: they chase it like a carrier and bonk it. At most
+  8 march at once. It is not a rat: it never scores, raids, picks anything up or takes a seat.
 - **Squeaker Pad** (trap, 15 scrap): a floor pad. An enemy stepping on it squeaks for everyone
   nearby and drops a beacon only its team sees (8 s). At most one squeak per 2 s; the third
   spends it. Like other placed traps: 5 digs for its team, 15 for anyone else.
@@ -127,6 +137,12 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
 ## Hazards and safety valves
 
 Carrying cheese weakens your dash (50% / 40% / 30% of the normal burst with 1 / 2 / 3+ cheese) and makes it cost 40 stamina instead of 25, on top of the carry slowdown (`Config.DASH_CARRY`, `Config.DASH_CARRY_COST`). Enemy name tags only show while you can see that rat.
+
+**Cheese crumbs:** anyone carrying cheese drops a little pile of crumbs on the ground every
+1.4 blocks (`Config.CRUMB_EVERY`). Everyone sees them, so a trail leads straight to the
+carrier; they last 25 s (`Config.CRUMB_TIME`) and shrink away over the last 4. None fall in
+water or mid-air: a jump just holds the count until you land. Bots run after an enemy hauling
+cheese within 10 blocks of them, at about their height, when their own paws are empty.
 
 
 Lava bounces a rat out on the first touch; a second touch within 8 s bounces it again, spills everything it carries right there, and sends it back to base 0.7 s later. Water slows everyone

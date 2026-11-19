@@ -11,6 +11,7 @@ signal toast(text: String, team: int)          # team -1 = everyone
 signal fx(kind: String, pos: Vector3, data: Variant)
 signal won(team: int)
 signal rat_spawned(rat: Rat)
+signal windup_spawned(body: Rat)   # a Wind-up Decoy's body, for a sprite
 
 const TEAM_NAMES := ["Blue", "Red"]
 const BOT_NAMES := ["Nibbles", "Gouda", "Brie", "Scrabble", "Whiskers", "Cheddar", "Pip", "Rind"]
@@ -69,6 +70,7 @@ var remote: Object = null       # NetClient on a replica, else null
 var networked := false          # true on a server or a client (never pauses)
 
 var dynamite: DynamiteSystem
+var windup: WindupSystem
 var siege: SiegeSystem
 
 var _next_uid := 1
@@ -89,6 +91,7 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 	world.name = "World"
 	add_child(world)
 	dynamite = DynamiteSystem.new(self)
+	windup = WindupSystem.new(self)
 	siege = SiegeSystem.new(self)
 	lava = LiquidFlow.lava(self)
 	water = LiquidFlow.water(self)
@@ -299,6 +302,8 @@ func step(dt: float) -> void:
 	_step_pickups(dt)
 	_step_tnt(dt)
 	dynamite.step(dt)
+	windup.step(dt)
+	_drop_crumbs()
 	siege.step(dt)
 	lava.step(dt)
 	water.step(dt)
@@ -329,6 +334,35 @@ static func _motion_fx(r: Rat) -> Array[String]:
 	if r.shield_raised:
 		out.append("shield")
 	return out
+
+
+var _crumb_at: Dictionary = {}   # rat id (or -uid of a wind-up) -> where it last dropped a crumb
+
+
+func _drop_crumbs() -> void:
+	## Cheese crumbs: everyone carrying cheese leaves a trail on the ground,
+	## one crumb every Config.CRUMB_EVERY blocks, that anyone can follow.
+	## Wind-up Decoys leave one too. (The view draws them; they're cosmetic.)
+	for r in rats:
+		_crumb(r.id, r, r.carried > 0 and not r.flying)
+	for w in windup.walkers:
+		_crumb(-w.uid, w.body, true)
+
+
+func _crumb(key: int, body: Rat, carrying: bool) -> void:
+	if not carrying:
+		_crumb_at.erase(key)
+		return
+	# only on dry ground: hold the count through jumps, falls and swims
+	if body.in_water or not world.solid_point(body.position - Vector3(0, 0.12, 0)):
+		return
+	if not _crumb_at.has(key):
+		_crumb_at[key] = body.position    # picked it up: the first crumb comes a few steps on
+		return
+	if body.position.distance_to(_crumb_at[key]) < Config.CRUMB_EVERY:
+		return
+	_crumb_at[key] = body.position
+	fx.emit("crumb", body.position, null)
 
 
 func raise_shield(rat: Rat) -> bool:
@@ -768,6 +802,8 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 		return "Nothing equipped - buy gadgets at the workshop (B)"
 	if g == "dynamite":
 		return "Mobile TNT is thrown, not placed"
+	if g == "windup":
+		return "A Wind-up Decoy is set down with Q"
 	if not free_mode and int(rat.gadgets.get(g, 0)) <= 0:
 		return "Out of %s" % ClassDefs.GADGET_NAME[g]
 	var facing := Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
@@ -812,6 +848,8 @@ func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, di
 		return remote.act("try_use_equipped", [wire_aim(aim), look, gentle, dir])
 	if rat.equipped == "dynamite":
 		return dynamite.try_throw(rat, look, gentle)
+	if rat.equipped == "windup":
+		return windup.try_place(rat, look)
 	if aim.is_empty():
 		return "Aim at a surface to place a gadget"
 	var aimed := Vector3i(aim["cell"])
@@ -1465,6 +1503,7 @@ func blast(origin: Vector3, radius: float, power: float) -> void:
 		if pd.length() < radius + 1.0:
 			p.vel = pd.normalized() * 5.0 + Vector3(0, 5.0, 0)
 	dynamite.on_blast(origin, radius)
+	windup.on_blast(origin, radius)
 
 
 # ---------------------------------------------------------------- abilities

@@ -15,6 +15,8 @@ const TIPS := [
 	"Highways make you 60% faster, even hauling cheese.",
 	"Stand in the enemy base for 3 seconds to raid their vault.",
 	"Squeaker Pads tell your team when someone sneaks past.",
+	"Carrying cheese leaves a crumb trail. Follow the crumbs!",
+	"That carrier might be a Wind-up Decoy. Bonk it and find out...",
 ]
 
 var progress := 0.0              # 0..1

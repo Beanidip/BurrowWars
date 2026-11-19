@@ -271,6 +271,22 @@ def _(i):
     i.pts([(12, 3), (13, 2), (14, 3), (13, 1), (14, 0)], GOO)
     i.pts([(10, 2), (11, 1), (10, 0)], GOO_L)
 
+@icon("windup")
+def _(i):
+    # a clockwork mouse with a brass key in its back
+    i.disc(7.0, 10.5, 4.0, STEEL)
+    i.rect(3, 12, 11, 13, STEEL_D)
+    i.pts([(5, 8), (6, 7), (7, 7)], STEEL_L)
+    i.disc(10.5, 7.5, 1.7, PINK)
+    i.pts([(11, 9), (12, 10), (12, 11), (13, 11)], STEEL)
+    i.put(14, 11, PINK)
+    i.put(11, 10, BLACK)
+    i.pts([(2, 11), (1, 10), (1, 9), (2, 8)], PINK)
+    i.disc(4.5, 14.5, 1.0, BLACK); i.disc(9.5, 14.5, 1.0, BLACK)
+    i.rect(6, 4, 6, 6, YEL_D)
+    i.rect(3, 2, 5, 3, YEL); i.rect(7, 2, 9, 3, YEL)
+    i.pts([(4, 2), (8, 2)], YEL_D)
+
 @icon("squeaker")
 def _(i):
     # a rubber pad with a squeaky bulb, and the squeak

@@ -109,6 +109,7 @@ func _process(delta: float) -> void:
 		else:
 			r.position = r.position.lerp(to + (t[1] as Vector3) * 0.05, k)
 		r.yaw = lerp_angle(r.yaw, float(t[2]), k)
+	m.windup.glide(delta)
 
 
 # ---------------------------------------------------------------- incoming
@@ -134,6 +135,7 @@ func on_snap(s: Dictionary) -> void:
 	_apply_machines(s.get("mc", []))
 	_apply_shots(s.get("sh", []))
 	_apply_sticks(s.get("st", []))
+	m.windup.apply(s.get("wd", []))
 
 
 func _apply_rats(list: Array) -> void:

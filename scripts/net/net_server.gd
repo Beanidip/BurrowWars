@@ -254,6 +254,11 @@ func on_act(id: int, method: String, a: Array) -> void:
 				var target := m.rat_by_id(a[0])
 				if target != null:
 					m.try_bonk(rat, target)
+		"bonk_windup":
+			if _ok(a, [TYPE_INT]):
+				var w := m.windup.by_uid(a[0])
+				if w != null:
+					m.windup.try_bonk(rat, w)
 		"try_place_mat":
 			if _ok(a, [TYPE_VECTOR3I, TYPE_STRING]):
 				res = m.try_place_mat(rat, a[0], a[1])
@@ -407,7 +412,7 @@ func _snapshot() -> Dictionary:
 	for s in m.dynamite.sticks:
 		sticks.append([s.uid, s.pos, s.vel, s.fuse, s.resting])
 	return {"t": m.time, "sc": [m.scores[0], m.scores[1]], "o": m.over, "w": m.winner, "r": rats, "p": picks,
-		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "lt": m.lobby_left}
+		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "wd": m.windup.snapshot(), "lt": m.lobby_left}
 
 
 func _private(r: Rat) -> Dictionary:

@@ -16,7 +16,7 @@ BONK  Left-click an enemy rat to bonk it: nobody gets hurt, but they drop a chee
 
 GROUND POUND  A full double jump landed flat thumps the block under you like a dig.
 
-SNEAKY STUFF  Bubble Shoes (gear): J switches them on, and stepping off an edge blows a bubble to stand on (2 scrap each, pops after 10 s). Cheese Decoy: looks just like cheese to the other team and dazes whoever digs it. Squeaker Pad: squeaks and marks the spot for your team when an enemy steps on it (three times).
+SNEAKY STUFF  Bubble Shoes (gear): J switches them on, and stepping off an edge blows a bubble to stand on (2 scrap each, pops after 10 s). Cheese Decoy: looks just like cheese to the other team and dazes whoever digs it. Squeaker Pad: squeaks and marks the spot for your team when an enemy steps on it (three times). Wind-up Decoy: a clockwork you with a cheese, marching off and dropping crumbs - enemies who bonk it get a TNT blast, and it goes off by itself after 20 s. Anyone carrying cheese leaves a crumb trail.
 
 SCRAP  Mine orange scrap for currency. Every cheese either team banks makes new scrap worth more. Spend it in the workshop (B, at your base): ladders, springs, conveyors, traps, TNT, gates. Conveyors and highways are laid into the floor you aim at; a conveyor runs toward the bright edge of your target square. Aim at a ladder and press Q to extend it up or down. Q places the equipped gadget, R changes it, I opens your pack.
 

@@ -62,6 +62,10 @@ func think(dt: float) -> void:
 	if retarget_t <= 0.0:
 		retarget_t = 0.8 + rng.randf() * 0.4
 		_retarget()
+	if mode == "chase":
+		var carrier: Variant = _pick_carrier()   # keep up with it between retargets
+		if carrier != null:
+			target = carrier
 	_track_stuck(dt)
 	if detour_t > 0.0:
 		detour_t -= dt
@@ -82,6 +86,13 @@ func _retarget() -> void:
 				mode = "defend"
 				target = other.position
 				return
+	# chase: an enemy hauling cheese close by (or a Wind-up Decoy - bots can't tell)
+	if not m.free_mode and rat.carried == 0:
+		var carrier: Variant = _pick_carrier()
+		if carrier != null:
+			mode = "chase"
+			target = carrier
+			return
 	# raid: when clearly behind, half the team goes for the enemy vault instead of digging -
 	# unless someone has been standing guard in it for a while: then it's not worth it
 	var behind := m.scores[enemy] - m.scores[rat.team]
@@ -125,6 +136,27 @@ func _retarget() -> void:
 		target = cheese
 	else:
 		target = Vector3(VoxelWorld.SX * 0.5, 20.0, VoxelWorld.SZ * 0.5)
+
+
+func _pick_carrier() -> Variant:
+	## The nearest enemy carrying cheese within Config.WINDUP_CHASE, at about
+	## our height (no chasing someone across a cliff). The other team's
+	## wind-ups count: to a bot they look just the same.
+	var best: Variant = null
+	var best_d := Config.WINDUP_CHASE
+	var spots: Array[Vector3] = []
+	for other in m.rats:
+		if other.team != rat.team and other.carried > 0:
+			spots.append(other.position)
+	for w in m.windup.walkers:
+		if w.team != rat.team:
+			spots.append(w.body.position)
+	for p in spots:
+		var d := p.distance_to(rat.position)
+		if d < best_d and absf(p.y - rat.position.y) < 3.0:
+			best_d = d
+			best = p
+	return best
 
 
 func _pick_cheese() -> Variant:
@@ -217,6 +249,10 @@ func _try_bonk() -> void:
 	for other in m.rats:
 		if other.team != rat.team and other.center().distance_to(rat.center()) < 1.9:
 			m.try_bonk(rat, other)
+			return
+	for w in m.windup.walkers:
+		if w.team != rat.team and w.body.center().distance_to(rat.center()) < 1.9:
+			m.windup.try_bonk(rat, w)     # it looked like a carrier...
 			return
 
 

@@ -25,6 +25,7 @@ static var _sheets: Dictionary = {}   # "path:team" -> team-coloured sheet
 var rat: Rat
 var celebrate := false
 var tag_shown := true            # the session hides enemy names you cannot see
+var tag_text := ""               # shown instead of the rat's name (a Wind-up Decoy, to its own team)
 var _t := 0.0
 var _anim := "idle"
 var _cheese: Array[MeshInstance3D] = []
@@ -87,7 +88,7 @@ func _process(delta: float) -> void:
 	texture = _frame(rat.class_id, rat.team, a, frame)
 	for i in _cheese.size():
 		_cheese[i].visible = i < rat.carried
-	_tag.text = rat.display_name
+	_tag.text = tag_text if tag_text != "" else rat.display_name
 	_tag.visible = tag_shown
 	_tag.modulate = Color(0.55, 0.75, 1.0) if rat.team == 0 else Color(1.0, 0.6, 0.55)
 

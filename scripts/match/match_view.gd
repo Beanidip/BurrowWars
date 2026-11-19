@@ -14,10 +14,14 @@ var _particle_mat: StandardMaterial3D
 var _crack: MeshInstance3D
 var _crack_t := 0.0
 var _t := 0.0
+var crumbs: CrumbTrail
 
 
 func _ready() -> void:
 	m.fx.connect(_on_fx)
+	crumbs = CrumbTrail.new()
+	crumbs.name = "Crumbs"
+	add_child(crumbs)
 	m.won.connect(func(_team: int) -> void: Sfx.play("team_victory_fanfare", 0.0, 1.0, 0.0))
 	_particle_mat = StandardMaterial3D.new()
 	_particle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -336,6 +340,14 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_burst(pos + Vector3.ONE * 0.07, Blocks.COLOR[int(data)], 2, 1.5)
 		"throw":
 			_sound("block_place", pos, 1.5)
+		"crumb":
+			crumbs.add(pos)
+		"windup":
+			_sound("windup", pos, 1.0, -4.0)
+			_sprite("dust", pos, 0.45)
+		"windup_warn":
+			_sound("windup", pos, 1.6, -2.0)
+			_float_text(pos + Vector3(0, 1.9, 0), "!!", Color(1, 0.3, 0.2), maxf(float(data), 0.4))
 		"tick":
 			_sound("mine_wood", pos, 1.9, -6.0)
 		"cannon":

@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -3588,3 +3588,254 @@ func test_pools_springs_raids_sparks() -> void:
 	view.free()
 	# the new bits of art and sound are there; the old POW is gone
 	check(FxSheets.SHEETS.has("dizzy") and not FxSheets.SHEETS.has("pow") and FileAccess.file_exists("res://assets/sfx/alarm.wav"), "bonks show dizzy stars; the raid alarm is the new chime")
+
+
+func test_crumb_trail() -> void:
+	## Everyone carrying cheese leaves crumbs on the ground to follow.
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var crumbs: Array[Vector3] = []
+	m.fx.connect(func(kind: String, p: Vector3, _d: Variant) -> void:
+		if kind == "crumb":
+			crumbs.append(p))
+	var r := arena_rat(m, 0, "digger", Vector3(-7, 0, 0))
+	run(m, 0.3)
+	r.wish = Vector3(1, 0, 0)
+	run(m, 2.0)
+	check(crumbs.is_empty(), "no cheese, no crumbs")
+	r.position = Vector3(ARENA) + Vector3(-6.5, 0, 0.5)
+	r.carried = 1
+	run(m, 3.0)
+	var travelled := r.position.x - (ARENA.x - 6.5)
+	check(crumbs.size() >= int(travelled / Config.CRUMB_EVERY) - 1 and crumbs.size() >= 3, "a carrier drops a trail (%d crumbs over %.1f blocks)" % [crumbs.size(), travelled])
+	var spaced := true
+	for i in range(1, crumbs.size()):
+		if crumbs[i].distance_to(crumbs[i - 1]) < Config.CRUMB_EVERY - 0.01:
+			spaced = false
+	check(spaced, "one crumb every %.1f blocks" % Config.CRUMB_EVERY)
+	check(not crumbs.is_empty() and absf(crumbs[0].y - float(ARENA.y)) < 0.05, "on the ground")
+	# none in mid-air: a jump holds the count until we land
+	crumbs.clear()
+	r.position = Vector3(ARENA) + Vector3(-6.5, 0, 2.5)
+	r.vel = Vector3.ZERO
+	run(m, 0.2)
+	crumbs.clear()
+	var airborne := 0
+	for i in 60:
+		r.jump_pressed = r.on_floor
+		var n := crumbs.size()
+		m.step(DT)
+		if crumbs.size() > n and not m.world.solid_point(crumbs[-1] - Vector3(0, 0.12, 0)):
+			airborne += 1
+	check(airborne == 0, "never in mid-air")
+	# the view lays them out and they fade away
+	var trail := CrumbTrail.new()
+	add_child(trail)
+	trail.add(Vector3(ARENA))
+	trail.add(Vector3(ARENA) + Vector3(1.4, 0, 0))
+	check(trail.count() == 2, "the view draws each crumb")
+	trail._process(Config.CRUMB_TIME - 1.0)
+	check(trail.count() == 2, "they lie there for %.0f s..." % Config.CRUMB_TIME)
+	trail._process(1.5)
+	check(trail.count() == 0, "...then they're gone")
+	trail.queue_free()
+	end(m)
+
+
+func windup_wall(m: Match, x: int, height: int) -> void:
+	for dz in range(-8, 9):
+		for dy in height:
+			m.world.set_block(ARENA + Vector3i(x, dy, dz), Blocks.STONE)
+
+
+func test_windup_decoy() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	var blue := arena_rat(m, 0, "digger")
+	var red := arena_rat(m, 1, "scout", Vector3(0, 0, 6))
+	blue.position = MapGenerator.spawn_point(0)
+	run(m, 0.3)
+	blue.scrap = 20
+	check(m.try_buy(blue, "windup") == "" and int(blue.gadgets.get("windup", 0)) == 1 and blue.scrap == 6, "a Wind-up Decoy costs 14 scrap")
+	m.set_equipped(blue, "windup")
+	check(m.try_place_gadget(blue, ARENA, "windup") != "", "it isn't placed like a block")
+	blue.position = Vector3(ARENA) + Vector3(-6.5, 0, 0.5)
+	blue.yaw = PI * 0.5
+	run(m, 0.2)
+	windup_wall(m, -3, 1)    # a step to hop up
+	windup_wall(m, 3, 3)     # a wall to turn at
+	kinds.clear()
+	check(m.try_use_equipped(blue, {}, Vector3(1, 0, 0), false) == "" and m.windup.walkers.size() == 1, "Q sets it down")
+	check(kinds.has("windup") and int(blue.gadgets.get("windup", 0)) == 0, "single use")
+	var w: WindupSystem.Walker = m.windup.walkers[0]
+	var b := w.body
+	check(w.team == 0 and b.carried == 1 and b.display_name == blue.display_name and b.class_id == blue.class_id,
+		"it wears its owner's colours, class and name, and holds a cheese")
+	check(not m.rats.has(b), "it's no rat: it never scores, raids or takes a seat")
+	var start := b.position
+	run(m, 1.0)
+	check(b.position.x - start.x > 1.5 and absf(b.position.z - start.z) < 0.2, "it marches the way it was set down (%.1f blocks)" % (b.position.x - start.x))
+	var top := b.position.y
+	var t := 0.0
+	while t < 4.0 and b.position.x < ARENA.x - 1.0:
+		m.step(DT)
+		t += DT
+		top = maxf(top, b.position.y)
+	check(top >= float(ARENA.y) + 1.0 and b.position.x > ARENA.x - 1.0, "it hops up a step (%.1f)" % (top - ARENA.y))
+	t = 0.0
+	while t < 5.0 and absf(w.dir.z) < 0.5:
+		m.step(DT)
+		t += DT
+	var turned_at := b.position
+	run(m, 0.6)
+	check(absf(w.dir.z) > 0.5 and absf(b.position.z - turned_at.z) > 0.6 and b.position.x < ARENA.x + 3.0,
+		"it turns at a wall and keeps going (%.1f s)" % t)
+	check(kinds.has("crumb"), "it drops crumbs like a real carrier")
+	# your own team's bonks pass through it; the other team's set it off
+	blue.position = b.position + Vector3(0.8, 0, 0)
+	blue.bonk_cd = 0.0
+	check(not m.windup.try_bonk(blue, w) and m.windup.walkers.size() == 1, "its own team can't set it off")
+	red.position = b.position + Vector3(-0.8, 0, 0)
+	red.bonk_cd = 0.0
+	red.stun = 0.0
+	blue.vel = Vector3.ZERO
+	kinds.clear()
+	var at := b.position
+	check(m.windup.try_bonk(red, w) and m.windup.walkers.is_empty(), "an enemy bonk sets it off")
+	check(kinds.has("boom") and red.vel.length() > 5.0, "like TNT: the bonker is blown away")
+	var holes := 0
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			if m.world.get_cell(Vector3i(floori(at.x) + dx, ARENA.y - 1, floori(at.z) + dz)) == Blocks.AIR:
+				holes += 1
+	check(holes >= 3, "and the floor around it (%d holes)" % holes)
+	# left alone it goes off by itself, with a warning first
+	m.free_mode = true
+	blue.position = Vector3(ARENA) + Vector3(-6.5, 0, -6.5)
+	blue.throw_cd = 0.0
+	run(m, 0.2)
+	kinds.clear()
+	m.try_use_equipped(blue, {}, Vector3(0, 0, 1), false)
+	var walker: WindupSystem.Walker = m.windup.walkers[0]
+	run(m, Config.WINDUP_FUSE - 2.0)
+	check(m.windup.walkers.has(walker) and not kinds.has("boom"), "it marches for %.0f s..." % Config.WINDUP_FUSE)
+	run(m, 2.5)
+	check(not m.windup.walkers.has(walker) and kinds.has("windup_warn") and kinds.has("boom"), "...warns, then goes off by itself")
+	# other blasts set it off: chains
+	for x in [-5.5, -3.5]:
+		var c := m.windup.spawn(0, blue.id, "digger", "x", Vector3(ARENA) + Vector3(x, 0, 6.5), Vector3(0, 0, -1))
+		c.fuse = 99.0
+	m.blast(Vector3(ARENA) + Vector3(-7.5, 0.5, 6.5), Config.TNT_RADIUS, Config.TNT_POWER)
+	run(m, 0.6)
+	check(m.windup.walkers.is_empty(), "a blast sets off the wind-ups next to it, one after the other")
+	# lava finishes it
+	m.world.set_block(ARENA + Vector3i(5, 0, -7), Blocks.LAVA)
+	var hot := m.windup.spawn(1, red.id, "scout", "y", Vector3(ARENA) + Vector3(5.5, 0, -5.5), Vector3(0, 0, -1))
+	hot.fuse = 99.0
+	run(m, 1.5)
+	check(m.windup.walkers.is_empty(), "lava sets it off")
+	end(m)
+
+
+func test_bots_chase_windups() -> void:
+	## Bots can't tell a Wind-up Decoy from a carrier: they chase it and bonk it.
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var bot := m.spawn_rat(1, "digger", true)
+	bot.position = Vector3(ARENA) + Vector3(5.5, 0, 0.5)
+	bot.gear = "jetpack"
+	bot.scrap = 40
+	var blue := arena_rat(m, 0, "digger", Vector3(-7, 0, -7))
+	var brain: BotBrain = null
+	for b in m.bots:
+		if b.rat == bot:
+			brain = b
+	var w := m.windup.spawn(0, blue.id, "digger", blue.display_name, Vector3(ARENA) + Vector3(-1.5, 0, 0.5), Vector3(0, 0, 1))
+	w.fuse = 99.0
+	check(brain._pick_carrier() != null, "a bot takes it for a carrier")
+	var own := m.windup.spawn(1, bot.id, "digger", "z", Vector3(ARENA) + Vector3(2.5, 0, -5.5), Vector3(1, 0, 0))
+	own.fuse = 99.0
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	var t := 0.0
+	while t < 8.0 and m.windup.walkers.has(w):
+		m.step(DT)
+		t += DT
+	check(not m.windup.walkers.has(w) and kinds.has("boom"), "and runs after it and bonks it: boom (%.1f s)" % t)
+	check(m.windup.walkers.has(own) or own.body.position.y < float(ARENA.y) - 1.0, "but leaves its own team's alone")
+	# a real carrier gets chased too
+	m.windup.remove(own)
+	var red_bot := bot
+	red_bot.position = Vector3(ARENA) + Vector3(5.5, 0, 0.5)
+	blue.position = Vector3(ARENA) + Vector3(-0.5, 0, 0.5)
+	blue.carried = 1
+	red_bot.bonk_cd = 0.0
+	run(m, 0.1)
+	brain._retarget()
+	check(brain.mode == "chase", "a bot chases an enemy hauling cheese nearby")
+	end(m)
+
+
+func test_windup_replica() -> void:
+	## Online players get each wind-up in the snapshot: same look, same name.
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var blue := arena_rat(m, 0, "builder")
+	blue.display_name = "Pip"
+	var w := m.windup.spawn(0, blue.id, blue.class_id, blue.display_name, Vector3(ARENA) + Vector3(0.5, 0, 0.5), Vector3(1, 0, 0))
+	run(m, 0.5)
+	var rep := Match.new()
+	rep.auto_step = false
+	add_child(rep)
+	rep.setup({"mode": "race", "seed": 4242, "goal": 3}, false, true)
+	var spawned: Array[Rat] = []
+	rep.windup_spawned.connect(func(b: Rat) -> void: spawned.append(b))
+	rep.windup.apply(m.windup.snapshot())
+	check(rep.windup.walkers.size() == 1 and spawned.size() == 1, "it arrives on a player's game (and gets a sprite)")
+	var c: WindupSystem.Walker = rep.windup.walkers[0]
+	check(c.uid == w.uid and c.team == 0 and c.body.display_name == "Pip" and c.body.class_id == "builder" and c.body.carried == 1,
+		"with its owner's name, class and colours, and a cheese")
+	check(rep.rats.is_empty(), "and not as a rat")
+	rep.windup.glide(1.0)
+	check(c.body.position.distance_to(w.body.position) < 0.3, "it glides to where the server has it")
+	run(m, 0.5)
+	rep.windup.apply(m.windup.snapshot())
+	for i in 30:
+		rep.windup.glide(DT)
+	check(c.body.position.distance_to(w.body.position) < 0.35, "and follows it as it marches")
+	m.windup.explode(w)
+	rep.windup.apply(m.windup.snapshot())
+	check(rep.windup.walkers.is_empty(), "gone when it goes off")
+	# an online player's Q and bonk go through the server's checks
+	var red := arena_rat(m, 1, "scout", Vector3(-4, 0, -4))
+	red.position = Vector3(ARENA) + Vector3(-3.5, 0, -3.5)
+	blue.position = Vector3(ARENA) + Vector3(3.5, 0, 3.5)
+	m.free_mode = true
+	m.set_equipped(blue, "windup")
+	run(m, 0.3)
+	var ns := NetServer.new()
+	ns.m = m
+	ns.seats[7] = blue
+	ns.seats[8] = red
+	blue.net_peer = 7
+	red.net_peer = 8
+	ns.on_act(7, "try_use_equipped", [{}, Vector3(-1, 0, -1), false, Vector3.ZERO])
+	check(m.windup.walkers.size() == 1 and m.windup.walkers[0].team == 0, "a player's Q sets one marching on the server")
+	var uid := m.windup.walkers[0].uid
+	ns.on_act(8, "bonk_windup", [uid + 999])
+	ns.on_act(8, "bonk_windup", ["junk"])
+	check(m.windup.walkers.size() == 1, "a bonk at nothing (or junk) does nothing")
+	ns.on_act(8, "bonk_windup", [uid])
+	check(m.windup.walkers.size() == 1, "too far away to bonk")
+	red.position = m.windup.walkers[0].body.position + Vector3(1.0, 0, 0)
+	red.bonk_cd = 0.0
+	ns.on_act(8, "bonk_windup", [uid])
+	check(m.windup.walkers.is_empty(), "a remote enemy's bonk sets it off")
+	ns.free()
+	blue.net_peer = 0
+	red.net_peer = 0
+	remove_child(rep)
+	rep.free()
+	end(m)

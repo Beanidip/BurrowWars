@@ -361,6 +361,19 @@ func _swing() -> void:
 		if d < best_d and to.normalized().dot(fwd) > 0.55:
 			best_d = d
 			best = other
+	# ...or what looks like one: a Wind-up Decoy of theirs, closer still, goes off
+	var decoy: WindupSystem.Walker = null
+	for w in m.windup.walkers:
+		if w.team == rat.team and not m.lobby:
+			continue
+		var to := w.body.center() - rat.eye()
+		var d := to.length()
+		if d < best_d and to.normalized().dot(fwd) > 0.55:
+			best_d = d
+			decoy = w
+	if decoy != null and rat.bonk_cd <= 0.0:
+		if m.windup.try_bonk(rat, decoy):
+			return
 	if best != null and rat.bonk_cd <= 0.0:
 		if m.try_bonk(rat, best):
 			return

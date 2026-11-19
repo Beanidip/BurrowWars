@@ -63,6 +63,7 @@ func _ready() -> void:
 	var online_client := String(settings.get("net", "")) == "client"
 	m.setup(settings, true, online_client)
 	m.rat_spawned.connect(_attach_sprite)
+	m.windup_spawned.connect(_attach_windup)
 	if online_client:
 		var nc := NetClient.new(m, net_info)
 		nc.name = "NetClient"
@@ -150,6 +151,10 @@ func _process(delta: float) -> void:
 		var s := r.get_node_or_null("Sprite") as RatSprite
 		if s != null:
 			s.tag_shown = name_visible(m.world, eye, player.team, r)
+	for w in m.windup.walkers:
+		var s := w.body.get_node_or_null("Sprite") as RatSprite
+		if s != null:
+			s.tag_shown = name_visible(m.world, eye, player.team, w.body)
 
 
 static func name_visible(world: VoxelWorld, eye: Vector3, viewer_team: int, r: Rat) -> bool:
@@ -165,6 +170,17 @@ func _attach_sprite(rat: Rat) -> void:
 	sprite.name = "Sprite"
 	sprite.rat = rat
 	rat.add_child(sprite)
+
+
+func _attach_windup(body: Rat) -> void:
+	## A Wind-up Decoy wears an ordinary rat sprite, so it passes for one.
+	## Its own team sees it for what it is.
+	var sprite := RatSprite.new()
+	sprite.name = "Sprite"
+	sprite.rat = body
+	if player != null and body.team == player.team:
+		sprite.tag_text = "Wind-up Decoy"
+	body.add_child(sprite)
 
 
 func _celebrate(team: int) -> void:
