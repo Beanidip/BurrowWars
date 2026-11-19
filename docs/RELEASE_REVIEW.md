@@ -472,6 +472,26 @@ flowchart LR
 - **Recommendation:** ship on PC first. If the game finds an audience, consider a mobile spin-off
   with a smaller map, simplified tools and touch-first design. Budget **2–4 months** for that.
 
+## 5b. Progress
+
+**Phase A (foundations): done** on branch `phase-a-foundations`, one commit per item, full test gate green after each (1,007 checks plus the network tests).
+- Renamed; placeholder icon stamped into the exe.
+- Credits & Licences page.
+- Asset ledger and art spec.
+- Display and audio settings, fullscreen by default.
+- Threaded re-meshing.
+- Merged terrain faces: 5× fewer triangles, same picture.
+- Safe saves and a clean shutdown; Quit game button.
+- Learn to Play tutorial.
+
+Moved:
+- **Action rate limits and movement checks** go to Phase B, with the public-server work.
+- **Controller and Steam Deck** is Phase A2.
+
+Still to check on real hardware:
+- fullscreen and Alt+Enter (the test machine has no window manager);
+- frame rates on a GPU, the Steam Deck and a Mac.
+
 ## 6. Phased roadmap (revised for your decisions)
 
 Efforts assume full-time work with me doing the code; calendar time depends on your art and testing.

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased - Phase A: release foundations
+
+| Change | Files |
+|---|---|
+| The game is now **Burrow Wars** (no "Jam Edition"), with a placeholder cheese app icon embedded in the Windows exe along with its name and version. Settings move to the new user-data folder | `project.godot`, `export_presets.cfg`, `assets/ui/app_icon.*`, `tools/make_app_icon.py` |
+| **Credits & Licences** page: team, asset sources, Godot's licence and every third-party notice compiled into the engine (read from the engine itself), and pixelfx's MIT licence | `ui/credits.gd`, `ui/main_menu.gd` |
+| Asset licence ledger and an art and audio spec for the art redo | `docs/ASSET_LICENSES.md`, `docs/ART_SPEC.md` |
+| **Display settings**: windowed / fullscreen / exclusive fullscreen (fullscreen by default; Alt+Enter or F11 toggles), V-Sync, frame rate limit, 3D resolution 50-100%. **Sound effects volume**, with Music and SFX on their own buses | `core/config.gd`, `core/sfx.gd`, `ui/settings_panel.gd` |
+| Dug and blasted chunks are re-meshed on worker threads, so digging and explosions no longer stall the frame (7-17 ms per chunk before, well under 1 ms now) | `world/voxel_world.gd` |
+| Terrain faces are merged into big quads, with each block's shading worked out in a new terrain shader: about **5x fewer triangles** (1.03 M to 204 k for a full map) for the same picture | `world/chunk_mesher.gd`, `assets/shaders/terrain.gdshader` |
+| Settings and map saves are written to a temporary file and swapped in, so a crash mid-save can't corrupt them; clean shutdown (shared caches released, a stray HUD label removed); a **Quit game** button in the pause menu | `core/config.gd`, `world/voxel_world.gd`, `core/main.gd`, `core/sfx.gd`, `ui/hud.gd` |
+| **Learn to Play**: a guided first match in seven steps, suggested to new players | `match/tutorial.gd`, `match/game_session.gd`, `ui/main_menu.gd` |
+
 ## Unreleased - Cheese crumbs, Wind-up Decoy, rats seen from the front and back, teleporters, impulse grenades
 
 | Change | Files |
