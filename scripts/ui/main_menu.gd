@@ -138,6 +138,7 @@ func _show_home() -> void:
 	col.add_child(Icons.on_button(UiKit.button("Free Build", _show_free.bind(false), Vector2(320, 44)), "hammer"))
 	col.add_child(Icons.on_button(UiKit.button("How to Play", _show_help, Vector2(320, 44)), "book"))
 	col.add_child(Icons.on_button(UiKit.button("Settings & Controls", _show_settings, Vector2(320, 44)), "gear"))
+	col.add_child(Icons.on_button(UiKit.button("Credits & Licences", _show_credits, Vector2(320, 44)), "book"))
 	col.add_child(Icons.on_button(UiKit.button("Quit", func() -> void: get_tree().quit(), Vector2(320, 44)), "door"))
 	if _message != "":
 		var msg := UiKit.wrapped(_message, 15, UiKit.TEAM[1].lightened(0.3))
@@ -351,6 +352,25 @@ func _show_help() -> void:
 	var sc := UiKit.scroll(440)
 	(sc[1] as VBoxContainer).add_child(UiKit.wrapped(HELP, 16))
 	_page.add_child(sc[0])
+	var back := UiKit.button("Back", _show_home, Vector2(160, 44))
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_page.add_child(back)
+	back.grab_focus()
+
+
+func _show_credits() -> void:
+	_clear()
+	_page.add_child(UiKit.label("Credits & Licences", 28, UiKit.BRASS))
+	var text := RichTextLabel.new()
+	text.bbcode_enabled = false
+	text.text = Credits.text()
+	text.custom_minimum_size = Vector2(700, 440)
+	text.scroll_active = true
+	text.selection_enabled = true
+	text.add_theme_font_size_override("normal_font_size", 14)
+	text.add_theme_color_override("default_color", UiKit.PAPER)
+	text.focus_mode = Control.FOCUS_ALL
+	_page.add_child(text)
 	var back := UiKit.button("Back", _show_home, Vector2(160, 44))
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_page.add_child(back)
