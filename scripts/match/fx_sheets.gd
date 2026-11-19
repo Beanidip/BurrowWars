@@ -26,5 +26,6 @@ const SHEETS := {
 	"shield_block": {"w": 108, "h": 76, "cols": 4, "frames": 17, "fps": 15, "loop": false, "pivot": Vector2(19.0, 62.0)},   # impacts/shield-block
 	"shield_up": {"w": 106, "h": 66, "cols": 2, "frames": 4, "fps": 15, "loop": true, "pivot": Vector2(17.0, 54.0)},   # impacts/shield-block
 	"tele_pad": {"w": 72, "h": 93, "cols": 7, "frames": 36, "fps": 15, "loop": true, "pivot": Vector2(36.0, 82.0)},   # scifi/teleporter-pad
+	"impulse": {"w": 206, "h": 190, "cols": 4, "frames": 16, "fps": 15, "loop": false, "pivot": Vector2(108.0, 95.0)},   # explosions/plasma-explosion
 	"tele_beam": {"w": 188, "h": 167, "cols": 3, "frames": 9, "fps": 15, "loop": false, "pivot": Vector2(94.0, 128.0)},   # scifi/warp-in
 }

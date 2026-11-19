@@ -204,7 +204,17 @@ func _sync_sticks(delta: float) -> void:
 	for s in m.dynamite.sticks:
 		alive[s.uid] = true
 		var node: Node3D = _sticks.get(s.uid)
-		if node == null:
+		if node == null and s.impulse:
+			# an Impulse Grenade: a blue puck with a bright band and a light on top
+			node = _part([
+				[Vector3(-0.12, -0.09, -0.12), Vector3(0.12, 0.09, 0.12), Color(0.2, 0.42, 0.95)],
+				[Vector3(-0.13, -0.025, -0.13), Vector3(0.13, 0.025, 0.13), Color(0.75, 0.95, 1.0)]])
+			var light := _part([[Vector3(-0.045, 0.09, -0.045), Vector3(0.045, 0.15, 0.045), Color(0.85, 1.0, 1.0)]])
+			light.name = "Spark"
+			node.add_child(light)
+			add_child(node)
+			_sticks[s.uid] = node
+		elif node == null:
 			node = _part([
 				[Vector3(-0.07, -0.17, -0.07), Vector3(0.07, 0.17, 0.07), Color(0.9, 0.14, 0.12)],
 				[Vector3(-0.075, -0.05, -0.075), Vector3(0.075, 0.05, 0.075), Color(0.98, 0.9, 0.75)],
@@ -215,6 +225,13 @@ func _sync_sticks(delta: float) -> void:
 			add_child(node)
 			_sticks[s.uid] = node
 		node.position = s.pos + Vector3(0, 0.05, 0)
+		if s.impulse:
+			node.position = s.pos
+			if not s.stuck:
+				node.rotation += Vector3(s.vel.z, 0, -s.vel.x) * delta * 2.2
+			var blink := 30.0 if s.stuck else 8.0     # stuck: about to go
+			(node.get_node("Spark") as Node3D).scale = Vector3.ONE * (0.5 + 1.0 * absf(sin(_t * blink)))
+			continue
 		# tumble with speed; a resting stick lies on its side
 		var spin := Vector3(s.vel.z, 0, -s.vel.x) * delta * 2.2
 		node.rotation += spin

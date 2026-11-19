@@ -119,6 +119,14 @@ A host's lobby lasts until the host presses Enter; a dedicated server's runs a c
   early; your own team's bonks pass through it (everyone's do in the lobby). Your team sees it
   labelled "Wind-up Decoy". Bots can't tell: they chase it like a carrier and bonk it. At most
   8 march at once. It is not a rat: it never scores, raids, picks anything up or takes a seat.
+- **Impulse Grenade** (trap, 2 for 8 scrap): thrown with Q like Mobile TNT, but it sticks to the
+  first thing it touches (ground, wall, lava or a rat, whom it then rides) and goes off 0.4 s
+  later (`Config.IMPULSE_FUSE`; in mid-air after 2.5 s if it hits nothing). It damages nothing
+  at all: no blocks, cracks, gadgets or TNT, and nobody drops cheese. It only shoves: every rat
+  within 4 blocks, thrower and teammates included, is thrown away from it (13 blocks/s plus a
+  lift beside it, half that at the edge, never more than about 4 blocks of height); carriers are
+  heavier and go 60% as far. Loose cheese, dynamite and wind-ups are pushed too. Ctrl+Q sets one
+  at your feet to launch yourself about 4 blocks up. Shares Mobile TNT's 16-in-the-air limit.
 - **Teleporter Set** (construction, 16 scrap): a one-way pair of floor pads, in the spirit of
   TF2's. Q puts down the entrance, Q again the exit (each needs a floor; not inside bases).
   Anyone on the owner's team who stands on a charged entrance for 0.5 s (`Config.TELE_WAIT`)

@@ -823,8 +823,8 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 	var g := gadget if gadget != "" else rat.equipped
 	if g == "" or not ClassDefs.GADGET_NAME.has(g):
 		return "Nothing equipped - buy gadgets at the workshop (B)"
-	if g == "dynamite":
-		return "Mobile TNT is thrown, not placed"
+	if g == "dynamite" or g == "impulse":
+		return "%s is thrown, not placed" % ClassDefs.GADGET_NAME[g]
 	if g == "windup":
 		return "A Wind-up Decoy is set down with Q"
 	if g == "teleporter":
@@ -871,8 +871,8 @@ func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, di
 	## The Q key: throw Mobile TNT, or place the equipped gadget at the aim.
 	if remote != null:
 		return remote.act("try_use_equipped", [wire_aim(aim), look, gentle, dir])
-	if rat.equipped == "dynamite":
-		return dynamite.try_throw(rat, look, gentle)
+	if rat.equipped == "dynamite" or rat.equipped == "impulse":
+		return dynamite.try_throw(rat, look, gentle, rat.equipped)
 	if rat.equipped == "windup":
 		return windup.try_place(rat, look)
 	if aim.is_empty():
@@ -1628,6 +1628,53 @@ func blast(origin: Vector3, radius: float, power: float) -> void:
 			p.vel = pd.normalized() * 5.0 + Vector3(0, 5.0, 0)
 	dynamite.on_blast(origin, radius)
 	windup.on_blast(origin, radius)
+
+
+func impulse_blast(origin: Vector3) -> void:
+	## Impulse Grenade: it damages nothing at all (terrain, gadgets, TNT and
+	## cheese are left alone). It only shoves: every rat near it, thrower and
+	## teammates included, plus loose cheese, dynamite and wind-ups, is thrown
+	## away from it, hardest right beside it. Carriers keep their cheese.
+	fx.emit("impulse", origin, null)
+	var radius := Config.IMPULSE_RADIUS
+	for r in rats:
+		if r.flying:
+			continue
+		var k := _impulse_k(r.center() - origin, radius)
+		if k <= 0.0:
+			continue
+		if r.carried > 0:
+			k *= Config.IMPULSE_CARRY
+		r.vel = _impulse_dir(r.center() - origin) * Config.IMPULSE_PUSH * k + Vector3(0, Config.IMPULSE_LIFT * k, 0)
+		r.vel.y = minf(r.vel.y, Config.IMPULSE_MAX_UP)
+		r.knock = 0.45
+		r.on_floor = false
+		siege.release(r)
+	for p in pickups:
+		var k := _impulse_k(p.pos - origin, radius)
+		if k > 0.0:
+			p.vel = _impulse_dir(p.pos - origin) * 9.0 * k + Vector3(0, 5.0 * k, 0)
+	for s in dynamite.sticks:
+		var k := _impulse_k(s.pos - origin, radius)
+		if k > 0.0 and not s.stuck:
+			s.vel = _impulse_dir(s.pos - origin) * 11.0 * k + Vector3(0, 4.0 * k, 0)
+			s.resting = false
+	for w in windup.walkers:
+		var k := _impulse_k(w.body.center() - origin, radius)
+		if k > 0.0:
+			w.body.vel = _impulse_dir(w.body.center() - origin) * 12.0 * k + Vector3(0, 6.0 * k, 0)
+			w.body.knock = 0.45
+			w.body.on_floor = false
+
+
+static func _impulse_k(d: Vector3, radius: float) -> float:
+	## Strength by distance: full right beside it, half at the edge, none past it.
+	var dist := d.length()
+	return 0.0 if dist > radius else 1.0 - 0.5 * dist / radius
+
+
+static func _impulse_dir(d: Vector3) -> Vector3:
+	return d.normalized() if d.length() > 0.05 else Vector3.UP
 
 
 # ---------------------------------------------------------------- abilities

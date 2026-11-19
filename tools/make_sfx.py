@@ -3,7 +3,8 @@
 splash (into or out of water), sizzle (lava), squeak (Squeaker Pad), pop
 (Bubble Shoes bubbles), toot (a Cheese Decoy going off), alarm (a vault
 raid: a soft two-tone chime), windup (a clockwork key being wound) and
-teleport (a teleporter sending someone), all in assets/sfx/.
+teleport (a teleporter sending someone) and impulse (an Impulse Grenade
+going off), all in assets/sfx/.
 Drop your own recordings over them (mono or stereo WAV, any rate) any time.
 
     python3 tools/make_sfx.py
@@ -167,6 +168,18 @@ def teleport(rng: random.Random) -> np.ndarray:
     return out
 
 
+def impulse(rng: random.Random) -> np.ndarray:
+    """An Impulse Grenade: a deep electric whump and a rushing push of air."""
+    n = int(0.75 * RATE)
+    t = np.arange(n) / RATE
+    f = 110.0 * np.exp(-t / 0.12) + 38.0
+    thump = np.sin(2 * math.pi * np.cumsum(f) / RATE) * np.exp(-t / 0.18)
+    noise = np.array([rng.uniform(-1, 1) for _ in range(n)])
+    rush = lowpass(noise, 1400) * np.exp(-t / 0.22) * np.clip(t / 0.01, 0, 1) * 1.2
+    zap = np.sin(2 * math.pi * np.cumsum(900.0 + 2600.0 * np.exp(-t / 0.05)) / RATE) * np.exp(-t / 0.06) * 0.35
+    return thump * 1.4 + rush + zap
+
+
 def save(name: str, x: np.ndarray) -> None:
     x = x / max(1e-6, float(np.max(np.abs(x)))) * 0.8
     fade = min(len(x), int(0.01 * RATE))
@@ -189,3 +202,4 @@ if __name__ == "__main__":
     save("alarm", alarm(random.Random(1)))
     save("windup", windup(random.Random(13)))
     save("teleport", teleport(random.Random(17)))
+    save("impulse", impulse(random.Random(19)))

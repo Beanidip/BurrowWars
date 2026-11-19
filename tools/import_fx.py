@@ -56,6 +56,7 @@ EFFECTS = [
     ("shield_block", "impacts/shield-block",     15, 0,   {}),
     ("shield_up",   "impacts/shield-block",      15, 0,   {}, {"from": 0.36, "to": 0.62, "loop": True}),
     ("tele_pad",    "scifi/teleporter-pad",      15, 0,   {}),
+    ("impulse",     "explosions/plasma-explosion", 15, 1.1, {}),
     ("tele_beam",   "scifi/warp-in",             15, 0,   {}, {"from": 0.1, "to": 0.75}),
 ]
 

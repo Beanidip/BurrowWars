@@ -345,6 +345,13 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_burst(pos + Vector3.ONE * 0.07, Blocks.COLOR[int(data)], 2, 1.5)
 		"throw":
 			_sound("block_place", pos, 1.5)
+		"impulse_stick":
+			_sound("mine_wood", pos, 2.2, -4.0)
+		"impulse":
+			_sound("impulse", pos, 1.0, 3.0)
+			_sprite("impulse", pos - Vector3(0, 0.75, 0), 0.95)
+			_shockwave(pos, Config.IMPULSE_RADIUS, Color(0.5, 0.8, 1.0))
+			_burst(pos, Color(0.55, 0.85, 1.0), 22, 9.0)      # the push, flying outward
 		"crumb":
 			crumbs.add(pos)
 		"tele_place":
@@ -386,6 +393,32 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"respawn":
 			_sound("block_place", pos, 0.7)
 			_sprite("poof", pos, 0.7)
+
+
+func _shockwave(pos: Vector3, radius: float, color: Color) -> void:
+	## A see-through bubble that swells out to `radius` and fades: the push.
+	var bubble := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 1.0
+	sphere.height = 2.0
+	sphere.radial_segments = 24
+	sphere.rings = 12
+	bubble.mesh = sphere
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.rim_enabled = false
+	mat.albedo_color = Color(color.r, color.g, color.b, 0.4)
+	bubble.material_override = mat
+	bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	bubble.position = pos
+	bubble.scale = Vector3.ONE * 0.2
+	add_child(bubble)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(bubble, "scale", Vector3.ONE * radius, 0.32).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(bubble.queue_free)
 
 
 func _smoke(pos: Vector3, size: float) -> void:

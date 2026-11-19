@@ -18,6 +18,7 @@ const TIPS := [
 	"Carrying cheese leaves a crumb trail. Follow the crumbs!",
 	"That carrier might be a Wind-up Decoy. Bonk it and find out...",
 	"Teleporters are one way, and cheese won't fit through.",
+	"Drop an Impulse Grenade at your feet (Ctrl+Q) to launch yourself.",
 ]
 
 var progress := 0.0              # 0..1

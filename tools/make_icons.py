@@ -233,6 +233,16 @@ def _(i):
     i.line(7, 5, 10, 2, BLACK); i.line(10, 2, 12, 3, BLACK)
     i.pts([(13, 2), (13, 3), (14, 2)], YEL); i.put(14, 1, ORANGE)
 
+@icon("impulse")
+def _(i):
+    # a blue grenade puck with rings of push coming off it
+    i.disc(8, 9, 4.2, BLUE)
+    i.rect(4, 8, 12, 9, BLUE_L)
+    i.disc(8, 4.5, 1.2, WHITE)
+    i.pts([(1, 6), (0, 8), (0, 10), (1, 12)], BLUE_L)
+    i.pts([(14, 6), (15, 8), (15, 10), (14, 12)], BLUE_L)
+    i.pts([(3, 2), (12, 2), (2, 15), (13, 15)], STEEL_L)
+
 @icon("sticky")
 def _(i):
     i.rect(2, 10, 13, 13, GOO)

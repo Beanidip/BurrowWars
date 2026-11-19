@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4038,4 +4038,111 @@ func test_teleporters() -> void:
 	check(rep.tele_pads().size() == 2 and rep.tele_next(eng) == "", "a player's game knows them (and that the set is out)")
 	remove_child(rep)
 	rep.free()
+	end(m)
+
+
+func test_impulse_grenade() -> void:
+	var m := new_match()
+	flat_arena(m, ARENA, 8)
+	var kinds: Array[String] = []
+	m.fx.connect(func(kind: String, _p: Vector3, _d: Variant) -> void: kinds.append(kind))
+	var me := arena_rat(m, 0, "scout")
+	me.position = MapGenerator.spawn_point(0)
+	run(m, 0.3)
+	me.scrap = 20
+	check(m.try_buy(me, "impulse") == "" and int(me.gadgets.get("impulse", 0)) == 2 and me.scrap == 12, "two Impulse Grenades for 8 scrap")
+	m.set_equipped(me, "impulse")
+	check(m.try_place_gadget(me, ARENA, "impulse") != "", "it's thrown, not placed")
+	# a wall to throw at, with things around it
+	for dz in range(-3, 4):
+		for dy in 4:
+			m.world.set_block(ARENA + Vector3i(4, dy, dz), Blocks.STONE)
+	me.position = Vector3(ARENA) + Vector3(-1.5, 0, 0.5)
+	me.yaw = -PI / 2.0
+	var near := arena_rat(m, 1, "digger", Vector3(2.0, 0, 1.5))
+	var far := arena_rat(m, 1, "builder", Vector3(-7, 0, -7))
+	near.carried = 1
+	var cheese := m.spawn_pickup("cheese", Vector3(ARENA) + Vector3(2.5, 0.1, -1.5), Vector3.ZERO)
+	var stick := m.dynamite.spawn(Vector3(ARENA) + Vector3(2.5, 0.2, -0.5), Vector3.ZERO, me.id, 9.0)
+	var w := m.windup.spawn(0, me.id, "scout", "x", Vector3(ARENA) + Vector3(2.5, 0, 2.5), Vector3(0, 0, 1))
+	w.fuse = 99.0
+	run(m, 0.3)
+	var before := m.world.data.duplicate()
+	var dmg := m.world.damage.size()
+	m.world.set_block(ARENA + Vector3i(3, 0, -3), Blocks.TNT)
+	m.tnt[ARENA + Vector3i(3, 0, -3)] = {"owner": -1, "fuse": -1.0}
+	before = m.world.data.duplicate()
+	kinds.clear()
+	check(m.try_use_equipped(me, {}, Vector3(1, 0, 0), false) == "" and int(me.gadgets["impulse"]) == 1, "Q throws one")
+	var g: DynamiteSystem.Stick = null
+	for s2 in m.dynamite.sticks:
+		if s2.impulse:
+			g = s2
+	var t := 0.0
+	while t < 1.0 and g != null and not g.stuck:
+		m.step(DT)
+		t += DT
+	check(g != null and g.stuck and g.pos.x > ARENA.x + 3.4 and g.pos.x < ARENA.x + 4.01 and kinds.has("impulse_stick"),
+		"it sticks to the wall it hits (%.2f s)" % t)
+	var at := g.pos
+	run(m, 0.2)
+	check(m.dynamite.sticks.has(g) and g.pos == at, "and stays put...")
+	var cheese_at := cheese.pos
+	var stick_at := stick.pos
+	run(m, Config.IMPULSE_FUSE)
+	check(not m.dynamite.sticks.has(g) and kinds.has("impulse") and not kinds.has("boom"), "...then promptly bursts")
+	var away := Vector3(near.position.x - at.x, 0, near.position.z - at.z).normalized()
+	var flat := Vector3(near.vel.x, 0, near.vel.z)
+	check(flat.length() > 2.5 and flat.normalized().dot(away) > 0.8 and near.knock > 0.0,
+		"a rat near it is thrown away from it (%.1f, %s)" % [flat.length(), str(near.vel)])
+	check(near.carried == 1, "and keeps its cheese")
+	check(far.vel.length() < 0.5, "nobody far away feels it")
+	run(m, 0.15)
+	check(cheese.pos.distance_to(at) > cheese_at.distance_to(at) + 0.3, "loose cheese is pushed away")
+	check(stick.pos.distance_to(at) > stick_at.distance_to(at) + 0.3, "and dynamite")
+	check(w.body.position.distance_to(at) > Vector3(ARENA + Vector3i(2, 0, 2)).distance_to(at), "and wind-ups")
+	check(m.world.data == before and m.world.damage.size() == dmg and not kinds.has("break") and float(m.tnt[ARENA + Vector3i(3, 0, -3)]["fuse"]) < 0.0,
+		"it damages nothing: no blocks, no cracks, no TNT lit")
+	# dropped at your feet it launches you
+	m.dynamite.sticks.clear()
+	near.position = Vector3(ARENA) + Vector3(-6.5, 0, 6.5)
+	me.position = Vector3(ARENA) + Vector3(-1.5, 0, 0.5)
+	me.vel = Vector3.ZERO
+	me.knock = 0.0
+	me.throw_cd = 0.0
+	run(m, 0.3)
+	var y0 := me.position.y
+	check(m.try_use_equipped(me, {}, Vector3(1, 0, 0), true) == "", "Ctrl+Q drops it at your feet")
+	var top := y0
+	for i in int(2.0 / DT):
+		m.step(DT)
+		top = maxf(top, me.position.y)
+	check(top > y0 + 3.0 and top < y0 + 8.0, "...and it launches you (%.1f blocks up)" % (top - y0))
+	print("    self-launch height %.1f" % (top - y0))
+	# thrown at a rat it sticks to them
+	m.free_mode = true
+	me.position = Vector3(ARENA) + Vector3(-4.5, 0, -4.5)
+	near.position = Vector3(ARENA) + Vector3(-1.5, 0, -4.5)
+	near.vel = Vector3.ZERO
+	me.throw_cd = 0.0
+	run(m, 0.5)
+	m.try_use_equipped(me, {}, Vector3(1, 0.05, 0), false)
+	var stuck_to: Rat = null
+	for i in 40:
+		m.step(DT)
+		for s3 in m.dynamite.sticks:
+			if s3.stuck:
+				stuck_to = s3.stuck_to
+	check(stuck_to == near, "thrown at a rat, it sticks to the rat")
+	# online players see it in flight and stuck
+	me.throw_cd = 0.0
+	m.try_use_equipped(me, {}, Vector3(0, 0, 1), false)
+	var ns := NetServer.new()
+	ns.m = m
+	var snap: Dictionary = ns._snapshot()
+	ns.free()
+	var ok := false
+	for e: Array in snap.get("st", []):
+		ok = ok or (e.size() > 6 and bool(e[5]))
+	check(ok, "the snapshot says which sticks are impulse grenades")
 	end(m)

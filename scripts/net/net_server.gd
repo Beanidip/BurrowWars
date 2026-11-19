@@ -410,7 +410,7 @@ func _snapshot() -> Dictionary:
 		shots.append([s.uid, s.pos, s.vel, s.team])
 	var sticks: Array = []
 	for s in m.dynamite.sticks:
-		sticks.append([s.uid, s.pos, s.vel, s.fuse, s.resting])
+		sticks.append([s.uid, s.pos, s.vel, s.fuse, s.resting, s.impulse, s.stuck])
 	return {"t": m.time, "sc": [m.scores[0], m.scores[1]], "o": m.over, "w": m.winner, "r": rats, "p": picks,
 		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "wd": m.windup.snapshot(), "tp": m.tele_pads(), "lt": m.lobby_left}
 

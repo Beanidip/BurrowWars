@@ -68,6 +68,8 @@ const SHOP := [
 		"desc": "See-through door. Your team walks through. Two TNT blasts (or ten wrecking-ball hits) break it; cracks show the damage."},
 	{"id": "dynamite", "name": "Mobile TNT x2", "kind": "gadget", "qty": 2, "cost": 7, "cat": "Traps",
 		"desc": "Bouncy dynamite stick, 3 s fuse: a TNT blast wherever it ends up, Team Blocks and Gates included. Q throws it, Ctrl+Q sets it down gently. Springs launch it, conveyors carry it, ice lets it slide."},
+	{"id": "impulse", "name": "Impulse Grenade x2", "kind": "gadget", "qty": 2, "cost": 8, "cat": "Traps",
+		"desc": "Q throws it; it sticks to whatever it hits - ground, wall or rat - and a moment later bursts, throwing everyone near it away (you too), with loose cheese, dynamite and wind-ups. It damages nothing and nobody drops cheese. Ctrl+Q drops it at your feet: launch yourself."},
 	{"id": "sticky", "name": "Sticky Trap x2", "kind": "gadget", "qty": 2, "cost": 4, "cat": "Traps",
 		"desc": "Glue pad. Enemy rats wade through at half speed; rolling dynamite stops dead."},
 	{"id": "pitfall", "name": "Pitfall x2", "kind": "gadget", "qty": 2, "cost": 5, "cat": "Traps",
@@ -102,11 +104,11 @@ const MATS := ["dirt", "stone", "ice", "obsidian"]
 const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "ice": Blocks.ICE, "obsidian": Blocks.OBSIDIAN}
 ## Gadgets that can go inside your own team gate (see Blocks.GATE_GADGETS).
 const GATE_GADGETS := ["ladder", "spring", "highway", "conveyor", "wallspring"]
-const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "sticky", "pitfall", "wallspring", "decoy", "windup", "squeaker", "gate", "teamblock", "stash", "teleporter", "cannon", "crane", "dozer"]
+const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "impulse", "sticky", "pitfall", "wallspring", "decoy", "windup", "squeaker", "gate", "teamblock", "stash", "teleporter", "cannon", "crane", "dozer"]
 const GADGET_NAME := {
 	"ladder": "Ladder", "spring": "Spring", "highway": "Highway", "conveyor": "Conveyor",
 	"trap": "Mouse Trap", "tnt": "TNT", "gate": "Team Gate",
-	"dynamite": "Mobile TNT", "sticky": "Sticky Trap", "pitfall": "Pitfall", "wallspring": "Wall Spring",
+	"dynamite": "Mobile TNT", "impulse": "Impulse Grenade", "sticky": "Sticky Trap", "pitfall": "Pitfall", "wallspring": "Wall Spring",
 	"cannon": "Scrap Cannon", "crane": "Wrecking Crane", "dozer": "Bulldozer", "teamblock": "Team Block", "stash": "Team Stash",
 	"decoy": "Cheese Decoy", "squeaker": "Squeaker Pad", "windup": "Wind-up Decoy", "teleporter": "Teleporter",
 }

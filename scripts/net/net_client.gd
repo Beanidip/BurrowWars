@@ -240,6 +240,9 @@ func _apply_sticks(list: Array) -> void:
 		s.vel = e[2]
 		s.fuse = float(e[3])
 		s.resting = bool(e[4])
+		if e.size() > 6:
+			s.impulse = bool(e[5])
+			s.stuck = bool(e[6])
 		out.append(s)
 	m.dynamite.sticks = out
 
