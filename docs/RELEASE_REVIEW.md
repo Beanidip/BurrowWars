@@ -29,6 +29,27 @@ Realistic estimate for a solo developer:
 - an itch.io build shortly after;
 - **mobile: not now**.
 
+## 1b. Your decisions (2026-11-19) and what they change
+
+| Decision | What it changes |
+|---|---|
+| Name: **Burrow Wars** | Rename `config/name` and the export product names (drop "Jam Edition"). Part of Phase A. |
+| All art and sound will be **redone**; only the pixelfx effects stay | Resolves the asset-provenance P0, as long as every new asset comes with a licence record. pixelfx is MIT (`assets/fx/LICENSE-pixelfx.txt`), which includes the teleport and impulse effects. A written art spec (sheet layouts, team-colour magenta, sizes) will keep the new art drop-in. That also matters for mods. |
+| **Free on itch.io, playable in the browser** | The web build is now a launch target. Browser players can only *join* servers, and only over secure WebSocket (`wss://`) with a CA-signed certificate (§5). Browser multiplayer therefore needs **your own public server(s) and a domain**. |
+| **About $3 on Steam, plus a ~$10 soundtrack add-on as a donation** | Steam has a Soundtrack app type that attaches to the game like DLC (Steamworks docs). The minimum base price is the $0.99 tier, so $2.99 is fine. **Risk:** developers report Valve objecting when the same game is free elsewhere; Valve's official wording wasn't reachable (UNVERIFIED). See the open questions. |
+| **Windows, Linux, macOS, browser** | Mobile is off the list. macOS needs signing and notarization for a smooth Gatekeeper experience. That means an Apple Developer ID ($99/year) and access to a Mac for testing. Valve's 2019 stance called notarization recommended, not required; current status UNVERIFIED. |
+| **Public server browser:** Steam integration on Steam, IP join plus browsing elsewhere | Two networks: Steam lobbies for Steam users, and public dedicated servers that everyone can join (Steam, itch desktop and browser). That is also cross-play. The static `servers.json` list should become a small server registry on your domain. |
+| **16 v 16 max** | The caps are hard-coded to 15 clients / 16 rats (`scripts/net/net.gd:20`, `scripts/net/net_server.gd:79`). Team sizes are clamped to 8 per side on the dedicated server (`scripts/net/dedicated_server.gd:91`) and 4 in the menu (`scripts/ui/main_menu.gd:205`). Bandwidth becomes the main problem: at today's encoding a 16v16 snapshot is about 4× larger, about 100 KB/s per client, about 25 Mbit/s of host upload. That is fine for a server in a data centre after optimisation, but **not for a player hosting from home**. Proposal: player-hosted (and Steam-lobby) games up to 8v8, 16v16 on dedicated servers, after delta and quantized snapshots plus distance-based update rates. |
+| **Steam Deck Verified** | Controller support moves to **P0**, along with: controller navigation of every menu, controller glyphs, the on-screen keyboard for text fields, 12 px minimum text, and a playable default framerate on the Deck. |
+| **No Steamworks account yet** | All Steam work uses AppID 480 until you pay the $100 Steam Direct fee and get an AppID. Account setup (identity, tax, bank) takes time, so start it early. |
+| **Achievements** | 8–12 achievements in the Steam phase. |
+| **Mod support** | New phase G. Recommended order: (1) map sharing, which already exists via `.bwmap`, plus Steam Workshop maps; (2) skin and sound packs, matching your art redo; (3) data mods (classes, shop, tuning). Script mods (arbitrary GDScript in a PCK) are not recommended: they run untrusted code on players' machines, break online play unless every player has the same mods, and don't work well in the browser. |
+
+**Revised answers**
+- **Own servers:** *yes, small.* One or two VPS with a domain and TLS for public and browser play. Steam friend games stay peer-to-peer and free.
+- **itch.io:** *yes*: desktop plus browser.
+- **Mobile:** *no* (not in your platform list).
+
 ## 2. Project map (Phase 1)
 
 **Scene tree and autoloads**
@@ -124,6 +145,12 @@ Realistic estimate for a solo developer:
 | P1 | Onboarding | `scripts/ui/main_menu.gd:7-39`, `scripts/core/inputs.gd:7-43` | "How to Play" is a wall of text, and there are 30+ bindings with no tutorial. Store reviews punish this hard. | Add a short guided first match: dig, pick up cheese, carry it home, bonk, workshop. Show contextual prompts the first time each system appears. | M |
 | P1 | Release | `scripts/ui/main_menu.gd:63-65`, `:496-505` | The server list URL is hard-coded to the raw `main` branch of your GitHub repo. It breaks if the repo is renamed or made private, and it's an undisclosed network call. | In Steam builds replace it with the Steam lobby list; in the itch build, host it on your own domain or remove it. | S |
 | P1 | Steam Deck | `scripts/ui/hud.gd:162,186,284,736` | The smallest text is 11–12 px on the 1280×720 canvas. That's above Valve's 9 px minimum at 1280×800 but below the 12 px recommendation. Body text in dialogs is 13–15 px. | Raise the minimum to 12 px and add a UI scale option. Verify on device. | S |
+| P0 (Deck goal) | Input | `scripts/core/inputs.gd:7-59`, `scripts/ui/settings_panel.gd:67-79` | Steam Deck Verified needs full controller play. Today there are no joypad bindings, no menu focus navigation and no on-screen keyboard. | Gamepad layer, focus navigation, glyphs, and `showGamepadTextInput` (Steam) for name and address fields. | L |
+| P0 (16v16) | Netcode | `scripts/net/net.gd:20`, `scripts/net/net_server.gd:79`, `:394-415`, `scripts/net/dedicated_server.gd:91`, `scripts/ui/main_menu.gd:205` | The caps stop at 16 rats. The full-state 20 Hz snapshot grows linearly with players (about 100 KB/s per client at 16v16). | Raise the caps to 32. Use delta and quantized snapshots with distance-based update rates. Allow 16v16 on dedicated servers only. | L |
+| P0 (public servers) | Netcode / cheating | `scripts/net/net_server.gd:168-180` | Public servers mean strangers. Trusted movement allows wall-walking and flying, and the server then grants pickups and scores from that position. | Server-side collision and gravity sanity checks, plus action rate limits (this moves up from P1). | M |
+| P0 (browser) | Web | `scripts/ui/main_menu.gd:282`, `scripts/ui/hud.gd:539` (pause on Esc), `scripts/net/net.gd:56,71` | Browser-specific problems: no filesystem to open (`OS.shell_open`); Esc releases pointer lock, which fights the Esc pause key; ENet isn't available in browsers. | Web feature checks (hide the maps folder, offer download/upload instead); treat losing pointer lock as pause; add a WebSocket backend with `wss://` servers. | M |
+| P1 | macOS | `export_presets.cfg` | No macOS preset. Unsigned apps are blocked by Gatekeeper when downloaded from itch.io. GodotSteam's libraries need signing too. | macOS preset (universal binary), Developer ID signing and notarization, test on a Mac. | M |
+| P1 | Mods | `scripts/core/config.gd` (tuning `const`s), `scripts/match/class_defs.gd:9`, `:28-96` (classes, shop) | Content is compile-time constants, so nothing can be modded except maps. | Load classes, shop and tuning from data files with a version and hash. The server sends its data hash; clients refuse a mismatch. | M |
 | P2 | Persistence | `scripts/core/config.gd:125-128`, `scripts/world/voxel_world.gd:480-500` | Settings and map exports are written in place. A crash mid-write corrupts the file. Loading does fall back safely (`config.gd:103`, `voxel_world.gd:675-699`), so the risk is losing data, not crashing. No settings schema version. | Write to `*.tmp`, then `DirAccess.rename`. Add `"version"` to `settings.cfg`. | S |
 | P2 | Stability | `scripts/actors/rat_sprite.gd:33-35`, `scripts/match/fx_sprite.gd:17`, `scripts/world/block_textures.gd:13`, `scripts/ui/icons.gd:12` | At exit: 41 ObjectDB instances, 18 GL textures and 1 CanvasItem RID are reported as leaked, plus 1 orphan node after returning to the menu (soak run). These are static caches that are never cleared. Harmless, but noisy in logs. | Clear the caches on `NOTIFICATION_WM_CLOSE_REQUEST`. Find the orphan with `--verbose`. | S |
 | P2 | Netcode bandwidth | `scripts/net/net_server.gd:394-415`, `docs/MULTIPLAYER.md:91` | The 20 Hz snapshot resends every rat's name and class strings and full-precision vectors: about 32 KB/s per player at 4v4, so about 2 Mbit/s of host upload for 8 players. | Send names and classes only when they change, quantize positions, and skip unchanged machines. That roughly halves the bandwidth. | M |
@@ -360,7 +387,7 @@ flowchart LR
 
 ## 5. Platform answers (Phase 4)
 
-### Own servers? **No (for launch).** Revisit if public matchmaking demand appears; see §4c.
+### Own servers? **Updated: yes, small** (see §1b). Originally "no for launch"; browser play and public cross-platform servers need one or two of your own `wss://` servers. Steam friend games still need none.
 
 ### itch.io? **Yes**, same codebase, plus a direct-IP and LAN fallback.
 
@@ -406,7 +433,7 @@ flowchart LR
 - **Verdict:** possible as a single-player "dig a cheese vs bots" demo after the meshing work
   (greedy meshing) lands. Not worth it for launch.
 
-### Mobile? **Later, as a separate adaptation, not a launch target. Effort: High.**
+### Mobile? **Dropped** (not in your platform list). Kept below for reference: later, as a separate adaptation. Effort: High.
 
 - **Performance**
   - About 1 million triangles, all 256 chunks always loaded, and GDScript meshing at about 7 ms per
@@ -435,82 +462,101 @@ flowchart LR
 - **Recommendation:** ship on PC first. If the game finds an audience, consider a mobile spin-off
   with a smaller map, simplified tools and touch-first design. Budget **2–4 months** for that.
 
-## 6. Phased roadmap
+## 6. Phased roadmap (revised for your decisions)
 
-Efforts assume one developer working full-time, with me doing the code. Calendar time depends on
-art and your testing time.
+Efforts assume full-time work with me doing the code; calendar time depends on your art and testing.
+Each phase goes on its own branch, in small commits, with the full test gate run after each change.
 
-**A. Must-fix before any release** (about 1.5–2.5 weeks)
-- Credits and licences screen, plus an asset-licence audit and the AI disclosure answers (P0).
-- Final name, icon and version stamping (P0).
-- Display settings, fullscreen default and SFX volume (P1).
-- Threaded runtime re-meshing, plus greedy meshing or cheaper rock faces (P1).
-- Action rate limiting (P1).
-- Basic onboarding: a guided first match (P1).
-- Atomic saves, cache cleanup and a quit-to-desktop button (P2, cheap).
-- Re-run the full test gate after each item.
+**A. Foundations** (about 2–3 weeks)
+- Rename to **Burrow Wars**: project name, export product names, window title.
+- Credits and licences screen (Godot, third-party notices, pixelfx).
+- `docs/ASSET_LICENSES.md` ledger, and an **art and audio spec** for your redo. It covers sheet layouts, team-colour magenta, side/front/back rat views, icon grid and sound list, so new assets drop in without code changes.
+- Display settings: fullscreen default, resolution/UI scale, vsync, fps cap. SFX volume bus.
+- Meshing:
+  - **threaded runtime re-meshing**;
+  - **greedy meshing**, with rock mottling done by vertex colour.
+  - Both are needed for the Steam Deck and the browser.
+- Atomic saves, cache cleanup, and a quit-to-desktop button.
+- A guided first match (onboarding).
 
-**B. Steam multiplayer** (about 2–3 weeks)
-- `NetworkBackend` refactor with ENet behind it; tests must stay green (2–3 days).
-- GodotSteam setup for 4.7.x and the export pipeline with AppID 480 (1–2 days).
-- Lobbies, invites, `+connect_lobby`, `join_requested` and rich presence, mapped onto the existing
-  playground lobby (4–6 days).
-- Two-machine testing and fixes (2–3 days).
-- Achievements and Auto-Cloud (1–2 days).
-- Movement sanity checks, if you plan public lobbies (2–4 days).
+**A2. Controller and Steam Deck** (about 2 weeks)
+- Gamepad action layer, stick look and aim assist for digging.
+- Focus navigation in every menu and dialog, and controller glyphs.
+- On-screen keyboard hooks.
+- 12 px minimum text and a UI scale option.
+- Test on a Deck; you'll need one, or a tester with one.
 
-**C. itch.io build** (about 1 week)
-- Feature flags and the no-Steam fallback (1–2 days).
-- LAN discovery (1 day).
-- butler channels and a build script (½ day).
-- Store page and pricing (1 day).
-- Optional free demo build: limited goal, bots only (1 day).
+**B. Network core for public play and 16v16** (about 3 weeks)
+- `NetworkBackend` with an **ENet** backend (today's code) and a **WebSocket** backend.
+- Snapshots: delta and quantized encoding; send names and classes only on change; nearby rats every tick, far ones at a lower rate.
+- Raise the caps to 32 rats. 16v16 on dedicated servers only; player hosts and lobbies up to 8v8.
+- Server-side movement sanity checks and action rate limits.
+- Server registry: a small HTTP service or a JSON file on your domain that dedicated servers report to (name, region, players, version). It replaces `servers.json`.
+- Measure bandwidth and CPU for a bot-filled 16v16 dedicated server before calling it done.
 
-**D. Steam store page and launch checklist** (4–8 weeks of calendar time, about 1–2 weeks of work)
-- Pay the Steam Direct fee: **$100 per app, recoupable after $1,000 adjusted gross revenue**
-  (Steamworks docs via search).
-- Complete the store page:
-  - capsule art in all sizes;
-  - 5+ screenshots;
-  - a 30–60 s trailer;
-  - description, tags and the content survey, including AI disclosure.
-- Submit the store page for review **at least 7 days ahead** (review typically takes 3–5 business days).
-- Keep it **Coming Soon for at least 2 weeks** before release (Steamworks docs). Use that time for
-  wishlists and Steam Next Fest if the dates line up.
-- Builds:
-  - SteamPipe depots for Windows and Linux;
-  - a test on Steam Deck;
-  - a Steam Input template;
-  - build review.
-- Decide between Early Access and full release. Early Access suits a multiplayer game that's still growing.
-- **Launch day:** watch logs (Godot file logging is on by default), have a hotfix pipeline ready, and
-  post known issues.
+**C. Your servers** (about 3–5 days, then ongoing)
+- One VPS to start. Pick the region where your players are.
+- A domain, with TLS from Let's Encrypt in front of the WebSocket server (`wss://` on 443).
+- systemd service (docs already exist) and a one-command deploy script.
+- Monitoring.
+- Every game release must update the servers too (same protocol version).
 
-**E. Mobile** (only if A–D succeed; 2–4 months)
-- Performance pass: greedy meshing, view distance, a smaller map.
-- Touch UI and controls.
-- EOS or LAN multiplayer.
-- Store accounts and compliance.
-- Closed test: 12 testers for 14 days on Google Play.
+**D. Browser + itch.io** (about 1–2 weeks)
+- Web export preset, with threads via itch's SharedArrayBuffer option, or a no-threads fallback.
+- Web feature checks: no filesystem, pointer lock and Esc, an audio-unlock click.
+- `wss://` join to your public servers only (browsers can't host).
+- Measure loading time and fps in Chrome, Firefox and Safari.
+- itch page (free), butler channels for windows / linux / mac / html5, and a release script.
 
-## 7. Open questions for you
+**E. Steam** (about 2–3 weeks once you have an AppID; can start on AppID 480)
+- GodotSteam for 4.7.x.
+- Steam backend: lobbies, friend invites, `+connect_lobby` / `join_requested`, rich presence.
+- Steam public lobby list, with your dedicated servers listed alongside.
+- 8–12 achievements; Auto-Cloud for settings and maps.
+- Soundtrack app (your ~$10 donation add-on).
+- SteamPipe depots for Windows, Linux and macOS, and a Steam Input default config.
 
-1. **Final name.** Is "Jam Edition" staying? Have you checked "Burrow Wars" for trademark or store
-   name clashes?
-2. **Asset provenance.** Who made the rat sprites, the music and the original sound effects, and
-   under what terms? Were any generated with AI tools? (This decides Steam's AI disclosure and
-   whether anything needs replacing.)
-3. **Price model.** Paid (what price?), free, or free with paid supporter pack? Early Access or full release?
-4. **Platforms.** Windows and Linux only (my recommendation), or macOS too? macOS needs signing and
-   notarization; details UNVERIFIED here.
-5. **Do you want public matchmaking at launch, or friends-only invites?** This decides whether the
-   movement anti-cheat work is P1 or can wait.
-6. **Max players per match** for the Steam lobby: 8 (4v4) or 16? 16 roughly doubles host upload.
-7. **Controller support:** is Steam Deck Verified a goal? It's the biggest single UX job (about 1–2 weeks).
-8. **Cross-play between Steam and itch:** needed? My recommendation is no; it'd require EOS.
-9. **Do you already have a Steamworks account and AppID?** Until then, Steam work uses AppID 480.
-10. **Mobile:** is a phone version a real goal for 2027, or a curiosity? It changes how much I
-    invest in greedy meshing and chunk streaming now.
+**F. macOS** (about 3–5 days plus Apple account setup)
+- Export preset with a universal binary.
+- Developer ID signing and notarization, including GodotSteam's libraries.
+- Testing on a real Mac.
+
+**G. Mods** (after launch; about 2–4 weeks in total, in steps)
+1. Steam Workshop for `.bwmap` maps; a maps folder on itch and browse/upload in the browser.
+2. Skin and sound packs loaded from a mods folder (and Workshop), in the art-spec layouts.
+3. Data mods for classes, shop and tuning, with server-enforced hashes.
+4. No script mods for now.
+
+**H. Store pages and launch** (4–8 weeks calendar, overlapping C–F)
+- Steamworks account and $100 fee.
+- Capsules, screenshots, trailer, content survey (including AI disclosure).
+- Coming Soon page for at least 2 weeks.
+- Store and build review.
+- Steam Deck review request.
+- itch page and devlog.
+- Launch-day hotfix plan.
+
+## 7. Open questions (round 2)
+
+1. **Free itch vs $3 Steam.** Developers report Valve objecting when the same game is free
+   elsewhere (UNVERIFIED; official wording not reachable). There are three safe-ish options:
+   - (a) **free on Steam too**, with the soundtrack or a "Supporter Pack" as the paid
+     donation. **My recommendation for a multiplayer game**, because player count is everything;
+   - (b) the itch version is a clearly smaller "Browser Edition", e.g. no Free Build or mods, fewer maps;
+   - (c) ask Valve once your Steamworks account exists.
+
+   Which do you prefer?
+2. **Own servers.** Are you OK running one or two small servers? Rough guess: about $10–40/month
+   plus a domain (UNVERIFIED prices). Browser multiplayer and public cross-play need them.
+3. **Player caps.** OK with 16v16 on dedicated servers only and up to 8v8 for player-hosted or
+   Steam-lobby games? Otherwise hosts at home will lag.
+4. **Cross-play.** Should Steam players also see and join your public servers? I recommend
+   yes: one community instead of two.
+5. **Mod scope at launch.** Maps and Workshop first, skins and data later, no script mods. Agreed?
+6. **Hardware.** Do you have, or can you borrow, a Mac and a Steam Deck for testing?
+7. **Art spec.** Should the redone rats keep the current 72×72 sheets with side/front/back views,
+   or would you like a different size or style (e.g. 3D models)? This changes the spec I write in Phase A.
+8. **Go-ahead.** Shall I start **Phase A** on a new branch?
 
 ## 8. Verification status of external facts
 
@@ -536,6 +582,9 @@ search results summarising the official pages and marked anything not confirmed 
 - Android: target API 36 from 31 Aug 2026 ([developer.android.com](https://developer.android.com/google/play/requirements/target-sdk)).
 - Apple: $99 per year ([developer.apple.com](https://developer.apple.com/support/enrollment/)); App Privacy details required ([developer.apple.com](https://developer.apple.com/app-store/app-privacy-details/)).
 
+- Steam minimum base price: the $0.99 tier ([Steamworks pricing](https://partner.steamgames.com/doc/store/pricing), via search). Soundtrack apps attach to a game like DLC ([Steamworks](https://partner.steamgames.com/doc/store/application/soundtrackapp), via search).
+- Browsers on HTTPS pages (itch.io) need `wss://` with a CA-signed certificate (Godot web export docs and community reports, via search).
+
 **UNVERIFIED (secondary sources or my knowledge only)**
 - GodotSteam:
   - whether the GDExtension includes the MultiplayerPeer;
@@ -553,3 +602,5 @@ search results summarising the official pages and marked anything not confirmed 
 - iOS: needing a Mac and Xcode.
 - Epic Online Services: free, relay fallback, no Epic Games Store requirement.
 - All server hosting prices.
+- Valve's position on a game being free on itch.io but paid on Steam (forum reports only).
+- Whether Steam currently requires macOS notarization (Valve's 2019 post said it was recommended, not required).
