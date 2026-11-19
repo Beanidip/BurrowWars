@@ -1,4 +1,4 @@
-# Burrow Wars: Jam Edition
+# Burrow Wars
 
 Rival rat civilizations dig, build and bonk their way to golden cheese.
 A from-scratch rebuild of Burrow Wars, scoped like a 48-hour game-jam entry:

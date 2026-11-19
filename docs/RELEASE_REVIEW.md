@@ -45,6 +45,16 @@ Realistic estimate for a solo developer:
 | **Achievements** | 8–12 achievements in the Steam phase. |
 | **Mod support** | New phase G. Recommended order: (1) map sharing, which already exists via `.bwmap`, plus Steam Workshop maps; (2) skin and sound packs, matching your art redo; (3) data mods (classes, shop, tuning). Script mods (arbitrary GDScript in a PCK) are not recommended: they run untrusted code on players' machines, break online play unless every player has the same mods, and don't work well in the browser. |
 
+**Round 2 answers (2026-11-19)**
+- **Pricing:** to be decided before the itch.io phase. Either free on both stores (with the soundtrack as a supporter add-on), or about $3 on Steam plus a free demo on itch.io.
+- **Servers:** you'll run one or two.
+- **16v16:** dedicated servers only; player-hosted games up to 8v8.
+- **Cross-play:** Steam players can join the public servers.
+- **Mods:** **skipped for the first release.** Phase G moves to after launch.
+- **Testing hardware:** you can borrow a Mac and a Steam Deck.
+- **Art style:** the current sprite style and sheet layouts stay; the art spec describes them.
+- **Phase A:** approved, on branch `phase-a-foundations`.
+
 **Revised answers**
 - **Own servers:** *yes, small.* One or two VPS with a domain and TLS for public and browser play. Steam friend games stay peer-to-peer and free.
 - **itch.io:** *yes*: desktop plus browser.
@@ -521,7 +531,7 @@ Each phase goes on its own branch, in small commits, with the full test gate run
 - Developer ID signing and notarization, including GodotSteam's libraries.
 - Testing on a real Mac.
 
-**G. Mods** (after launch; about 2–4 weeks in total, in steps)
+**G. Mods** (**after launch**, skipped for the first release; about 2–4 weeks in total, in steps)
 1. Steam Workshop for `.bwmap` maps; a maps folder on itch and browse/upload in the browser.
 2. Skin and sound packs loaded from a mods folder (and Workshop), in the art-spec layouts.
 3. Data mods for classes, shop and tuning, with server-enforced hashes.

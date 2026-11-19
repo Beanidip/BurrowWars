@@ -13,7 +13,7 @@ var _launches := 0               # a newer launch supersedes one still loading
 
 
 func _ready() -> void:
-	Log.info("Burrow Wars: Jam Edition %s on Godot %s" % [
+	Log.info("Burrow Wars %s on Godot %s" % [
 		ProjectSettings.get_setting("application/config/version"), Engine.get_version_info()["string"]])
 	Net.joined.connect(_on_joined)
 	Net.join_failed.connect(_on_net_problem)
