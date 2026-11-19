@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4343,3 +4343,101 @@ func test_safe_saves_and_exit() -> void:
 	UiKit.clear_cache()
 	check(Icons.tex("cheese") != null and RatSprite._frame("digger", 0, "idle", 0) != null and UiKit.theme() != null,
 		"after clearing, everything loads again")
+
+
+func test_tutorial() -> void:
+	## Learn to Play: each step ticks off when the player has really done it.
+	var keep := bool(Config.get_value("tutorial_done"))
+	var m := new_match({"goal": 1, "seed": 4242})
+	var me := m.spawn_rat(0, "digger", false)
+	m.spawn_rat(1, "scout", true)
+	run(m, 0.3)
+	var guide := TutorialGuide.new()
+	guide.m = m
+	guide.rat = me
+	add_child(guide)
+	guide.setup()
+	m.fx.connect(guide.on_fx)
+	check(m.bots.is_empty() and guide.dummy != null and guide.dummy.team == 1, "nobody else plays; the other rat is the practice rat")
+	check(m.world.get_cell(guide.cheese_cell) == Blocks.CHEESE, "a cheese is buried for the lesson")
+	check(Blocks.SOLID[m.world.get_cell(guide.cheese_cell + Vector3i(0, 1, 0))] == 1, "under one block of ground")
+	check(guide.step == 0 and guide.text_for(0).contains(Inputs.key_name("move_forward")), "step 1 names your own keys")
+	# 1 move
+	guide.poll()
+	check(guide.step == 0, "nothing ticks off by itself")
+	me.position += Vector3(3.5, 0, 0)
+	guide.poll()
+	check(guide.step == 1, "walking ticks off step 1")
+	# 2 workshop
+	me.position = MapGenerator.spawn_point(0)
+	run(m, 0.2)
+	check(m.try_buy(me, "ladder") == "", "buy ladders at base")
+	guide.poll()
+	check(guide.step == 2, "buying something ticks off step 2")
+	# 3 dig: three blocks next to the base, for real
+	var front := MapGenerator.approach_point(0)
+	me.position = Vector3(floorf(front.x) + 0.5, m.world.surface_y(floori(front.x), floori(front.z)), floorf(front.z) + 0.5)
+	me.vel = Vector3.ZERO
+	run(m, 0.3)
+	var dug := 0
+	for dz in [1, -1, 2, -2, 3]:
+		var cell := Vector3i(floori(me.position.x) + 1, floori(me.position.y) - 1, floori(me.position.z) + dz)
+		for hit in 12:
+			if Blocks.SOLID[m.world.get_cell(cell)] == 0:
+				break
+			me.dig_cd = 0.0
+			m.try_dig(me, cell)
+		if Blocks.SOLID[m.world.get_cell(cell)] == 0:
+			dug += 1
+	guide.poll()
+	check(dug >= 3 and guide.step == 3, "digging 3 blocks ticks off step 3 (%d dug)" % dug)
+	# 4 place two blocks
+	for dz in [1, -1]:
+		var cell := Vector3i(floori(me.position.x) + 1, floori(me.position.y), floori(me.position.z) + dz)
+		m.world.set_block(cell, Blocks.AIR)
+		m.try_place_mat(me, cell, "dirt" if int(me.mats["dirt"]) > 0 else "stone")
+	guide.poll()
+	check(guide.step == 4, "placing 2 blocks ticks off step 4")
+	check(m.markers.size() == 1 and String(m.markers[0]["text"]) == "Practice Rat", "the practice rat is marked")
+	# 5 bonk the practice rat
+	me.position = guide.dummy.position + Vector3(1.2, 0, 0)
+	me.bonk_cd = 0.0
+	me.stun = 0.0
+	run(m, 0.05)
+	m.try_bonk(me, guide.dummy)
+	guide.poll()
+	check(guide.step == 5, "bonking it ticks off step 5")
+	# 6 pick up the cheese
+	check(m.markers.size() == 1 and String(m.markers[0]["text"]) == "Cheese here", "the cheese is marked")
+	m.world.set_block(guide.cheese_cell, Blocks.AIR)
+	m.spawn_pickup("cheese", me.position + Vector3(0, 0.2, 0), Vector3.ZERO)
+	run(m, 0.5)
+	guide.poll()
+	check(me.carried > 0 and guide.step == 6, "picking it up ticks off step 6")
+	# dropping it sends you back for it
+	m.drop_cheese(me)
+	guide.poll()
+	check(guide.step == 5 and me.carried == 0, "drop it and the guide sends you back for it")
+	run(m, 2.5)
+	me.vel = Vector3.ZERO
+	var picked := false
+	for p in m.pickups:
+		if p.kind == "cheese":
+			me.position = p.pos
+			picked = true
+	run(m, 0.5)
+	guide.poll()
+	check(picked and me.carried > 0 and guide.step == 6, "pick it up again")
+	# 7 bank it
+	var done := [false]
+	guide.finished.connect(func() -> void: done[0] = true)
+	me.position = MapGenerator.spawn_point(0)
+	me.vel = Vector3.ZERO
+	run(m, 0.5)
+	guide.poll()
+	check(m.scores[0] >= 1 and m.over and done[0], "banking it wins the match and finishes the tutorial")
+	check(bool(Config.get_value("tutorial_done")), "and it's remembered")
+	Config.set_value("tutorial_done", keep)
+	Config.save()
+	guide.queue_free()
+	end(m)

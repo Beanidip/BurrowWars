@@ -118,6 +118,14 @@ func _ready() -> void:
 	hud.rematch_requested.connect(func() -> void: rematch_requested.emit())
 	hud.start_requested.connect(func() -> void: start_requested.emit())
 	m.won.connect(_celebrate)
+	if bool(settings.get("tutorial", false)) and not online_client:
+		var guide := TutorialGuide.new()
+		guide.name = "Tutorial"
+		guide.m = m
+		guide.rat = player
+		add_child(guide)
+		guide.setup()
+		m.fx.connect(guide.on_fx)
 	if loading != null:
 		# behind the loading screen: the match waits while every core meshes the world
 		m.auto_step = false

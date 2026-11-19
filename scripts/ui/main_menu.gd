@@ -133,7 +133,12 @@ func _show_home() -> void:
 	col.add_theme_constant_override("separation", 8)
 	_page.add_child(col)
 	var play := Icons.on_button(UiKit.button("Cheese Race (Bot Game)", _show_setup, Vector2(320, 52)), "cheese")
+	if not bool(Config.get_value("tutorial_done")):
+		var hint := UiKit.label("New here? Try Learn to Play first - about five minutes.", 15, UiKit.BRASS)
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(hint)
 	col.add_child(play)
+	col.add_child(Icons.on_button(UiKit.button("Learn to Play", _start_tutorial, Vector2(320, 44)), "book"))
 	col.add_child(Icons.on_button(UiKit.button("Play Online", _show_online, Vector2(320, 44)), "online"))
 	col.add_child(Icons.on_button(UiKit.button("Free Build", _show_free.bind(false), Vector2(320, 44)), "hammer"))
 	col.add_child(Icons.on_button(UiKit.button("How to Play", _show_help, Vector2(320, 44)), "book"))
@@ -357,6 +362,11 @@ func _show_help() -> void:
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_page.add_child(back)
 	back.grab_focus()
+
+
+func _start_tutorial() -> void:
+	start_requested.emit({"mode": "race", "seed": 4242, "goal": 1, "team": 0, "class": "digger", "team_size": 1,
+		"tutorial": true, "bot_rest": 0.0})
 
 
 func _show_credits() -> void:

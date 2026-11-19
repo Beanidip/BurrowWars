@@ -98,6 +98,7 @@ const DEFAULTS := {
 	"player_name": "",
 	"last_address": "",
 	"host_lobby": true,
+	"tutorial_done": false,
 }
 
 const WINDOW_MODES := ["windowed", "fullscreen", "exclusive"]
