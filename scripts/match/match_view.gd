@@ -219,7 +219,28 @@ func _nearest_rat(pos: Vector3) -> Rat:
 	return best
 
 
+func _rumble(kind: String, pos: Vector3) -> void:
+	## Things that happen to us buzz the controller (if the player wants that).
+	if listener == null:
+		return
+	var d := listener.position.distance_to(pos)
+	match kind:
+		"bonk":
+			if d < 1.0:
+				Inputs.rumble(0.5, 0.6, 0.25)
+		"boom":
+			if d < 8.0:
+				Inputs.rumble(0.6, 1.0 - d / 10.0, 0.35)
+		"impulse":
+			if d < 5.0:
+				Inputs.rumble(0.5, 0.7, 0.25)
+		"land", "pound":
+			if d < 0.5:
+				Inputs.rumble(0.2, 0.35, 0.12)
+
+
 func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
+	_rumble(kind, pos)
 	var c := pos + Vector3(0.5, 0.5, 0.5)
 	var size := 1.0 if data == null or not (data is float or data is int) else float(data)
 	match kind:

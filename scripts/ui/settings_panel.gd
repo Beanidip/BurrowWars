@@ -32,8 +32,24 @@ func _ready() -> void:
 	_slider_row("Mouse sensitivity", "mouse_sensitivity", 0.0005, 0.008, 0.0001)
 	_slider_row("Field of view", "fov", 60.0, 110.0, 1.0)
 	_slider_row("Third-person camera distance", "camera_distance", 2.0, 7.0, 0.1)
+	add_child(UiKit.label("Controller", 18, UiKit.BRASS))
+	_slider_row("Stick look speed", "stick_sensitivity", 0.8, 6.0, 0.1)
+	var vib := CheckBox.new()
+	vib.text = "Vibration"
+	vib.button_pressed = bool(Config.get_value("vibration"))
+	vib.toggled.connect(func(on: bool) -> void: _store("vibration", on))
+	add_child(vib)
+	var pads := GridContainer.new()
+	pads.columns = 2
+	pads.add_theme_constant_override("h_separation", 16)
+	for action: String in Inputs.PAD_LABELS:
+		var l := UiKit.label(Inputs.PAD_LABELS[action], 15)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pads.add_child(l)
+		pads.add_child(UiKit.label(Inputs.pad_name(action), 15, UiKit.BRASS))
+	add_child(pads)
 	var inv := CheckBox.new()
-	inv.text = "Invert mouse Y"
+	inv.text = "Invert look up/down (mouse and stick)"
 	inv.button_pressed = bool(Config.get_value("invert_y"))
 	inv.toggled.connect(func(on: bool) -> void: _store("invert_y", on))
 	add_child(inv)
@@ -93,6 +109,12 @@ func _begin_rebind(action: String, button: Button) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if _waiting_action != "" and event is InputEventJoypadButton and event.is_pressed():
+		# a gamepad can't type a key: any button cancels the rebind
+		get_viewport().set_input_as_handled()
+		_waiting_button.text = Inputs.key_name(_waiting_action)
+		_waiting_action = ""
+		return
 	if _waiting_action == "" or not (event is InputEventKey) or not event.is_pressed():
 		return
 	get_viewport().set_input_as_handled()

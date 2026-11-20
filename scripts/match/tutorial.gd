@@ -69,17 +69,20 @@ func text_for(i: int) -> String:
 	var k := func(action: String) -> String: return Inputs.key_name(action)
 	match STEPS[clampi(i, 0, STEPS.size() - 1)]:
 		"move":
+			if Inputs.using_pad:
+				return "Walk with the left stick and look around with the right stick. %s jumps; press it again in the air to double jump." % k.call("jump")
 			return "Look around with the mouse and walk with %s %s %s %s. %s jumps; press it again in the air to double jump." % [
 				k.call("move_forward"), k.call("move_left"), k.call("move_back"), k.call("move_right"), k.call("jump")]
 		"shop":
 			return "Back on your base, press %s to open the workshop and buy something - try Ladders. You start with a little scrap; mining orange scrap blocks earns more." % k.call("workshop")
 		"dig":
-			return "Hold left mouse on the ground to dig. Dig 3 blocks: the dirt and stone go into your pack."
+			return "Hold %s on the ground to dig. Dig 3 blocks: the dirt and stone go into your pack." % k.call("dig")
 		"place":
-			return "Right mouse places what you dug (%s-%s pick the material). Place 2 blocks - handy for climbing out of holes." % [
-				k.call("slot_1"), k.call("slot_4")]
+			var pick := "%s / %s pick the material" % [k.call("prev_slot"), k.call("next_slot")] if Inputs.using_pad \
+				else "%s-%s pick the material" % [k.call("slot_1"), k.call("slot_4")]
+			return "%s places what you dug (%s). Place 2 blocks - handy for climbing out of holes." % [k.call("place"), pick]
 		"bonk":
-			return "A Practice Rat is waiting outside your base (marked). Walk up to it and left-click to bonk it. A bonked rat drops a cheese if it carries one."
+			return "A Practice Rat is waiting outside your base (marked). Walk up to it and press %s to bonk it. A bonked rat drops a cheese if it carries one." % k.call("dig")
 		"cheese":
 			return "Golden cheese is buried just outside your base (marked). Dig down to it and walk into it to pick it up."
 		"home":

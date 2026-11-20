@@ -47,8 +47,52 @@ const MOUSE := {
 	"place": MOUSE_BUTTON_RIGHT,
 }
 
+## Gamepad layout (Xbox names; the Steam Deck's buttons are labelled the same).
+## Each entry: ["b", button] or ["a", axis, direction]. Actions that exist
+## only on a gamepad (look, next/previous slot) are added here as well.
+const PAD := {
+	"move_forward": [["a", JOY_AXIS_LEFT_Y, -1]],
+	"move_back": [["a", JOY_AXIS_LEFT_Y, 1]],
+	"move_left": [["a", JOY_AXIS_LEFT_X, -1]],
+	"move_right": [["a", JOY_AXIS_LEFT_X, 1]],
+	"look_left": [["a", JOY_AXIS_RIGHT_X, -1]],
+	"look_right": [["a", JOY_AXIS_RIGHT_X, 1]],
+	"look_up": [["a", JOY_AXIS_RIGHT_Y, -1]],
+	"look_down": [["a", JOY_AXIS_RIGHT_Y, 1]],
+	"jump": [["b", JOY_BUTTON_A]],
+	"dash": [["b", JOY_BUTTON_B]],
+	"descend": [["b", JOY_BUTTON_B]],          # held: climb down / swim down / fly down
+	"interact": [["b", JOY_BUTTON_X]],
+	"gear": [["b", JOY_BUTTON_Y]],
+	"gadget": [["b", JOY_BUTTON_RIGHT_SHOULDER]],
+	"cycle_gadget": [["b", JOY_BUTTON_LEFT_SHOULDER]],
+	"dig": [["a", JOY_AXIS_TRIGGER_RIGHT, 1]],
+	"place": [["a", JOY_AXIS_TRIGGER_LEFT, 1]],
+	"next_slot": [["b", JOY_BUTTON_DPAD_RIGHT]],
+	"prev_slot": [["b", JOY_BUTTON_DPAD_LEFT]],
+	"ability_1": [["b", JOY_BUTTON_DPAD_UP]],
+	"ability_2": [["b", JOY_BUTTON_DPAD_DOWN]],
+	"drop_cheese": [["b", JOY_BUTTON_LEFT_STICK]],
+	"camera_toggle": [["b", JOY_BUTTON_RIGHT_STICK]],
+	"pause": [["b", JOY_BUTTON_START]],
+	"workshop": [["b", JOY_BUTTON_BACK]],
+}
+const PAD_DEADZONE := 0.2
+const PAD_LABELS := {"move_forward": "Move", "look_left": "Look", "jump": "Jump", "dash": "Dash (climb down on ladders, in water or flying)",
+	"interact": "Pilot a machine", "gear": "Use gear", "gadget": "Use the Q gadget (hold B as well to set it down gently)",
+	"cycle_gadget": "Next gadget", "dig": "Dig / bonk", "place": "Place", "next_slot": "Next material or tool",
+	"prev_slot": "Previous material or tool", "ability_1": "Class ability 1 (rotate a blueprint)",
+	"ability_2": "Class ability 2 (mirror a blueprint)", "drop_cheese": "Drop one cheese", "camera_toggle": "First / third person",
+	"pause": "Menu", "workshop": "Workshop (your pack when away from base)"}
+
+signal device_changed(pad: bool)
+
+var using_pad := false          # the last thing the player touched was a gamepad
+var pad_device := 0
+
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	for action: String in KEYS:
 		_bind_key(action, Config.get_key(action, KEYS[action][0]))
 	for action: String in MOUSE:
@@ -57,6 +101,100 @@ func _ready() -> void:
 		var ev := InputEventMouseButton.new()
 		ev.button_index = MOUSE[action]
 		InputMap.action_add_event(action, ev)
+	_bind_pad()
+
+
+func _bind_pad() -> void:
+	for action: String in PAD:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
+		InputMap.action_set_deadzone(action, PAD_DEADZONE)
+		for spec: Array in PAD[action]:
+			InputMap.action_add_event(action, _pad_event(spec))
+	# menus: A confirms, B goes back (directions already include the D-pad and stick)
+	for pair: Array in [["ui_accept", JOY_BUTTON_A], ["ui_cancel", JOY_BUTTON_B]]:
+		var ev := InputEventJoypadButton.new()
+		ev.device = -1
+		ev.button_index = pair[1]
+		InputMap.action_add_event(pair[0], ev)
+
+
+static func _pad_event(spec: Array) -> InputEvent:
+	if spec[0] == "b":
+		var b := InputEventJoypadButton.new()
+		b.device = -1          # any controller
+		b.button_index = spec[1]
+		return b
+	var a := InputEventJoypadMotion.new()
+	a.device = -1
+	a.axis = spec[1]
+	a.axis_value = float(spec[2])
+	return a
+
+
+func _input(event: InputEvent) -> void:
+	# Prompts follow whatever the player last touched.
+	var pad := using_pad
+	if event is InputEventJoypadButton and event.is_pressed():
+		pad = true
+		pad_device = event.device
+	elif event is InputEventJoypadMotion and absf((event as InputEventJoypadMotion).axis_value) > 0.5:
+		pad = true
+		pad_device = event.device
+	elif event is InputEventKey or event is InputEventMouseButton:
+		pad = false
+	elif event is InputEventMouseMotion and (event as InputEventMouseMotion).relative.length() > 6.0:
+		pad = false
+	if pad != using_pad:
+		using_pad = pad
+		device_changed.emit(pad)
+
+
+func rumble(weak: float, strong: float, seconds: float) -> void:
+	## A short buzz on the controller in use (if the player allows it).
+	if using_pad and bool(Config.get_value("vibration")):
+		Input.start_joy_vibration(pad_device, clampf(weak, 0.0, 1.0), clampf(strong, 0.0, 1.0), seconds)
+
+
+func pad_name(action: String) -> String:
+	## The controller button for an action, by the controller's own labels.
+	if not PAD.has(action):
+		return ""
+	var spec: Array = PAD[action][0]
+	var sony := _is_sony()
+	if spec[0] == "a":
+		match int(spec[1]):
+			JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y:
+				return "Left stick"
+			JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y:
+				return "Right stick"
+			JOY_AXIS_TRIGGER_LEFT:
+				return "L2" if sony else "LT"
+			JOY_AXIS_TRIGGER_RIGHT:
+				return "R2" if sony else "RT"
+		return "Stick"
+	match int(spec[1]):
+		JOY_BUTTON_A: return "Cross" if sony else "A"
+		JOY_BUTTON_B: return "Circle" if sony else "B"
+		JOY_BUTTON_X: return "Square" if sony else "X"
+		JOY_BUTTON_Y: return "Triangle" if sony else "Y"
+		JOY_BUTTON_LEFT_SHOULDER: return "L1" if sony else "LB"
+		JOY_BUTTON_RIGHT_SHOULDER: return "R1" if sony else "RB"
+		JOY_BUTTON_LEFT_STICK: return "L3"
+		JOY_BUTTON_RIGHT_STICK: return "R3"
+		JOY_BUTTON_START: return "Options" if sony else "Menu"
+		JOY_BUTTON_BACK: return "Create" if sony else "View"
+		JOY_BUTTON_DPAD_UP: return "D-pad Up"
+		JOY_BUTTON_DPAD_DOWN: return "D-pad Down"
+		JOY_BUTTON_DPAD_LEFT: return "D-pad Left"
+		JOY_BUTTON_DPAD_RIGHT: return "D-pad Right"
+	return "Button %d" % int(spec[1])
+
+
+func _is_sony() -> bool:
+	var n := Input.get_joy_name(pad_device).to_lower()
+	return n.contains("ps4") or n.contains("ps5") or n.contains("dualsense") or n.contains("dualshock") \
+		or n.contains("sony") or n.contains("playstation")
 
 
 func _bind_key(action: String, keycode: int) -> void:
@@ -87,6 +225,9 @@ func key_of(action: String) -> int:
 
 
 func key_name(action: String) -> String:
+	## What to press, on the device the player is using right now.
+	if using_pad and PAD.has(action):
+		return pad_name(action)
 	if MOUSE.has(action):
 		return "LMB" if MOUSE[action] == MOUSE_BUTTON_LEFT else "RMB"
 	return OS.get_keycode_string(key_of(action))

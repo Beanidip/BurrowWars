@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4440,4 +4440,109 @@ func test_tutorial() -> void:
 	Config.set_value("tutorial_done", keep)
 	Config.save()
 	guide.queue_free()
+	end(m)
+
+
+func _pad_button(button: int, pressed := true) -> InputEventJoypadButton:
+	var e := InputEventJoypadButton.new()
+	e.device = 0
+	e.button_index = button
+	e.pressed = pressed
+	return e
+
+
+func _feed(e: InputEvent) -> void:
+	Input.parse_input_event(e)
+	Input.flush_buffered_events()
+
+
+func _pad_axis(axis: int, value: float) -> InputEventJoypadMotion:
+	var e := InputEventJoypadMotion.new()
+	e.device = 0
+	e.axis = axis
+	e.axis_value = value
+	return e
+
+
+func test_gamepad_input() -> void:
+	## Everything you do in a match has a controller button, prompts name the
+	## controller's buttons once you use it, and the sticks drive the rat.
+	for action: String in ["move_forward", "move_back", "move_left", "move_right", "look_left", "look_right", "look_up", "look_down",
+			"jump", "dash", "descend", "interact", "gear", "gadget", "cycle_gadget", "dig", "place", "next_slot", "prev_slot",
+			"ability_1", "ability_2", "drop_cheese", "camera_toggle", "pause", "workshop"]:
+		var has_pad := false
+		for e in InputMap.action_get_events(action):
+			has_pad = has_pad or e is InputEventJoypadButton or e is InputEventJoypadMotion
+		check(has_pad, "%s is on the controller" % action)
+	var ok_a := false
+	var ok_b := false
+	for e in InputMap.action_get_events("ui_accept"):
+		ok_a = ok_a or (e is InputEventJoypadButton and (e as InputEventJoypadButton).button_index == JOY_BUTTON_A)
+	for e in InputMap.action_get_events("ui_cancel"):
+		ok_b = ok_b or (e is InputEventJoypadButton and (e as InputEventJoypadButton).button_index == JOY_BUTTON_B)
+	check(ok_a and ok_b, "menus: A confirms, B goes back")
+	# prompts follow the device
+	Inputs._input(_pad_button(JOY_BUTTON_A))
+	check(Inputs.using_pad and Inputs.key_name("jump") == "A" and Inputs.key_name("dig") == "RT", "after touching the pad, prompts show its buttons")
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_W
+	key.pressed = true
+	Inputs._input(key)
+	check(not Inputs.using_pad and Inputs.key_name("jump") == OS.get_keycode_string(KEY_SPACE), "after touching the keyboard, keys again")
+	# the sticks drive a real rat
+	var m := new_match()
+	flat_arena(m, ARENA, 6)
+	var r := arena_rat(m, 0, "digger")
+	var ctl := PlayerController.new()
+	ctl.m = m
+	ctl.rat = r
+	add_child(ctl)
+	ctl.yaw = 0.0
+	_feed(_pad_axis(JOY_AXIS_LEFT_Y, -1.0))
+	ctl._physics_process(DT)
+	check(r.wish.dot(Vector3(0, 0, -1)) > 0.9, "left stick forward walks forward (%s)" % str(r.wish))
+	_feed(_pad_axis(JOY_AXIS_LEFT_Y, 0.0))
+	_feed(_pad_axis(JOY_AXIS_LEFT_X, 0.5))
+	ctl._physics_process(DT)
+	check(r.wish.length() > 0.2 and r.wish.length() < 0.8 and r.wish.x > 0.0, "half a tilt walks slower (%.2f)" % r.wish.length())
+	_feed(_pad_axis(JOY_AXIS_LEFT_X, 0.0))
+	_feed(_pad_axis(JOY_AXIS_RIGHT_X, 1.0))
+	ctl._process(0.5)
+	check(ctl.yaw < -0.5, "right stick turns the camera (%.2f)" % ctl.yaw)
+	_feed(_pad_axis(JOY_AXIS_RIGHT_X, 0.0))
+	var y0 := ctl.yaw
+	ctl._process(0.5)
+	check(ctl.yaw == y0, "and stops when let go")
+	# B: dash on the ground, climb down on a ladder
+	r.dash_pressed = false
+	r.on_ladder = true
+	ctl._unhandled_input(_pad_button(JOY_BUTTON_B))
+	check(not r.dash_pressed, "on a ladder B climbs down instead of dashing")
+	r.on_ladder = false
+	ctl._unhandled_input(_pad_button(JOY_BUTTON_B))
+	check(r.dash_pressed, "on the ground B dashes")
+	# D-pad left/right: materials, paint, then the chisel and the pantograph
+	ctl.selected_mat = 0
+	ctl.tool = PlayerController.Tool.DIG
+	ctl._unhandled_input(_pad_button(JOY_BUTTON_DPAD_RIGHT))
+	check(ctl.selected_mat == 1, "D-pad Right picks the next material")
+	for i in 4:
+		ctl.cycle_slot(1)
+	check(ctl.tool == PlayerController.Tool.CHISEL, "past the paint slot comes the chisel")
+	ctl.cycle_slot(1)
+	check(ctl.tool == PlayerController.Tool.PANTOGRAPH, "then the pantograph")
+	ctl.cycle_slot(1)
+	check(ctl.tool == PlayerController.Tool.DIG and ctl.selected_mat == 0, "and round to dirt again")
+	ctl._unhandled_input(_pad_button(JOY_BUTTON_DPAD_LEFT))
+	check(ctl.tool == PlayerController.Tool.PANTOGRAPH, "D-pad Left goes back")
+	# holding a blueprint: D-pad Up rotates it
+	var bp := Blueprint.new()
+	bp.size = Vector3i(3, 1, 1)
+	for x in 3:
+		bp.cells.append({"o": Vector3i(x, 0, 0), "id": Blocks.STONE, "mask": null})
+	ctl.blueprint = bp
+	ctl._unhandled_input(_pad_button(JOY_BUTTON_DPAD_UP))
+	check(ctl.blueprint.size == Vector3i(1, 1, 3), "D-pad Up rotates a blueprint")
+	remove_child(ctl)
+	ctl.free()
 	end(m)

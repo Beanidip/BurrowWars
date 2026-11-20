@@ -117,6 +117,8 @@ func machine() -> SiegeSystem.Machine:
 func _unhandled_input(event: InputEvent) -> void:
 	if ui_open or m.over:
 		return
+	if event is InputEventJoypadMotion:
+		return   # sticks are read every frame, triggers by their press (see _pad_triggers)
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var mm := event as InputEventMouseMotion
 		var sens := float(Config.get_value("mouse_sensitivity"))
@@ -142,10 +144,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if rat.operating != -1:
 		return   # at the controls: only aim, fire (polled) and leave
+	var pad := event is InputEventJoypadButton or event is InputEventJoypadMotion
+	if pad and tool == Tool.PANTOGRAPH and blueprint != null and _pad_blueprint(event):
+		return
 	if event.is_action_pressed("jump"):
 		rat.jump_pressed = true
 	elif event.is_action_pressed("dash"):
-		rat.dash_pressed = true
+		# on a gamepad B also climbs down: on a ladder, in water or flying it doesn't dash
+		if not (pad and (rat.on_ladder or rat.in_water or rat.flying)):
+			rat.dash_pressed = true
+	elif event.is_action_pressed("next_slot"):
+		cycle_slot(1)
+	elif event.is_action_pressed("prev_slot"):
+		cycle_slot(-1)
 	elif event.is_action_pressed("camera_toggle"):
 		first_person = not first_person
 	elif event.is_action_pressed("dig"):
@@ -212,6 +223,54 @@ func _unhandled_input(event: InputEvent) -> void:
 				selected_mat = i
 				if tool == Tool.PANTOGRAPH:
 					tool = Tool.DIG
+
+
+func _pad_blueprint(event: InputEvent) -> bool:
+	## Holding a blueprint on a gamepad: D-pad Up rotates, D-pad Down mirrors,
+	## LB flips it upside down and Y inverts it.
+	if event.is_action_pressed("ability_1"):
+		blueprint = blueprint.rotated()
+	elif event.is_action_pressed("ability_2"):
+		blueprint = blueprint.mirrored()
+		_say("Blueprint mirrored")
+	elif event.is_action_pressed("cycle_gadget"):
+		blueprint = blueprint.flipped()
+		_say("Blueprint flipped upside down")
+	elif event.is_action_pressed("gear"):
+		var inv := blueprint.inverted()
+		if inv.cells.is_empty():
+			_say("Inverting that would leave nothing to build")
+		else:
+			blueprint = inv
+			_say("Blueprint inverted: now needs %s" % blueprint.cost_text())
+	else:
+		return false
+	return true
+
+
+func slot_index() -> int:
+	## Where we are in the build slots: materials, paint, then chisel and pantograph.
+	if tool == Tool.CHISEL:
+		return ClassDefs.MATS.size() + 1
+	if tool == Tool.PANTOGRAPH:
+		return ClassDefs.MATS.size() + 2
+	return selected_mat
+
+
+func cycle_slot(step: int) -> void:
+	## D-pad Left/Right on a gamepad: dirt, stone, ice, obsidian, paint, chisel, pantograph.
+	var n := ClassDefs.MATS.size() + 3
+	var i := posmod(slot_index() + step, n)
+	if i <= ClassDefs.MATS.size():
+		selected_mat = i
+		tool = Tool.DIG
+	elif i == ClassDefs.MATS.size() + 1:
+		tool = Tool.CHISEL
+		_say("Chisel: %s carves a microvoxel, %s adds one" % [Inputs.key_name("dig"), Inputs.key_name("place")])
+	else:
+		tool = Tool.PANTOGRAPH
+		corner_set = false
+		_say("Pantograph: %s marks two corners to copy, %s pastes" % [Inputs.key_name("dig"), Inputs.key_name("place")])
 
 
 func painting() -> bool:
@@ -324,6 +383,7 @@ func _physics_process(_delta: float) -> void:
 		rat.jump_held = false
 		rat.down_held = false
 		return
+	_pad_triggers()
 	var firing := Input.is_action_pressed("dig") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	if rat.operating != -1:
 		rat.wish = Vector3.ZERO
@@ -346,6 +406,35 @@ func _physics_process(_delta: float) -> void:
 		_swing()
 	elif tool == Tool.CHISEL and rat.chisel_cd <= 0.0 and not aim.is_empty():
 		_say(m.try_chisel_remove(rat, aim["cell"], aim["micro"]))
+
+
+var _lt_down := false
+var _rt_down := false
+
+
+func _pad_triggers() -> void:
+	## A trigger pull acts once, like a mouse click (holding RT keeps digging,
+	## through the "dig" action like a held mouse button).
+	var lt := Input.get_joy_axis(Inputs.pad_device, JOY_AXIS_TRIGGER_LEFT) > 0.5
+	var rt := Input.get_joy_axis(Inputs.pad_device, JOY_AXIS_TRIGGER_RIGHT) > 0.5
+	if lt and not _lt_down and rat.operating == -1:
+		_secondary()
+	if rt and not _rt_down and rat.operating == -1 and tool == Tool.PANTOGRAPH:
+		_pantograph_click()
+	_lt_down = lt
+	_rt_down = rt
+
+
+func _stick_look(delta: float) -> void:
+	## The right stick turns the camera; squared response for fine aiming.
+	var look := Input.get_vector("look_left", "look_right", "look_up", "look_down")
+	if look == Vector2.ZERO:
+		return
+	var curve := look * look.length()
+	var s := float(Config.get_value("stick_sensitivity"))
+	yaw -= curve.x * s * delta
+	var dy := curve.y * s * 0.75 * delta
+	pitch = clampf(pitch + (dy if bool(Config.get_value("invert_y")) else -dy), -1.5, 1.5)
 
 
 func _swing() -> void:
@@ -389,6 +478,8 @@ func _swing() -> void:
 func _process(delta: float) -> void:
 	if rat == null:
 		return
+	if not ui_open and not m.over:
+		_stick_look(delta)
 	var fwd := forward()
 	var pivot := rat.position + Vector3(0, 0.72, 0)
 	var dist := 0.0

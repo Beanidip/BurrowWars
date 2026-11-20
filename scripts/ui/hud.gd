@@ -279,7 +279,7 @@ func _build_bottom() -> void:
 	_ability_box = VBoxContainer.new()
 	_ability_box.add_theme_constant_override("separation", 2)
 	rv.add_child(_ability_box)
-	_hint = UiKit.label("", 11, UiKit.PAPER.darkened(0.2))
+	_hint = UiKit.label("", 12, UiKit.PAPER.darkened(0.2))
 	rv.add_child(_hint)
 
 
@@ -402,8 +402,11 @@ func _process(_delta: float) -> void:
 	var shop := "[%s] Workshop" % Inputs.key_name("workshop")
 	if not m.can_shop(rat):
 		shop = "[%s] Team stash" % Inputs.key_name("workshop") if m.can_use_stash(rat) else shop + " (at base)"
-	_hint.text = "%s\n[%s] Pack   [%s] Drop cheese\n[%s] Machine   [%s] Camera   [Esc] Menu" % [shop, Inputs.key_name("inventory"),
-		Inputs.key_name("drop_cheese"), Inputs.key_name("interact"), Inputs.key_name("camera_toggle")]
+	var pack := "[%s] Pack" % Inputs.key_name("inventory")
+	if Inputs.using_pad:
+		pack = "[%s] Pack (away from base)" % Inputs.key_name("workshop")
+	_hint.text = "%s\n%s   [%s] Drop cheese\n[%s] Machine   [%s] Camera   [%s] Menu" % [shop, pack,
+		Inputs.key_name("drop_cheese"), Inputs.key_name("interact"), Inputs.key_name("camera_toggle"), Inputs.key_name("pause")]
 	_target.text = ""
 	if ctl.tool_text != "" and _dialog == null:
 		_target.text = ctl.tool_text
@@ -540,8 +543,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			open_dialog("pause")
 		get_viewport().set_input_as_handled()
+	elif _dialog != null and event.is_action_pressed("ui_cancel"):
+		close_dialog()       # B on a gamepad backs out of any dialog
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("workshop"):
-		_toggle("workshop")
+		# on a gamepad the one View button opens your pack wherever there's no workshop
+		var pad := event is InputEventJoypadButton
+		if pad and _dialog_kind == "" and not m.can_shop(rat) and not m.can_use_stash(rat):
+			_toggle("inventory")
+		else:
+			_toggle("workshop")
 	elif event.is_action_pressed("inventory"):
 		_toggle("inventory")
 	elif event.is_action_pressed("color_picker"):
@@ -583,6 +594,7 @@ func close_dialog() -> void:
 	_owned_labels.clear()
 	_stash_labels.clear()
 	ctl.ui_open = false
+	get_viewport().gui_release_focus()   # so the gamepad's A jumps again instead of pressing a button
 	get_tree().paused = false
 	if not m.over:
 		_capture(true)
@@ -731,7 +743,7 @@ func _fill_colors(v: VBoxContainer) -> void:
 		var col := Blocks.paint_color(k)
 		if k >= Blocks.PALETTE_SOLID:
 			b.text = "glass"
-			b.add_theme_font_size_override("font_size", 11)
+			b.add_theme_font_size_override("font_size", 12)
 			b.add_theme_color_override("font_color", UiKit.INK)
 			col = Color(col.r, col.g, col.b, 0.55)
 		var chosen := k == ctl.selected_color

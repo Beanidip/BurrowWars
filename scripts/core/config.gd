@@ -80,6 +80,8 @@ const PANTOGRAPH_MAX := 9         # blueprint edge limit, blocks
 
 const DEFAULTS := {
 	"mouse_sensitivity": 0.0025,
+	"stick_sensitivity": 2.8,        # radians a second at full right-stick tilt
+	"vibration": true,
 	"invert_y": false,
 	"fov": 80.0,
 	"master_volume": 0.8,
