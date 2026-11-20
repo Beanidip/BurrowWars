@@ -121,6 +121,11 @@ func _run() -> void:
 	await frames(3)
 	check(fits(panel), "settings page fits the viewport")
 	await shot("03_settings")
+	menu._show_online()
+	await frames(3)
+	check(fits(panel), "online page fits the viewport")
+	menu._show_home()
+	await frames(2)
 
 	# --- Cheese Race -----------------------------------------------------
 	main.start_match({"mode": "race", "seed": 4242, "goal": 2, "team": 0, "class": "builder", "team_size": 2})

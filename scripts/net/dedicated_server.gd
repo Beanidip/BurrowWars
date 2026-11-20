@@ -12,6 +12,8 @@ extends Node
 ##                                        what browsers need; desktop players can join too)
 ##         [--tls-cert cert.pem --tls-key key.pem]   (serve wss:// directly; or put
 ##                                        the server behind a proxy such as Caddy instead)
+##         [--status-port N]             (HTTP /status for the server list; default port + 1)
+##         [--no-status]                 (no status page)
 ##
 ## or, from an exported build:  BurrowWars.exe --headless -- --server
 ## See docs/MULTIPLAYER.md for running a public server.
@@ -24,6 +26,8 @@ var m: Match
 var net: NetServer
 var _restart_in := -1.0
 var _status_t := 0.0
+var status_page: StatusServer
+var _started := 0
 
 
 static func parse_args() -> Dictionary:
@@ -37,10 +41,10 @@ static func parse_args() -> Dictionary:
 		var a: String = args[i]
 		if a.begins_with("--") and a.length() > 2:
 			var key := a.substr(2)
-			if key in ["server", "free"]:
+			if key in ["server", "free", "no-status"]:
 				out[key] = true
 			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map",
-					"transport", "tls-cert", "tls-key"] and i + 1 < args.size():
+					"transport", "tls-cert", "tls-key", "status-port"] and i + 1 < args.size():
 				out[key] = args[i + 1]
 				i += 1
 		i += 1
@@ -60,7 +64,42 @@ func _ready() -> void:
 	var ws := Net.transport == Net.Transport.WEBSOCKET
 	Log.info("dedicated server '%s' listening on %s %d%s" % [_server_name(), "TCP (WebSocket)" if ws else "UDP", port,
 		" with TLS (wss://)" if ws and String(options.get("tls-cert", "")) != "" else ""])
+	_started = Time.get_ticks_msec()
+	if not bool(options.get("no-status", false)):
+		var status_port := int(options.get("status-port", port + 1))
+		status_page = StatusServer.new()
+		status_page.name = "StatusPage"
+		status_page.provider = status
+		add_child(status_page)
+		var serr := status_page.listen(status_port)
+		if serr != "":
+			Log.warn("dedicated server: %s; the server list won't show live status" % serr)
+		else:
+			Log.info("status page: http://<this machine>:%d/status" % status_port)
 	_next()
+
+
+func status() -> Dictionary:
+	## What the server list shows (StatusServer serves it as JSON).
+	var humans := net.player_count() if net != null else 0
+	var st := {
+		"game": "Burrow Wars",
+		"name": _server_name(),
+		"version": Net.game_version(),
+		"protocol": Net.PROTOCOL,
+		"transport": "ws" if Net.transport == Net.Transport.WEBSOCKET else "enet",
+		"players": humans,
+		"max_players": Net.MAX_CLIENTS,
+		"uptime": (Time.get_ticks_msec() - _started) / 1000,
+	}
+	if m != null:
+		st["mode"] = "lobby" if m.lobby else ("free" if m.free_mode else "race")
+		st["rats"] = m.rats.size()
+		st["team_size"] = int(m.settings.get("team_size", 0))
+		st["goal"] = int(m.settings.get("goal", 0))
+		st["score"] = [m.scores[0], m.scores[1]]
+		st["time"] = int(m.time)
+	return st
 
 
 func _lobby_time() -> float:

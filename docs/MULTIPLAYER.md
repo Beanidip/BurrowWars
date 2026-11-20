@@ -73,6 +73,8 @@ On Windows: `BurrowWars.exe --headless -- --server`.
 | `--map FILE` | none | Start every round on a saved/exported `.bwmap` (from Esc > Export map) instead of a new map. |
 | `--transport ws` | ENet (UDP) | Listen for **WebSocket** (TCP) instead: browsers can join, and so can desktop players with a `ws://` / `wss://` address. Use this for public servers. |
 | `--tls-cert FILE --tls-key FILE` | none | With `--transport ws`: serve `wss://` directly with this PEM certificate and key. Usually simpler: put Caddy in front (below). |
+| `--status-port N` | game port + 1 | TCP port of the **status page** (`GET /status`, JSON) the server list reads: name, version, players, mode, score. |
+| `--no-status` | off | No status page. The server list then shows "not answering" for it. |
 
 ### Browsers need `wss://`
 
@@ -90,28 +92,40 @@ Run the game server on WebSocket, listening only for Caddy:
 ./BurrowWars.x86_64 --headless -- --server --transport ws --port 24565 --name "Burrow Wars EU #1"
 ```
 
-and give Caddy this `/etc/caddy/Caddyfile`:
+and give Caddy this `/etc/caddy/Caddyfile` (the game on 24565, its status page on 24566):
 
 ```
 play.example.org {
-	reverse_proxy 127.0.0.1:24565
+	handle /status {
+		reverse_proxy 127.0.0.1:24566
+	}
+	handle {
+		reverse_proxy 127.0.0.1:24565
+	}
 }
 ```
 
-Several servers on one machine can share the name, one path each:
+Several servers on one machine can share the name, one path each (give each its own ports):
 
 ```
 play.example.org {
+	handle_path /eu1/status {
+		reverse_proxy 127.0.0.1:24566
+	}
 	handle_path /eu1 {
 		reverse_proxy 127.0.0.1:24565
 	}
+	handle_path /eu2/status {
+		reverse_proxy 127.0.0.1:24576
+	}
 	handle_path /eu2 {
-		reverse_proxy 127.0.0.1:24566
+		reverse_proxy 127.0.0.1:24575
 	}
 }
 ```
 
-Players then join `wss://play.example.org` (or `wss://play.example.org/eu1`). Open TCP **80** and
+Players then join `wss://play.example.org` (or `wss://play.example.org/eu1`), and the list reads
+`https://play.example.org/status` (or `.../eu1/status`). Open TCP **80** and
 **443** in the firewall (Caddy needs 80 to get the certificate) and keep the game's own port closed
 to the outside. To skip Caddy, pass your own certificate with `--tls-cert` / `--tls-key` and open
 the game's TCP port instead; the address is then `wss://play.example.org:24565`.
@@ -156,17 +170,29 @@ one full server; give it 2 vCPUs to run two.
 ### Listing it in the game
 
 The **Public servers** list in the menu is read from [`servers.json`](../servers.json) on the
-`main` branch of this repository. To list a server, add an entry and push:
+`main` branch of this repository (or from the URL in the project setting
+`burrow_wars/server_list_url`). To list a server, add an entry and push:
 
 ```json
 {
   "servers": [
-    {"name": "Burrow Wars EU #1", "address": "203.0.113.10", "port": 24565, "region": "EU"}
+    {"name": "Burrow Wars EU #1", "region": "EU", "url": "wss://play.example.org"},
+    {"name": "LAN party box", "region": "EU", "address": "203.0.113.10", "port": 24565}
   ]
 }
 ```
 
-The list shows name, address and region. It does not yet show live player counts or ping.
+- `url` is a WebSocket server (`wss://` for browsers); `address` + `port` an ENet (UDP) server,
+  which browsers can't join (their row says "Desktop only").
+- Each row asks the server's **status page** how it's doing and shows the players, the mode and
+  score, and a ping (estimated from how long the status took). A server running another version
+  shows "Needs version ..." and a full one "Full", instead of Join. **Refresh** asks again.
+- Where the status page is, unless the entry gives `"status": "https://..."`:
+  - `wss://host/path` -> `https://host/path/status` (the Caddy setup above);
+  - `ws://host:port` and `address` + `port` -> `http://host:<port + 1>/status` (the game's own
+    status port; open it in the firewall).
+- To try a list of your own before pushing it: `BW_SERVER_LIST=/path/to/servers.json` (a file or
+  a URL) when starting the game.
 
 ## How it works (for developers)
 
@@ -207,8 +233,12 @@ The list shows name, address and region. It does not yet show live player counts
   dropped. The client checks the parts' order, count and size before building anything.
 - **Files.** `scripts/net/net.gd` (autoload, transports, joining, RPC endpoints),
   `net_server.gd`, `net_client.gd`, `dedicated_server.gd`.
+- **Status page.** `status_server.gd`: a minimal HTTP server on its own TCP port answering
+  `GET /status` with JSON (`Access-Control-Allow-Origin: *`, so a browser build may read it), and
+  404 to anything else; at most 16 connections, 4 KB requests, 3 s each.
 - **Tests.** `tools/net_check.sh` (run by `tools/check.sh`) starts real processes on localhost:
-  dedicated server + scripted client (over ENet, and again over WebSocket), a `wss://` join with a
+  dedicated server + scripted client (over ENet, and again over WebSocket), a 16v16 WebSocket
+  server, the server list (live status, ping, join from the list), a `wss://` join with a
   throwaway certificate, player-hosted game + client, and a dedicated server rolling a connected
   player onto a new map after a win.
 
@@ -221,7 +251,7 @@ The list shows name, address and region. It does not yet show live player counts
   own side. Everything else (digging, building, scores, inventories) is validated by the server.
 - Removed players are not banned: a public server sees every WebSocket player arrive from its
   proxy's address, so there is nothing reliable to ban by yet. Accounts (Steam) would fix that.
-- No accounts, kick or ban commands, chat, or player-count/ping in the server list yet.
+- No accounts, kick or ban commands or chat yet.
 - Player-hosted games need port forwarding for internet play (no relay or NAT punch-through).
 - ENet and `ws://` traffic is not encrypted; `wss://` is. Nothing secret is sent either way.
 - WebSocket runs over TCP, so a lost packet holds up the ones behind it: on a bad connection

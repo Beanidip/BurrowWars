@@ -66,6 +66,9 @@ func _run() -> void:
 	if OS.get_environment("BW_NET_TEST") == "lobby":
 		await _run_lobby()
 		return
+	if OS.get_environment("BW_NET_TEST") == "browser":
+		await _run_browser()
+		return
 	var s := await join_server()
 	check(s != null, "joined the dedicated server and got a session")
 	if s == null:
@@ -283,4 +286,55 @@ func _run_lobby() -> void:
 		await wait(1.0)
 	Net.close()
 	print("---- net lobby: %d failed ----" % _fails)
+	get_tree().quit(1 if _fails > 0 else 0)
+
+
+func fetch(url: String) -> Array:
+	## [http code, parsed JSON or null]
+	var http := HTTPRequest.new()
+	http.timeout = 5.0
+	add_child(http)
+	var out := [0, null]
+	http.request_completed.connect(func(_r: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
+		out[0] = code
+		out[1] = JSON.parse_string(body.get_string_from_utf8()) if body.size() > 0 else null)
+	if http.request(url) != OK:
+		return out
+	await wait_for(func() -> bool: return int(out[0]) != 0, 6.0)
+	http.queue_free()
+	return out
+
+
+func _run_browser() -> void:
+	## The server list (BW_SERVER_LIST, a local servers.json naming our test
+	## server) shows the server's live status and ping, and joins it.
+	var menu: MainMenu = main.menu
+	menu._show_online()
+	await wait_for(func() -> bool:
+		return menu._server_rows.size() == 1 and String((menu._server_rows[0][1] as Label).text).contains("players"), 8.0)
+	var rows: Array = menu._server_rows
+	check(rows.size() == 1, "the list shows our test server (%d rows)" % rows.size())
+	if rows.size() != 1:
+		print("---- net browser: %d failed ----" % _fails)
+		get_tree().quit(1)
+		return
+	var state: Label = rows[0][1]
+	var ping: Label = rows[0][2]
+	var join: Button = rows[0][3]
+	check(state.text.begins_with("0/31 players") and state.text.contains("Cheese Race"), "with its live status (%s)" % state.text)
+	check(ping.text.begins_with("~") and ping.text.ends_with(" ms"), "and a ping (%s)" % ping.text)
+	check(not join.disabled and join.text == "Join", "it can be joined")
+	var st: Array = await fetch(String(rows[0][0]["status"]))
+	check(int(st[0]) == 200 and st[1] is Dictionary and st[1].get("game") == "Burrow Wars" and int(st[1].get("protocol", 0)) == Net.PROTOCOL
+		and st[1].get("transport") == "ws", "the status page answers JSON (%s)" % str(st[1]))
+	var nope: Array = await fetch(String(rows[0][0]["status"]).replace("/status", "/secret"))
+	check(int(nope[0]) == 404, "and nothing else (%d)" % int(nope[0]))
+	join.pressed.emit()
+	var joined := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session.player != null and main.session.loaded, 30.0)
+	check(joined, "Join on the list takes us into the game")
+	if joined:
+		check(main.session.player.display_name != "" and not main.session.player.is_bot, "seated as a player")
+		var st2: Array = await fetch(String(rows[0][0]["status"]) if is_instance_valid(menu) else ServerList.status_url_for(OS.get_environment("BW_URL")))
+		check(st2[1] is Dictionary and int(st2[1].get("players", 0)) == 1, "the status page now counts us (%s)" % str(st2[1]))
+	print("---- net browser: %d failed ----" % _fails)
 	get_tree().quit(1 if _fails > 0 else 0)

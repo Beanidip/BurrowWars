@@ -61,9 +61,10 @@ var _lobby_check: CheckBox
 var _status: Label
 var _back := Callable()   # where B / Esc goes from this page (nowhere on the home page)
 
-## Public servers are listed in servers.json in the game's GitHub repository,
-## so adding one is a one-line change (see docs/MULTIPLAYER.md).
-const SERVER_LIST_URL := "https://raw.githubusercontent.com/Beanidip/BurrowWars/main/servers.json"
+## Public servers are listed in servers.json (ServerList.list_url(): the game's
+## repository by default), so adding one is a one-line change; each row then
+## asks that server for its live status (see docs/MULTIPLAYER.md).
+var _server_rows: Array = []        # [entry, status label, ping label, join button]
 
 
 func _ready() -> void:
@@ -461,8 +462,13 @@ func _show_online() -> void:
 	_pick_team(_team)
 	_pick_class(_class)
 
-	_page.add_child(UiKit.label("Public servers", 20, UiKit.BRASS))
-	var sc := UiKit.scroll(110)
+	var head := HBoxContainer.new()
+	var title := UiKit.label("Public servers", 20, UiKit.BRASS)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	head.add_child(UiKit.button("Refresh", _refresh_servers, Vector2(110, 32)))
+	_page.add_child(head)
+	var sc := UiKit.scroll(130)
 	_server_list = sc[1]
 	_page.add_child(sc[0])
 	_server_list.add_child(UiKit.label("Looking for servers...", 15, UiKit.PAPER.darkened(0.2)))
@@ -565,14 +571,27 @@ func _process(_delta: float) -> void:
 		_status.text = "Joined - downloading the map... %d%%" % roundi(got * 100.0)
 
 
+func _refresh_servers() -> void:
+	if _server_list == null or not is_instance_valid(_server_list):
+		return
+	for c in _server_list.get_children():
+		c.queue_free()
+	_server_list.add_child(UiKit.label("Looking for servers...", 15, UiKit.PAPER.darkened(0.2)))
+	_fetch_servers()
+
+
 func _fetch_servers() -> void:
+	var url := ServerList.list_url()
+	if not url.begins_with("http"):   # a local file (testing your own list)
+		_show_servers.call_deferred(FileAccess.get_file_as_string(url))
+		return
 	var http := HTTPRequest.new()
 	http.timeout = 8.0
 	add_child(http)
 	http.request_completed.connect(func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
 		http.queue_free()
 		_show_servers(body.get_string_from_utf8() if result == HTTPRequest.RESULT_SUCCESS and code == 200 else ""))
-	if http.request(SERVER_LIST_URL) != OK:
+	if http.request(url) != OK:
 		http.queue_free()
 		_show_servers("")
 
@@ -582,20 +601,60 @@ func _show_servers(json_text: String) -> void:
 		return
 	for c in _server_list.get_children():
 		c.queue_free()
-	var data: Variant = JSON.parse_string(json_text) if json_text != "" else null
-	var list: Array = []
-	if data is Dictionary and data.get("servers") is Array:
-		list = data["servers"]
-	var shown := 0
-	for e: Variant in list:
-		if not (e is Dictionary) or not (e.get("address") is String):
-			continue
-		var addr := String(e["address"]).strip_edges()
-		var port := int(e.get("port", Net.DEFAULT_PORT))
-		var title := Net.clean_name(e.get("name", "")) if e.get("name") is String else ""
-		var region := Net.clean_name(e.get("region", "")) if e.get("region") is String else ""
-		var info := UiKit.label("%s   %s:%d   %s" % [title if title != "" else "Server", addr, port, region], 15)
-		_server_list.add_child(UiKit.row(info, UiKit.button("Join", _join.bind("%s:%d" % [addr, port]), Vector2(100, 34))))
-		shown += 1
-	if shown == 0:
+	_server_rows.clear()
+	for entry: Dictionary in ServerList.parse(json_text):
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var info := VBoxContainer.new()
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.add_theme_constant_override("separation", 0)
+		var title := String(entry["name"]) + ("   (%s)" % entry["region"] if String(entry["region"]) != "" else "")
+		info.add_child(UiKit.label(title, 16))
+		var state := UiKit.label("checking...", 13, UiKit.PAPER.darkened(0.25))
+		info.add_child(state)
+		row.add_child(info)
+		var ping := UiKit.label("", 14, UiKit.PAPER.darkened(0.1))
+		ping.custom_minimum_size = Vector2(70, 0)
+		row.add_child(ping)
+		var join := UiKit.button("Join", _join.bind(String(entry["join"])), Vector2(110, 34))
+		var why := ServerList.why_not(entry, null)
+		if why != "":
+			join.text = why
+			join.disabled = true
+		row.add_child(join)
+		_server_list.add_child(row)
+		_server_rows.append([entry, state, ping, join])
+		_fetch_status(entry, state, ping, join)
+	if _server_rows.is_empty():
 		_server_list.add_child(UiKit.wrapped("No public servers listed right now. Join a friend by address, or host a game.", 14, UiKit.PAPER.darkened(0.2)))
+
+
+func _fetch_status(entry: Dictionary, state: Label, ping: Label, join: Button) -> void:
+	## Each row asks its server how it's doing, and times the answer.
+	var url := String(entry.get("status", ""))
+	if url == "":
+		state.text = "no status page"
+		return
+	var http := HTTPRequest.new()
+	http.timeout = 5.0
+	add_child(http)
+	var t0 := Time.get_ticks_msec()
+	http.request_completed.connect(func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
+		http.queue_free()
+		if not is_instance_valid(state):
+			return
+		var st: Variant = JSON.parse_string(body.get_string_from_utf8()) if result == HTTPRequest.RESULT_SUCCESS and code == 200 else null
+		if not (st is Dictionary):
+			state.text = "not answering"
+			state.add_theme_color_override("font_color", UiKit.TEAM[1].lightened(0.2))
+			return
+		state.text = ServerList.describe(st)
+		state.add_theme_color_override("font_color", Color(0.6, 0.95, 0.55))
+		ping.text = "~%d ms" % ServerList.ping_ms(float(Time.get_ticks_msec() - t0), url)
+		var why := ServerList.why_not(entry, st)
+		if why != "":
+			join.text = why
+			join.disabled = true)
+	if http.request(url) != OK:
+		http.queue_free()
+		state.text = "no status page"

@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4775,6 +4775,41 @@ func test_sixteen_a_side() -> void:
 	ns.seats.clear()
 	ns.free()
 	end(m)
+
+
+func test_server_list() -> void:
+	## servers.json entries, their status pages and what the list shows.
+	var json := JSON.stringify({"servers": [
+		{"name": "EU One", "region": "EU", "url": "wss://play.example.org/eu1"},
+		{"name": "Old UDP", "address": "203.0.113.10", "port": 24565},
+		{"name": "Own status", "url": "ws://198.51.100.7:9000", "status": "https://status.example.org/x"},
+		{"name": "Broken", "port": 5},
+		"junk",
+		{"address": "2001:db8::5", "port": 24570}]})
+	var list := ServerList.parse(json)
+	check(list.size() == 4, "good entries are kept, broken ones dropped (%d)" % list.size())
+	if list.size() == 4:
+		check(list[0]["join"] == "wss://play.example.org/eu1" and list[0]["ws"] and list[0]["status"] == "https://play.example.org/eu1/status",
+			"a wss:// server; its status behind the same proxy (%s)" % list[0]["status"])
+		check(list[1]["join"] == "203.0.113.10:24565" and not list[1]["ws"] and list[1]["status"] == "http://203.0.113.10:24566/status",
+			"an ENet server; status on the next TCP port (%s)" % list[1]["status"])
+		check(list[2]["status"] == "https://status.example.org/x", "a status page the list names itself wins")
+		check(list[3]["name"] == "Server" and list[3]["status"] == "http://[2001:db8::5]:24571/status", "no name, IPv6 (%s)" % list[3]["status"])
+	check(ServerList.parse("").is_empty() and ServerList.parse("{\"servers\": 3}").is_empty(), "an unreadable list is empty, not an error")
+	check(ServerList.status_url_for("ws://10.0.0.2:24565/") == "http://10.0.0.2:24566/status", "ws:// status sits on the next port")
+	var st := {"players": 12, "max_players": 31, "mode": "race", "score": [3, 1], "goal": 10, "protocol": Net.PROTOCOL, "version": "x"}
+	check(ServerList.describe(st) == "12/31 players  -  Cheese Race 3-1 (to 10)", "a status line (%s)" % ServerList.describe(st))
+	check(ServerList.describe({"players": 0, "max_players": 31, "mode": "free"}).ends_with("Free Build"), "Free Build servers say so")
+	var ws_entry := {"ws": true}
+	check(ServerList.why_not(ws_entry, st) == "", "a joinable server")
+	st["players"] = 31
+	check(ServerList.why_not(ws_entry, st) == "Full", "a full one")
+	st["protocol"] = Net.PROTOCOL + 1
+	st["version"] = "9.9"
+	check(ServerList.why_not(ws_entry, st) == "Needs version 9.9", "another version")
+	check(ServerList.why_not({"ws": false}, null) == ("" if Net.enet_available() else "Desktop only"), "UDP servers are for desktop builds")
+	check(ServerList.ping_ms(90.0, "https://a/status") == 30 and ServerList.ping_ms(40.0, "http://a/status") == 20, "ping from the fetch time")
+	check(ServerList.list_url().begins_with("http") or OS.get_environment("BW_SERVER_LIST") != "", "the list comes from the web by default")
 
 
 func test_map_in_parts() -> void:
