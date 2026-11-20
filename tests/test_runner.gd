@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4810,6 +4810,88 @@ func test_server_list() -> void:
 	check(ServerList.why_not({"ws": false}, null) == ("" if Net.enet_available() else "Desktop only"), "UDP servers are for desktop builds")
 	check(ServerList.ping_ms(90.0, "https://a/status") == 30 and ServerList.ping_ms(40.0, "http://a/status") == 20, "ping from the fetch time")
 	check(ServerList.list_url().begins_with("http") or OS.get_environment("BW_SERVER_LIST") != "", "the list comes from the web by default")
+
+
+func test_cheat_code() -> void:
+	## Up Up Down Down Left Right Left Right B A in the playground: only the
+	## host's works, and the match it starts gives everyone infinite resources.
+	var code := CheatCode.new()
+	var t := 10.0
+	var got := 0
+	for tok: String in CheatCode.CODE:
+		t += 0.2
+		got = code.feed(tok, t)
+	check(got == 10, "the full code is recognised")
+	check(code.feed("u", t + 0.2) == 1, "and then it starts over")
+	code = CheatCode.new()
+	for tok: String in ["u", "u", "d", "d", "l", "r", "l", "r"]:
+		t += 0.2
+		got = code.feed(tok, t)
+	check(got == 8 and code.feed("", t) == 0, "other keys in between don't count, or break it")
+	check(code.feed("b", t + 3.0) == 0, "a long pause starts it over")
+	code = CheatCode.new()
+	for tok: String in ["u", "u", "u", "d", "d", "l", "r", "l", "r", "b", "a"]:
+		t += 0.2
+		got = code.feed(tok, t)
+	check(got == 10, "an extra Up at the start is forgiven")
+	var up := InputEventKey.new()
+	up.keycode = KEY_UP
+	up.pressed = true
+	var pad_b := InputEventJoypadButton.new()
+	pad_b.button_index = JOY_BUTTON_B
+	pad_b.pressed = true
+	var w := InputEventKey.new()
+	w.keycode = KEY_W
+	w.pressed = true
+	check(CheatCode.token(up) == "u" and CheatCode.token(pad_b) == "b" and CheatCode.token(w) == "", "arrow keys and the D-pad, B and A")
+	# the host's playground
+	var lobby := new_match(Match.lobby_settings({"team": 0, "class": "digger"}))
+	var host_rat := lobby.spawn_rat(0, "digger", false)
+	var toasts: Array = []
+	lobby.toast.connect(func(text: String, _team: int) -> void: toasts.append(text))
+	check(lobby.lobby and not lobby.infinite_next, "the playground starts with the cheat off")
+	check(lobby.cheat_infinite(host_rat) == "" and lobby.infinite_next and bool(lobby.settings["infinite"]), "the host's code turns it on")
+	check(toasts.size() == 1 and String(toasts[0]).begins_with("CHEAT CODE"), "and everyone is told (%s)" % str(toasts))
+	check(Match.lobby_settings({"infinite": true})["infinite"] == true, "the next playground remembers it")
+	lobby.cheat_infinite(host_rat)
+	check(not lobby.infinite_next and toasts.size() == 2, "typed again, it's off")
+	end(lobby)
+	var guest := Match.new()
+	guest.auto_step = false
+	add_child(guest)
+	guest.setup(Match.lobby_settings({"team": 1}), false, true)
+	var guest_rat := guest.spawn_rat(1, "scout", false)
+	check(guest.cheat_infinite(guest_rat).begins_with("Nice try") and not guest.infinite_next, "a guest's code does nothing (but gets a reply)")
+	remove_child(guest)
+	guest.free()
+	# the match it starts
+	var m := new_match({"infinite": true})
+	check(m.infinite and m.unlimited() and not m.free_mode and not m.world.cheese_cells.is_empty(), "an infinite match is still a Cheese Race (cheese and all)")
+	flat_arena(m, ARENA, 6)
+	var r := arena_rat(m, 0, "digger")
+	var bot := arena_rat(m, 1, "scout", Vector3(3, 0, 3))
+	r.mats["dirt"] = 0
+	var cell := ARENA + Vector3i(2, 0, 0)
+	check(m.try_place_mat(r, cell, "dirt") == "" and m.world.get_cell(cell) == Blocks.DIRT and int(r.mats["dirt"]) == 0, "blocks without digging any")
+	r.gadgets["spring"] = 0
+	r.equipped = "spring"
+	check(m.try_use_equipped(r, {"cell": ARENA + Vector3i(-2, -1, 0), "normal": Vector3i(0, 1, 0)}, Vector3(-1, 0, 0), false) == "", "gadgets without owning any")
+	r.gadgets["dynamite"] = 0
+	check(m.dynamite.try_throw(r, Vector3(1, 0.3, 0), false, "dynamite") == "" and int(r.gadgets["dynamite"]) == 0, "Mobile TNT without any sticks")
+	bot.mats["stone"] = 0
+	check(m.try_place_mat(bot, ARENA + Vector3i(3, 0, 1), "stone") == "", "and it's the same for everyone, the other team too")
+	var scrap := r.scrap
+	r.position = MapGenerator.spawn_point(0)
+	check(m.try_buy(r, "spring") == "" and r.scrap == scrap, "the workshop costs nothing")
+	m.world.set_block(cell + Vector3i(0, 1, 0), Blocks.DIRT)
+	r.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	r.dig_cd = 0.0
+	m.try_dig(r, cell + Vector3i(0, 1, 0))
+	check(m.world.get_cell(cell + Vector3i(0, 1, 0)) == Blocks.DIRT, "but digging is as hard as ever (dirt takes two hits)")
+	end(m)
+	var normal := new_match()
+	check(not normal.unlimited(), "a normal match isn't infinite")
+	end(normal)
 
 
 func test_map_in_parts() -> void:

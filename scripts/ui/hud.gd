@@ -57,6 +57,7 @@ var _focus_pick: Control        # where a controller's focus starts in the open 
 var _want_capture := false      # play is on: the mouse should be captured
 var _had_capture := false       # (browser) we had it, so losing it means Esc was pressed
 var _click_hint: Label          # (browser) "Click to play" while the page has the mouse
+var _code := CheatCode.new()    # Up Up Down Down Left Right Left Right B A, in the playground
 
 ## Workshop, pack and paint pots are tabs of one dialog, so a controller can
 ## reach all three (LB / RB switch between them).
@@ -97,6 +98,8 @@ func _ready() -> void:
 		_push_toast("Free Build: N toggles flight, F5 saves the map, F9 loads it. Everything is free.", UiKit.BRASS)
 	else:
 		_push_toast("Dig for golden cheese and carry it back to your base. First to %d wins!" % m.goal, UiKit.BRASS)
+	if m.infinite:
+		_push_toast("CHEAT CODE: infinite scrap, materials and gadgets for everyone this match!", Color(1.0, 0.85, 0.3))
 
 
 func _capture(on: bool) -> void:
@@ -122,6 +125,17 @@ func _web_capture() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# the playground's cheat code: once it's under way, its keys and buttons
+	# do nothing else (so B doesn't open the workshop, A doesn't jump)
+	if m.lobby and _dialog == null:
+		var got := _code.feed(CheatCode.token(event), Time.get_ticks_msec() / 1000.0)
+		if got >= 2:
+			get_viewport().set_input_as_handled()
+		if got == CheatCode.CODE.size():
+			var said := m.cheat_infinite(rat)
+			if said != "":
+				_push_toast(said, UiKit.PAPER)
+			return
 	# (browser) the click that takes the mouse back is not a dig
 	if _click_hint != null and _click_hint.visible and event is InputEventMouseButton and event.is_pressed():
 		get_viewport().set_input_as_handled()
@@ -371,6 +385,8 @@ func _fit_side_panels() -> void:
 
 func lobby_text() -> String:
 	var here := "%d %s here" % [m.rats.size(), "rat" if m.rats.size() == 1 else "rats"]
+	if m.infinite_next:
+		here += "  -  CHEAT: infinite resources"
 	if m.lobby_left >= 0.0:
 		return "PLAYGROUND  -  %s  -  the match starts in %d s" % [here, ceili(m.lobby_left)]
 	if not m.replica:
@@ -401,10 +417,10 @@ func _process(_delta: float) -> void:
 			_paint_chip.color = Blocks.paint_color(ctl.selected_color)
 			_slot_counts[i].text = ("%s: colour" % Inputs.key_name("workshop")) if Inputs.using_pad else ("[%s] colour" % Inputs.key_name("color_picker"))
 		else:
-			_slot_counts[i].text = "inf" if m.free_mode else "x%d" % int(rat.mats[ClassDefs.MATS[i]])
+			_slot_counts[i].text = "inf" if m.unlimited() else "x%d" % int(rat.mats[ClassDefs.MATS[i]])
 	if rat.equipped != "":
 		_q_name.text = ClassDefs.GADGET_NAME[rat.equipped]
-		_q_count.text = "unlimited" if m.free_mode else "x%d   (%s: next)" % [int(rat.gadgets.get(rat.equipped, 0)), Inputs.key_name("cycle_gadget")]
+		_q_count.text = "unlimited" if m.unlimited() else "x%d   (%s: next)" % [int(rat.gadgets.get(rat.equipped, 0)), Inputs.key_name("cycle_gadget")]
 		if rat.equipped == "teleporter":
 			var nxt := m.tele_next(rat)
 			_q_count.text = "Q: %s" % nxt if nxt != "" else "set is out"
@@ -493,7 +509,7 @@ func _process(_delta: float) -> void:
 	_update_markers()
 	for ol in _owned_labels:
 		var it: Dictionary = ol.get_meta("item")
-		ol.text = "%s      owned: %s" % [it["name"], "unlimited" if m.free_mode else str(_owned(it))]
+		ol.text = "%s      owned: %s" % [it["name"], "unlimited" if m.unlimited() else str(_owned(it))]
 	var bank: Dictionary = m.team_bank[rat.team]
 	for key: String in _stash_labels:
 		var have := rat.scrap if key == "scrap" else int(rat.mats.get(key, 0))
@@ -776,7 +792,7 @@ func _fill_workshop(v: VBoxContainer) -> void:
 		_owned_labels.append(own_label)
 		text.add_child(own_label)
 		text.add_child(UiKit.wrapped(item["desc"], 13, UiKit.PAPER.darkened(0.2)))
-		var cost := ClassDefs.price(rat.cls, String(item["id"]), m.free_mode)
+		var cost := ClassDefs.price(rat.cls, String(item["id"]), m.unlimited())
 		var price := "free" if cost == 0 else "%d scrap" % cost
 		var buy := UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))
 		if _focus_pick == null:
@@ -889,13 +905,13 @@ func _fill_inventory(v: VBoxContainer) -> void:
 	var any := false
 	for g: String in ClassDefs.GADGETS:
 		var n := int(rat.gadgets.get(g, 0))
-		if n <= 0 and not m.free_mode:
+		if n <= 0 and not m.unlimited():
 			continue
 		any = true
 		var item := ClassDefs.shop_item(g)
 		var text := VBoxContainer.new()
 		text.add_theme_constant_override("separation", 0)
-		text.add_child(UiKit.label("%s   %s" % [ClassDefs.GADGET_NAME[g], "unlimited" if m.free_mode else "x%d" % n], 17))
+		text.add_child(UiKit.label("%s   %s" % [ClassDefs.GADGET_NAME[g], "unlimited" if m.unlimited() else "x%d" % n], 17))
 		text.add_child(UiKit.wrapped(String(item.get("desc", "")), 13, UiKit.PAPER.darkened(0.2)))
 		var equipped := rat.equipped == g
 		var b := UiKit.button("Equipped" if equipped else "Equip to Q", _equip.bind(g), Vector2(140, 38))

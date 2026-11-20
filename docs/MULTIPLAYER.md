@@ -30,6 +30,13 @@ match.
   The match starts only when the host presses **Enter** (rebindable: "Lobby: start the match").
   After a match, **Back to the lobby** takes everyone back to the playground. Untick Lobby to
   start the match as soon as you open the server, as before.
+  - **Cheat code (host only):** in the playground, the host types **Up Up Down Down Left Right
+    Left Right B A**: the arrow keys and B, A, or a controller's D-pad and B, A. The match it
+    starts gives **everyone** (bots too) infinite scrap, materials and gadgets: everything in the
+    workshop is free and nothing runs out. Digging, cheese and winning work as usual. Everyone
+    hears it and the playground banner shows it. Typing it again turns it off. It stays on for
+    "Back to the lobby" rounds until the host turns it off. A guest who types it gets a "nice
+    try". Dedicated servers have no host, so there it does nothing.
 - Same Wi-Fi/LAN: friends join with your local address (for example `192.168.1.20`).
 - Over the internet: forward **UDP 24565** on your router to your PC, allow Burrow Wars through
   Windows Firewall when asked, and give friends your public IP address. There is no NAT

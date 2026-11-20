@@ -242,12 +242,16 @@ func _run_round() -> void:
 		return
 	if s.m.lobby:
 		check(s.m.lobby_left > 0.0 and s.hud.lobby_text().contains("starts in"), "a server opens with a timed playground (%s)" % s.hud.lobby_text())
-		var raced := await wait_for(func() -> bool: return main.session != s and main.session != null and is_instance_valid(main.session) \
+		var lobby_id := s.get_instance_id()
+		var raced := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session.get_instance_id() != lobby_id \
 				and main.session.player != null and not main.session.m.lobby, 30.0)
 		check(raced, "then the round starts by itself")
 		s = main.session
 	var first_seed := int(s.m.settings["seed"])
-	var won := await wait_for(func() -> bool: return is_instance_valid(s) and s.m.over, 120.0)
+	var round_ref: WeakRef = weakref(s)
+	var won := await wait_for(func() -> bool:
+		var live: GameSession = round_ref.get_ref()
+		return live != null and live.m.over, 120.0)
 	check(won, "the round ends with a winner on our screen")
 	var next := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) \
 			and main.session != s and main.session.player != null, 40.0)
@@ -277,12 +281,21 @@ func _run_lobby() -> void:
 	check(s.hud.lobby_text().contains("waiting for the host"), "we're told the host starts it (%s)" % s.hud.lobby_text())
 	var c := Vector3(MapGenerator.LOBBY_CENTER)
 	check(s.player.position.distance_to(c) < 5.0 and s.m.world.get_cell(MapGenerator.LOBBY_BULL) != Blocks.AIR, "the playground arrived (we stand on its plaza)")
-	var started := await wait_for(func() -> bool: return main.session != s and main.session != null and is_instance_valid(main.session) \
+	await type_contra_code()
+	check(toast_says(s.hud, "only the host") and not s.m.infinite_next, "our cheat code gets a 'nice try': only the host's counts")
+	var ref: WeakRef = weakref(s)
+	var saw := await wait_for(func() -> bool:
+		var live: GameSession = ref.get_ref()
+		return live != null and live.m.infinite_next and live.hud.lobby_text().contains("CHEAT"), 30.0)
+	check(saw, "when the host types it, our banner shows it")
+	var lobby_id := s.get_instance_id()   # (the lobby session is freed once the match starts)
+	var started := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session.get_instance_id() != lobby_id \
 			and main.session.player != null and not main.session.m.lobby, 40.0)
 	check(started, "the host started the match and we were carried into it")
 	if started:
 		var race: GameSession = main.session
 		check(race.player.display_name == "Tester" and race.player.team == 1 and race.m.rats.size() == 4, "same name and team, in a full 2v2 match")
+		check(race.m.infinite and race.m.unlimited() and toast_says(race.hud, "infinite"), "with infinite resources for us too, and we're told")
 		await wait(1.0)
 	Net.close()
 	print("---- net lobby: %d failed ----" % _fails)
@@ -338,3 +351,27 @@ func _run_browser() -> void:
 		check(st2[1] is Dictionary and int(st2[1].get("players", 0)) == 1, "the status page now counts us (%s)" % str(st2[1]))
 	print("---- net browser: %d failed ----" % _fails)
 	get_tree().quit(1 if _fails > 0 else 0)
+
+func type_contra_code() -> void:
+	## Up Up Down Down Left Right Left Right B A, as real key presses.
+	for k: int in [KEY_UP, KEY_UP, KEY_DOWN, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_LEFT, KEY_RIGHT, KEY_B, KEY_A]:
+		var e := InputEventKey.new()
+		e.keycode = k as Key
+		e.physical_keycode = k as Key
+		e.pressed = true
+		Input.parse_input_event(e)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var u := InputEventKey.new()
+		u.keycode = k as Key
+		u.physical_keycode = k as Key
+		u.pressed = false
+		Input.parse_input_event(u)
+		await get_tree().process_frame
+
+
+func toast_says(hud: Hud, text: String) -> bool:
+	for c in hud._toasts.get_children():
+		if c is Label and (c as Label).text.contains(text):
+			return true
+	return false

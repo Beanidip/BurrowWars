@@ -388,6 +388,12 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"windup":
 			_sound("windup", pos, 1.0, -4.0)
 			_sprite("dust", pos, 0.45)
+		"cheat":
+			# heard by everyone in the playground: on is a fanfare, off a sad little drop
+			if int(data) == 1:
+				Sfx.play("team_victory_fanfare", -8.0, 1.25, 0.0)
+			else:
+				Sfx.play("discovery_chime", -6.0, 0.6, 0.0)
 		"windup_warn":
 			_sound("windup", pos, 1.6, -2.0)
 			_float_text(pos + Vector3(0, 1.9, 0), "!!", Color(1, 0.3, 0.2), maxf(float(data), 0.4))

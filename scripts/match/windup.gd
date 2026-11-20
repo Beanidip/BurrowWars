@@ -54,7 +54,7 @@ func try_place(rat: Rat, look: Vector3) -> String:
 		return "Can't wind it up right now"
 	if rat.throw_cd > 0.0:
 		return "wait"
-	if not m.free_mode and int(rat.gadgets.get("windup", 0)) <= 0:
+	if not m.unlimited() and int(rat.gadgets.get("windup", 0)) <= 0:
 		return "Out of Wind-up Decoys"
 	if walkers.size() >= Config.WINDUP_MAX_ACTIVE:
 		return "Too many wind-ups marching already"
@@ -64,7 +64,7 @@ func try_place(rat: Rat, look: Vector3) -> String:
 	var ahead := rat.position + dir * 0.7
 	if not w.body.blocked_at(ahead):
 		w.body.position = ahead
-	if not m.free_mode:
+	if not m.unlimited():
 		rat.gadgets["windup"] = int(rat.gadgets["windup"]) - 1
 	rat.throw_cd = 0.5
 	rat.play_action("build", 0.3)

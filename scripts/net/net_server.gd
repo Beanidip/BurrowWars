@@ -99,6 +99,9 @@ func on_hello(id: int, hello: Dictionary) -> void:
 		rat.gear = "jetpack"
 	if not m.in_base(rat) and not m.free_mode:
 		m.respawn(rat)   # take over the seat at home, not wherever the bot was
+	# each seat counts its corrections from a fresh random number, so reports
+	# a player's game sent in the previous round (or the lobby) are stale here
+	rat.net_kick = randi_range(1, 1 << 30)
 	rat.net_pre = Match.net_state(rat)
 	seats[id] = rat
 	_last_input[id] = Time.get_ticks_msec()
@@ -463,6 +466,8 @@ func _snapshot(with_names := false) -> Dictionary:
 		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "wd": m.windup.snapshot(), "tp": m.tele_pads(), "lt": m.lobby_left}
 	if send_names:
 		snap["ro"] = roster()
+	if m.lobby:
+		snap["ix"] = m.infinite_next   # the cheat code, so everyone's banner shows it
 	return snap
 
 

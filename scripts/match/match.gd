@@ -31,6 +31,8 @@ class Pickup:
 var world: VoxelWorld
 var settings: Dictionary = {}
 var free_mode := false
+var infinite := false               # nobody runs out of anything: scrap, materials, gadgets (the lobby cheat code)
+var infinite_next := false          # (lobby) the host entered the code: the match it starts is infinite
 var lobby := false                  # the playground everyone waits in before a hosted match
 var lobby_props: Dictionary = {}    # Vector3i -> true: playground fixtures nobody can break
 var lobby_left := -1.0              # seconds until a server's lobby ends; -1 = when the host says
@@ -90,6 +92,8 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 	visual = with_visuals
 	lobby = settings.get("mode", "race") == "lobby"
 	free_mode = settings.get("mode", "race") == "free" or lobby   # everything is free in the lobby too
+	infinite = bool(settings.get("infinite", false)) and not lobby
+	infinite_next = lobby and bool(settings.get("infinite", false))
 	goal = int(settings.get("goal", 8))
 	var map_seed := int(settings.get("seed", 1))
 	_rng.seed = map_seed * 7919 + 13
@@ -716,13 +720,13 @@ func try_place_mat(rat: Rat, cell: Vector3i, mat: String) -> String:
 		return remote.act("try_place_mat", [cell, mat])
 	if not ClassDefs.MAT_BLOCK.has(mat):
 		return "Unknown material"
-	if not free_mode and int(rat.mats.get(mat, 0)) <= 0:
+	if not unlimited() and int(rat.mats.get(mat, 0)) <= 0:
 		return "No %s left - dig some first" % mat
 	var block: int = ClassDefs.MAT_BLOCK[mat]
 	var why := can_place_at(rat, cell, block)
 	if why != "":
 		return why
-	if not free_mode:
+	if not unlimited():
 		rat.mats[mat] = int(rat.mats[mat]) - 1
 	world.set_block(cell, block)
 	rat.play_action("build", 0.3)
@@ -739,13 +743,13 @@ func try_place_paint(rat: Rat, cell: Vector3i, color: int) -> String:
 	if color < 0 or color >= Blocks.PALETTE_SIZE:
 		return "Unknown colour"
 	var pay := paint_material(rat)
-	if not free_mode and pay == "":
+	if not unlimited() and pay == "":
 		return "Painted blocks are made from dirt or stone - dig some first"
 	var block := Blocks.PAINT_0 + color
 	var why := can_place_at(rat, cell, block)
 	if why != "":
 		return why
-	if not free_mode:
+	if not unlimited():
 		rat.mats[pay] = int(rat.mats[pay]) - 1
 	world.set_block(cell, block)
 	rat.play_action("build", 0.3)
@@ -834,7 +838,7 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 		return "A Wind-up Decoy is set down with Q"
 	if g == "teleporter":
 		return _place_teleporter(rat, cell, reach)
-	if not free_mode and int(rat.gadgets.get(g, 0)) <= 0:
+	if not unlimited() and int(rat.gadgets.get(g, 0)) <= 0:
 		return "Out of %s" % ClassDefs.GADGET_NAME[g]
 	var facing := Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
 	if absf(dir.x) + absf(dir.z) > 0.5:
@@ -853,7 +857,7 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 	var why := can_place_at(rat, cell, block, reach, replace or into_gate)
 	if why != "":
 		return why
-	if not free_mode:
+	if not unlimited():
 		rat.gadgets[g] = int(rat.gadgets[g]) - 1
 		if replace:   # the floor block you swapped out goes into your stash, as if dug
 			var mat := Blocks.mat_of(old)
@@ -916,7 +920,7 @@ func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, di
 
 func _place_teleporter(rat: Rat, cell: Vector3i, reach := -1.0) -> String:
 	## Your first pad is the entrance, the second the exit. One set per rat.
-	if not free_mode and int(rat.gadgets.get("teleporter", 0)) <= 0:
+	if not unlimited() and int(rat.gadgets.get("teleporter", 0)) <= 0:
 		return "Out of Teleporters"
 	var exit := tele_in.has(rat.id)
 	if exit and tele_out.has(rat.id):
@@ -928,7 +932,7 @@ func _place_teleporter(rat: Rat, cell: Vector3i, reach := -1.0) -> String:
 	var why := can_place_at(rat, cell, block, reach)
 	if why != "":
 		return why
-	if not free_mode:
+	if not unlimited():
 		rat.gadgets["teleporter"] = int(rat.gadgets["teleporter"]) - 1
 	world.set_block(cell, block)
 	tele_owner[cell] = rat.id
@@ -1028,7 +1032,7 @@ func _micro_available(rat: Rat, mat: String) -> int:
 func _pay_micro(rat: Rat, mat: String, n: int) -> bool:
 	## Spend n microvoxels of a material, breaking whole blocks into the
 	## rat's spare-change bank as needed. All or nothing.
-	if free_mode:
+	if unlimited():
 		return true
 	if _micro_available(rat, mat) < n:
 		return false
@@ -1043,7 +1047,7 @@ func _pay_micro(rat: Rat, mat: String, n: int) -> bool:
 func _refund_micro(rat: Rat, mat: String, n: int) -> void:
 	## Exactly reverses _pay_micro, so carve / refill / re-dig loops are
 	## zero-sum: 343 spare microvoxels become one block again.
-	if free_mode:
+	if unlimited():
 		return
 	var bank := int(rat.micro_bank.get(mat, 0)) + n
 	while bank >= Blocks.MICRO_COUNT and int(rat.mats[mat]) < 99:
@@ -1128,7 +1132,7 @@ func try_chisel_add(rat: Rat, cell: Vector3i, mv: Vector3i, mat: String, color :
 			return "A rat is in the way"
 	var use_mat := Blocks.mat_of(block)
 	if value > 1 or Blocks.is_paint(block):
-		use_mat = "dirt" if free_mode else paint_material(rat, 1)   # paint: dirt, else stone
+		use_mat = "dirt" if unlimited() else paint_material(rat, 1)   # paint: dirt, else stone
 		if use_mat == "":
 			return "Paint is made from dirt or stone - dig some first"
 	if not _pay_micro(rat, use_mat, 1):
@@ -1177,7 +1181,7 @@ func paste_check(rat: Rat, bp: Blueprint, origin: Vector3i) -> String:
 		for r in rats:
 			if r.overlaps_cell(c):
 				return "A rat is in the way"
-	if not free_mode:
+	if not unlimited():
 		var need := bp.cost()
 		for mat: String in need:
 			if _micro_available(rat, mat) < int(need[mat]):
@@ -1315,10 +1319,33 @@ func respawn(rat: Rat) -> void:
 	fx.emit("respawn", rat.position, null)
 
 
+func unlimited() -> bool:
+	## Nobody runs out of scrap, materials or gadgets: Free Build, the
+	## playground, and a match started with the cheat code.
+	return free_mode or infinite
+
+
+func cheat_infinite(by: Rat) -> String:
+	## The host typed the code in the playground: the match it starts gives
+	## everyone infinite resources (typed again: a normal match). Returns what
+	## to tell whoever typed it.
+	if not lobby:
+		return ""
+	if replica or remote != null:
+		return "Nice try - only the host knows that one."
+	infinite_next = not infinite_next
+	settings["infinite"] = infinite_next
+	toast.emit("CHEAT CODE! The next match gives everyone infinite resources." if infinite_next
+		else "Cheat code off: the next match is a normal one.", -1)
+	fx.emit("cheat", by.position if by != null else Vector3.ZERO, 1 if infinite_next else 0)
+	return ""
+
+
 static func lobby_settings(race: Dictionary) -> Dictionary:
-	## The playground round in front of a match: same host, team and class.
+	## The playground round in front of a match: same host, team and class,
+	## and the cheat code's setting if the host had it on.
 	var s := {"mode": "lobby", "seed": 1, "goal": 9999, "team": int(race.get("team", 0)), "class": String(race.get("class", "digger")),
-		"team_size": 1, "server_name": String(race.get("server_name", ""))}
+		"team_size": 1, "server_name": String(race.get("server_name", "")), "infinite": bool(race.get("infinite", false))}
 	if race.has("net"):
 		s["net"] = race["net"]
 		s["port"] = int(race.get("port", Net.DEFAULT_PORT))
@@ -1370,7 +1397,7 @@ func place_bubble(rat: Rat, cell: Vector3i) -> bool:
 		return false
 	if MapGenerator.in_any_base(cell) and not free_mode:
 		return false
-	if not free_mode:
+	if not unlimited():
 		if rat.scrap < Config.BUBBLE_COST:
 			return false
 		rat.scrap -= Config.BUBBLE_COST
@@ -1901,7 +1928,7 @@ func try_buy(rat: Rat, item_id: String) -> String:
 		return "Match is over"
 	if not can_shop(rat):
 		return "Return to your base to use the workshop"
-	var cost := ClassDefs.price(rat.cls, item_id, free_mode)
+	var cost := ClassDefs.price(rat.cls, item_id, unlimited())
 	if item_id == "teleporter" and not free_mode:
 		# one set per rat: buying tops you up to a full set, at the price per missing pad
 		var missing := int(item["qty"]) - int(rat.gadgets.get("teleporter", 0)) - int(tele_in.has(rat.id)) - int(tele_out.has(rat.id))

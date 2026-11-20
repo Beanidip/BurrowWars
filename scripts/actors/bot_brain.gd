@@ -191,7 +191,7 @@ func _pick_cheese() -> Variant:
 func _pick_scrap(cheese: Variant) -> Variant:
 	## Scrap close by, when we aren't hauling cheese: worth a short detour.
 	## Sets target_cell to the block to mine.
-	if m.free_mode or rat.carried > 0 or rat.scrap >= SCRAP_ENOUGH:
+	if m.unlimited() or rat.carried > 0 or rat.scrap >= SCRAP_ENOUGH:
 		return null
 	var f := rat.feet_cell()
 	var best: Variant = null

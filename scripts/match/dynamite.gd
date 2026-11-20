@@ -47,7 +47,7 @@ func try_throw(rat: Rat, look: Vector3, gentle: bool, kind := "dynamite") -> Str
 		return "Can't throw right now"
 	if rat.throw_cd > 0.0:
 		return "wait"
-	if not m.free_mode and int(rat.gadgets.get(kind, 0)) <= 0:
+	if not m.unlimited() and int(rat.gadgets.get(kind, 0)) <= 0:
 		return "Out of %s" % ClassDefs.GADGET_NAME.get(kind, kind)
 	if sticks.size() >= Config.DYNAMITE_MAX_ACTIVE:
 		return "Too much dynamite in the air already"
@@ -55,7 +55,7 @@ func try_throw(rat: Rat, look: Vector3, gentle: bool, kind := "dynamite") -> Str
 	var start := rat.eye() + dir * 0.45
 	if m.world.solid_point(start):
 		start = rat.eye()
-	if not m.free_mode:
+	if not m.unlimited():
 		rat.gadgets[kind] = int(rat.gadgets[kind]) - 1
 	rat.throw_cd = 0.5
 	var speed := 2.0 if gentle else Config.DYNAMITE_THROW_SPEED

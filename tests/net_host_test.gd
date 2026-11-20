@@ -85,8 +85,14 @@ func _run_lobby() -> void:
 		check(friend.team == 1 and friend.class_id == "digger" and friend.gear == "jetpack", "in their team and class, with a jetpack")
 		await wait_for(func() -> bool: return s.m.time > 6.0, 10.0)
 		check(is_instance_valid(s) and main.session == s and s.m.lobby, "nothing starts by itself")
+		check(not s.m.infinite_next, "the friend's attempt at the cheat code changed nothing here")
+		await type_contra_code()
+		check(s.m.infinite_next and s.hud.lobby_text().contains("CHEAT"), "the host's Up Up Down Down Left Right Left Right B A turns on infinite resources (%s)" % s.hud.lobby_text())
+		check(s.hud._dialog == null, "and its B didn't open the workshop")
+		await get_tree().create_timer(2.0).timeout   # (the friend's banner shows it too)
 		s.start_requested.emit()     # the host presses start
-		var started := await wait_for(func() -> bool: return main.session != s and main.session != null \
+		var lobby_id := s.get_instance_id()   # (the lobby session is freed once the match starts)
+		var started := await wait_for(func() -> bool: return main.session != null and main.session.get_instance_id() != lobby_id \
 				and is_instance_valid(main.session) and main.session.m != null and not main.session.m.lobby, 10.0)
 		check(started, "the host starts the match")
 		if started:
@@ -97,7 +103,36 @@ func _run_lobby() -> void:
 				bots += 1 if r.is_bot else 0
 			check(seated and race.m.rats.size() == 4 and bots == 2, "everyone is carried into the match; bots fill the rest (%d rats, %d bots)" % [race.m.rats.size(), bots])
 			check(race.player.gear == "" and race.player.display_name == "Hosty", "lobby jetpacks stay in the lobby")
+			check(race.m.infinite and not race.m.free_mode, "the match is a Cheese Race with infinite resources")
+			var scrap := race.player.scrap
+			var springs := int(race.player.gadgets.get("spring", 0))
+			check(race.m.try_buy(race.player, "spring") == "" and race.player.scrap == scrap and int(race.player.gadgets["spring"]) > springs,
+				"the host's workshop costs nothing")
 			await wait_for(func() -> bool: return (race.net as NetServer).player_count() == 0, 30.0)
 	Net.close()
 	print("---- net lobby host: %d failed ----" % _fails)
 	get_tree().quit(1 if _fails > 0 else 0)
+
+func type_contra_code() -> void:
+	## Up Up Down Down Left Right Left Right B A, as real key presses.
+	for k: int in [KEY_UP, KEY_UP, KEY_DOWN, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_LEFT, KEY_RIGHT, KEY_B, KEY_A]:
+		var e := InputEventKey.new()
+		e.keycode = k as Key
+		e.physical_keycode = k as Key
+		e.pressed = true
+		Input.parse_input_event(e)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var u := InputEventKey.new()
+		u.keycode = k as Key
+		u.physical_keycode = k as Key
+		u.pressed = false
+		Input.parse_input_event(u)
+		await get_tree().process_frame
+
+
+func toast_says(hud: Hud, text: String) -> bool:
+	for c in hud._toasts.get_children():
+		if c is Label and (c as Label).text.contains(text):
+			return true
+	return false

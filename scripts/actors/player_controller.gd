@@ -359,7 +359,7 @@ func _micro_neighbor() -> Array:
 func cycle_gadget(step := 1) -> void:
 	var owned: Array[String] = []
 	for g: String in ClassDefs.GADGETS:
-		if m.free_mode or int(rat.gadgets.get(g, 0)) > 0:
+		if m.unlimited() or int(rat.gadgets.get(g, 0)) > 0:
 			owned.append(g)
 	if owned.is_empty():
 		_say("No gadgets yet - buy some at the workshop (B)")

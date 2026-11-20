@@ -118,6 +118,8 @@ func _process(delta: float) -> void:
 func on_snap(s: Dictionary) -> void:
 	m.time = float(s.get("t", m.time))
 	m.lobby_left = float(s.get("lt", -1.0))
+	if m.lobby:
+		m.infinite_next = bool(s.get("ix", false))
 	var sc: Array = s.get("sc", [0, 0])
 	if int(sc[0]) != m.scores[0] or int(sc[1]) != m.scores[1]:
 		m.scores[0] = int(sc[0])

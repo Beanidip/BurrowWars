@@ -116,6 +116,9 @@ func _start_pending() -> void:
 		return
 	var s := _pending
 	_pending = {}
+	if session != null and is_instance_valid(session) and session.m != null and session.m.lobby:
+		s["infinite"] = session.m.infinite_next   # the cheat code typed in the playground
+		_last_settings["infinite"] = s["infinite"]  # (and the next lobby remembers it)
 	_launch(s)
 
 
