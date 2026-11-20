@@ -30,6 +30,36 @@ const ok = (cond, what) => {
     if (m.type() === 'error' && !/favicon|AudioContext|autoplay/i.test(m.text())) errors.push(m.text());
   });
   page.on('pageerror', (e) => errors.push(String(e)));
+  // a level meter between the game's audio and the speakers
+  await page.addInitScript(() => {
+    const connect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function (dest, ...rest) {
+      if (dest instanceof AudioDestinationNode) {
+        const ctx = this.context;
+        if (!ctx.__meter) {
+          ctx.__meter = ctx.createAnalyser();
+          ctx.__meter.fftSize = 2048;
+          connect.call(ctx.__meter, ctx.destination);
+          window.__meter = ctx.__meter;
+        }
+        return connect.call(this, ctx.__meter, ...rest);
+      }
+      return connect.call(this, dest, ...rest);
+    };
+    window.__loudest = async (ms) => {
+      let peak = 0;
+      const buf = new Float32Array(2048);
+      const t0 = performance.now();
+      while (performance.now() - t0 < ms) {
+        if (window.__meter) {
+          window.__meter.getFloatTimeDomainData(buf);
+          for (const x of buf) peak = Math.max(peak, Math.abs(x));
+        }
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      return peak;
+    };
+  });
   const waitLog = async (re, ms) => {
     const t0 = Date.now();
     while (Date.now() - t0 < ms) {
@@ -52,6 +82,8 @@ const ok = (cond, what) => {
   await shot('web_01_menu');
   // the menu: the focus starts on Cheese Race; Enter opens setup, Enter again starts digging
   await page.mouse.click(10, 10);   // a click on the background gives the page focus (and lets audio start)
+  const loud = await page.evaluate(() => window.__loudest(2500));
+  ok(loud > 0.001, `after a click the menu music can be heard (peak level ${loud.toFixed(4)})`);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
   await page.keyboard.press('Enter');

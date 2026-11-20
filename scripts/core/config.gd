@@ -171,6 +171,9 @@ static func write_atomic(path: String, writer: Callable) -> int:
 
 func apply_audio() -> void:
 	## Master, Music and SFX buses (Sfx routes its players to the last two).
+	## They come from res://default_bus_layout.tres. Adding them here at run
+	## time is only a fallback: in a browser, Godot wires buses added at run
+	## time into a loop through Master, and the browser silences the loop.
 	for bus: String in AUDIO_BUSES:
 		if AudioServer.get_bus_index(bus) < 0:
 			AudioServer.add_bus()
