@@ -150,6 +150,62 @@ func _input(event: InputEvent) -> void:
 		device_changed.emit(pad)
 
 
+const NAV_DELAY := 0.4          # hold up / down this long in a menu and the focus starts to repeat
+const NAV_REPEAT := 0.11
+const SCROLL_SPEED := 1100.0    # right stick scrolling of long pages, pixels per second
+var _nav_held := 0.0
+
+
+func _process(delta: float) -> void:
+	## Menu helpers for a controller: holding up or down keeps moving the focus
+	## (Godot moves it once per push), and the right stick scrolls the page.
+	if not using_pad:
+		_nav_held = 0.0
+		return
+	var owner := get_viewport().gui_get_focus_owner()
+	if owner == null:
+		_nav_held = 0.0
+		return
+	var dir := 1 if Input.is_action_pressed("ui_down") else (-1 if Input.is_action_pressed("ui_up") else 0)
+	if dir == 0:
+		_nav_held = 0.0
+	else:
+		_nav_held += delta
+		if _nav_held >= NAV_DELAY:
+			_nav_held -= NAV_REPEAT
+			var next := owner.find_valid_focus_neighbor(SIDE_BOTTOM if dir > 0 else SIDE_TOP)
+			if next != null:
+				next.grab_focus()
+	var scroll := Input.get_axis("look_up", "look_down")
+	if absf(scroll) > 0.05:
+		var step := roundi(scroll * absf(scroll) * SCROLL_SPEED * delta)
+		var sc := scroll_near(owner)
+		if sc is ScrollContainer:
+			(sc as ScrollContainer).scroll_vertical += step
+		elif sc is RichTextLabel:
+			(sc as RichTextLabel).get_v_scroll_bar().value += step
+
+
+static func _scrolls(c: Node) -> bool:
+	if not (c is Control) or not (c as Control).is_visible_in_tree():
+		return false
+	return c is ScrollContainer or (c is RichTextLabel and (c as RichTextLabel).scroll_active)
+
+
+static func scroll_near(c: Node) -> Control:
+	## The scrolling list or text closest to a control: one it sits in, or else
+	## the nearest one beside it (a page's Back button and its help text).
+	var at := c
+	while at != null and at is Control:
+		if _scrolls(at):
+			return at
+		for found in at.find_children("*", "", true, false):
+			if _scrolls(found):
+				return found
+		at = at.get_parent()
+	return null
+
+
 func rumble(weak: float, strong: float, seconds: float) -> void:
 	## A short buzz on the controller in use (if the player allows it).
 	if using_pad and bool(Config.get_value("vibration")):
@@ -173,7 +229,13 @@ func pad_name(action: String) -> String:
 			JOY_AXIS_TRIGGER_RIGHT:
 				return "R2" if sony else "RT"
 		return "Stick"
-	match int(spec[1]):
+	return button_name(int(spec[1]))
+
+
+func button_name(button: int) -> String:
+	## A controller button by the controller's own labels.
+	var sony := _is_sony()
+	match button:
 		JOY_BUTTON_A: return "Cross" if sony else "A"
 		JOY_BUTTON_B: return "Circle" if sony else "B"
 		JOY_BUTTON_X: return "Square" if sony else "X"
@@ -188,7 +250,22 @@ func pad_name(action: String) -> String:
 		JOY_BUTTON_DPAD_DOWN: return "D-pad Down"
 		JOY_BUTTON_DPAD_LEFT: return "D-pad Left"
 		JOY_BUTTON_DPAD_RIGHT: return "D-pad Right"
-	return "Button %d" % int(spec[1])
+	return "Button %d" % button
+
+
+func pad_help() -> String:
+	## The controller layout as a short paragraph for the help pages.
+	var parts: Array[String] = []
+	for action: String in PAD_LABELS:
+		parts.append("%s: %s" % [pad_name(action), String(PAD_LABELS[action]).to_lower()])
+	return "CONTROLLER  " + ". ".join(parts) + ". In menus %s picks and %s goes back; %s / %s switch the workshop, pack and colour tabs. Respawn, flight and Free Build saves are buttons in the %s menu. Text boxes need an on-screen keyboard (Steam Deck: Steam + X)." % [
+		button_name(JOY_BUTTON_A), button_name(JOY_BUTTON_B), button_name(JOY_BUTTON_LEFT_SHOULDER),
+		button_name(JOY_BUTTON_RIGHT_SHOULDER), pad_name("pause")]
+
+
+func back_name() -> String:
+	## What backs out of a menu or dialog on the device in use.
+	return button_name(JOY_BUTTON_B) if using_pad else OS.get_keycode_string(KEY_ESCAPE)
 
 
 func _is_sony() -> bool:

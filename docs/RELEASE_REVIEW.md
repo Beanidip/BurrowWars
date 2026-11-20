@@ -488,9 +488,19 @@ Moved:
 - **Action rate limits and movement checks** go to Phase B, with the public-server work.
 - **Controller and Steam Deck** is Phase A2.
 
+**Phase A2 (controller and Steam Deck): done** on branch `controller-network-web`.
+- Every action on a controller, with analog movement and look, button prompts that follow the device, rumble and stick settings.
+- Every menu and dialog usable with a controller alone; the colour picker and the keyboard-only actions (respawn, start match, flight, Free Build saves) reachable from the pad.
+- A controller-only playthrough at 1280x800 in the test gate: focus, fit and a 12 px minimum text size on every page and dialog.
+
+Left for the Steam phase (needs Steamworks):
+- the **on-screen keyboard** for text boxes (Steam's gamepad text input). Until then names are suggested and servers are picked from the list, and Steam + X brings up the Deck's keyboard by hand;
+- Steam Input glyph art (today the prompts are text: A, B, LB...).
+
 Still to check on real hardware:
 - fullscreen and Alt+Enter (the test machine has no window manager);
-- frame rates on a GPU, the Steam Deck and a Mac.
+- frame rates on a GPU, the Steam Deck and a Mac;
+- on the Deck: run the Linux build and the Windows build under Proton, play a match with the built-in controls, and check the text is comfortable on the 7" screen.
 
 ## 6. Phased roadmap (revised for your decisions)
 

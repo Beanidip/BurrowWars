@@ -59,6 +59,7 @@ var _map_paths: Array[String] = []
 var _free_hosting := false
 var _lobby_check: CheckBox
 var _status: Label
+var _back := Callable()   # where B / Esc goes from this page (nowhere on the home page)
 
 ## Public servers are listed in servers.json in the game's GitHub repository,
 ## so adding one is a one-line change (see docs/MULTIPLAYER.md).
@@ -104,6 +105,7 @@ func _ready() -> void:
 
 
 func _clear() -> void:
+	_back = Callable()
 	for c in _page.get_children():
 		_page.remove_child(c)
 		c.queue_free()
@@ -152,6 +154,17 @@ func _show_home() -> void:
 		_page.add_child(msg)
 		_message = ""
 	play.grab_focus()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	## Controller (and keyboard) navigation: B or Esc goes back a page, and the
+	## first stick or D-pad push lands on a button when nothing has the focus.
+	if event.is_action_pressed("ui_cancel") and _back.is_valid():
+		get_viewport().set_input_as_handled()
+		_back.call()
+	elif UiKit.is_pad_nav(event) and get_viewport().gui_get_focus_owner() == null:
+		get_viewport().set_input_as_handled()
+		UiKit.focus_first(_page)
 
 
 func show_message(text: String) -> void:
@@ -230,7 +243,7 @@ func _setup_page() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
-	buttons.add_child(UiKit.button("Back", _show_home, Vector2(160, 46)))
+	buttons.add_child(UiKit.button("Back", _show_online if _hosting else _show_home, Vector2(160, 46)))
 	var go := UiKit.button("Open server & play" if _hosting else "Start digging!", _start_race, Vector2(260, 46))
 	if _hosting:
 		_port_edit = LineEdit.new()
@@ -247,6 +260,7 @@ func _setup_page() -> void:
 	_page.add_child(buttons)
 	_pick_team(_team)
 	_pick_class(_class)
+	_back = _show_online if _hosting else _show_home
 	go.grab_focus()
 
 
@@ -339,6 +353,7 @@ func _show_free(hosting := false) -> void:
 	var go := UiKit.button("Open server & build" if hosting else "Start building", _start_free, Vector2(260, 46))
 	buttons.add_child(go)
 	_page.add_child(buttons)
+	_back = _show_online if hosting else _show_home
 	go.grab_focus()
 
 
@@ -356,11 +371,16 @@ func _show_help() -> void:
 	_clear()
 	_page.add_child(UiKit.label("How to Play", 28, UiKit.BRASS))
 	var sc := UiKit.scroll(440)
+	var pad := UiKit.wrapped(Inputs.pad_help(), 16, UiKit.BRASS.lightened(0.3))
 	(sc[1] as VBoxContainer).add_child(UiKit.wrapped(HELP, 16))
+	(sc[1] as VBoxContainer).add_child(pad)
+	if Inputs.using_pad:
+		(sc[1] as VBoxContainer).move_child(pad, 0)
 	_page.add_child(sc[0])
 	var back := UiKit.button("Back", _show_home, Vector2(160, 44))
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_page.add_child(back)
+	_back = _show_home
 	back.grab_focus()
 
 
@@ -385,6 +405,7 @@ func _show_credits() -> void:
 	var back := UiKit.button("Back", _show_home, Vector2(160, 44))
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_page.add_child(back)
+	_back = _show_home
 	back.grab_focus()
 
 
@@ -397,6 +418,8 @@ func _show_settings() -> void:
 	var back := UiKit.button("Back", _show_home, Vector2(160, 44))
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_page.add_child(back)
+	_back = _show_home
+	UiKit.focus_first(sc[1])
 
 
 # ---------------------------------------------------------------- online
@@ -409,6 +432,8 @@ func _show_online() -> void:
 	_name_edit.max_length = Net.NAME_MAX
 	_name_edit.placeholder_text = "your rat's name"
 	_name_edit.text = String(Config.get_value("player_name"))
+	if _name_edit.text == "":
+		_name_edit.text = suggested_name()   # a ready-made name, so a controller never has to type one
 	_name_edit.custom_minimum_size = Vector2(260, 34)
 	_page.add_child(UiKit.row(UiKit.label("Name"), _name_edit))
 	var teams := HBoxContainer.new()
@@ -461,7 +486,16 @@ func _show_online() -> void:
 	buttons.add_child(Icons.on_button(UiKit.button("Host Cheese Race...", _show_host_setup, Vector2(230, 46)), "cheese"))
 	buttons.add_child(Icons.on_button(UiKit.button("Host Free Build", _host_free, Vector2(210, 46)), "hammer"))
 	_page.add_child(buttons)
-	_name_edit.grab_focus()
+	_back = _show_home
+	if Inputs.using_pad:
+		_team_buttons[_team].grab_focus()   # typing needs the on-screen keyboard: start on the buttons
+	else:
+		_name_edit.grab_focus()
+
+
+static func suggested_name() -> String:
+	const PARTS := ["Whisker", "Nibbles", "Squeak", "Burrow", "Cheddar", "Scamper", "Gnaw", "Pip"]
+	return Net.clean_name("%s%d" % [PARTS[randi() % PARTS.size()], randi_range(10, 99)])
 
 
 func _host_free() -> void:

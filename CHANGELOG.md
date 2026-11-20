@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase A2: controller and Steam Deck
+
+| Change | Files |
+|---|---|
+| **Every action has a controller button** (Xbox layout; the Steam Deck's buttons are labelled the same): sticks move and look (analog: half a tilt walks slower), RT digs and bonks, LT places, A jumps, B dashes or climbs down, D-pad Left / Right picks the material or tool, D-pad Up / Down are the class abilities, RB uses the gadget, LB changes it, Y gear, X pilots, L3 drops cheese, R3 switches camera, Menu pauses, View opens the workshop (your pack away from base). The pantograph's rotate / mirror / flip / invert are on the D-pad, LB and Y while you hold a blueprint. Prompts switch to the controller's button names as soon as you touch it (PlayStation names on a PlayStation pad) and back when you touch the keyboard. Stick look speed, invert and vibration settings; a light rumble for bonks, blasts and hard landings | `core/inputs.gd`, `actors/player_controller.gd`, `ui/hud.gd`, `ui/settings_panel.gd`, `match/match_view.gd`, `match/tutorial.gd`, `core/config.gd` |
+| **Every menu and dialog works with a controller alone**: the focus starts on a sensible button (and nothing is pre-selected for a mouse), a clear white ring shows it, B goes back a page or closes a dialog, holding the stick or D-pad keeps moving, long lists scroll with the focus and the right stick scrolls long text. The workshop, pack and paint pots are tabs of one dialog (LB / RB switch), so the colour picker no longer needs C. The pause menu has buttons for what the keyboard does with keys of its own: Respawn at base (asks first), Start the match (lobby host), Flight on / off, Quick save / load (Free Build). Play Online suggests a name, so nobody has to type one. How to Play lists the controller layout. Ticked checkboxes no longer look like pressed buttons | `ui/ui_kit.gd`, `ui/main_menu.gd`, `ui/hud.gd`, `core/inputs.gd` |
+| A controller-only test plays through every menu page and dialog at the Steam Deck's 1280x800, checking the focus, that everything fits and that no text is under 12 px | `tests/pad_runner.gd`, `tools/check.sh` |
+
 ## Unreleased - Phase A: release foundations
 
 | Change | Files |

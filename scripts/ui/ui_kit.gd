@@ -119,7 +119,7 @@ static func theme() -> Theme:
 		t.set_stylebox("hover", type, box(WOOD_LIGHT, BRASS, 8, 2, 8))
 		t.set_stylebox("pressed", type, box(WOOD_DARK, BRASS, 8, 3, 8))
 		t.set_stylebox("disabled", type, box(WOOD_DARK.lightened(0.05), WOOD, 8, 2, 8))
-		t.set_stylebox("focus", type, box(Color(0, 0, 0, 0), PAPER, 8, 2, 8))
+		t.set_stylebox("focus", type, focus_ring())
 		t.set_color("font_color", type, PAPER)
 		t.set_color("font_hover_color", type, Color.WHITE)
 		t.set_color("font_pressed_color", type, BRASS)
@@ -131,8 +131,70 @@ static func theme() -> Theme:
 	t.set_color("font_color", "CheckBox", PAPER)
 	t.set_stylebox("normal", "LineEdit", box(WOOD_DARK, WOOD_LIGHT, 6, 2, 6))
 	t.set_color("font_color", "LineEdit", PAPER)
+	# a ticked CheckBox would otherwise borrow the Button's "pressed" frame and look selected
+	for state: String in ["normal", "pressed", "disabled", "hover_pressed"]:
+		t.set_stylebox(state, "CheckBox", StyleBoxEmpty.new())
+	t.set_stylebox("hover", "CheckBox", box(Color(1, 1, 1, 0.06), Color(0, 0, 0, 0), 6, 0, 4))
+	t.set_stylebox("hover_pressed", "CheckBox", box(Color(1, 1, 1, 0.06), Color(0, 0, 0, 0), 6, 0, 4))
+	t.set_color("font_hover_color", "CheckBox", Color.WHITE)
+	t.set_color("font_pressed_color", "CheckBox", PAPER)
+	t.set_color("font_hover_pressed_color", "CheckBox", Color.WHITE)
+	# a bright ring shows where a controller's focus is
+	for type: String in ["CheckBox", "HSlider", "LineEdit", "RichTextLabel"]:
+		t.set_stylebox("focus", type, focus_ring())
 	_theme = t
 	return t
+
+
+static func focus_ring() -> StyleBoxFlat:
+	var f := box(Color(0, 0, 0, 0), Color.WHITE, 8, 3, 8)
+	f.expand_margin_left = 2
+	f.expand_margin_right = 2
+	f.expand_margin_top = 2
+	f.expand_margin_bottom = 2
+	return f
+
+
+static func focusable(c: Node) -> bool:
+	## Can a controller land on this? (Shown, enabled and takes focus.)
+	if not (c is Control):
+		return false
+	var ctl := c as Control
+	if ctl.focus_mode == Control.FOCUS_NONE or not ctl.is_visible_in_tree():
+		return false
+	return not (ctl is BaseButton and (ctl as BaseButton).disabled)
+
+
+static func first_focusable(root: Node) -> Control:
+	## The first control a controller can land on, in reading order.
+	if root == null:
+		return null
+	for c in root.get_children():
+		if focusable(c):
+			return c
+		var inner := first_focusable(c)
+		if inner != null:
+			return inner
+	return null
+
+
+static func focus_first(root: Node, prefer: Control = null) -> Control:
+	## Puts the keyboard / controller focus on `prefer`, or else on the first
+	## thing in `root` that can take it. Returns what got the focus.
+	var target := prefer if prefer != null and is_instance_valid(prefer) and focusable(prefer) else first_focusable(root)
+	if target != null:
+		target.grab_focus()
+	return target
+
+
+static func is_pad_nav(event: InputEvent) -> bool:
+	## A controller press that means "move around the menu" or "press it".
+	if not (event is InputEventJoypadButton or event is InputEventJoypadMotion) or not event.is_pressed():
+		return false
+	for a: String in ["ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_focus_next", "ui_focus_prev"]:
+		if event.is_action_pressed(a):
+			return true
+	return false
 
 
 static func label(text: String, size := 17, color := PAPER) -> Label:
@@ -192,6 +254,7 @@ static func scroll(min_height: float) -> Array:
 	sc.custom_minimum_size = Vector2(0, min_height)
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.follow_focus = true   # a controller moving down a long list scrolls it along
 	var v := VBoxContainer.new()
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_theme_constant_override("separation", 8)

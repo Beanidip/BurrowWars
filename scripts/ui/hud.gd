@@ -53,6 +53,11 @@ var _crosshair: Control
 var _style_slot: StyleBoxFlat
 var _style_slot_on: StyleBoxFlat
 var _cheese_tex: Texture2D
+var _focus_pick: Control        # where a controller's focus starts in the open dialog
+
+## Workshop, pack and paint pots are tabs of one dialog, so a controller can
+## reach all three (LB / RB switch between them).
+const TABS := ["workshop", "inventory", "colors"]
 
 
 func _ready() -> void:
@@ -356,7 +361,7 @@ func _process(_delta: float) -> void:
 		_slots[i].add_theme_stylebox_override("panel", _style_slot_on if (i == ctl.selected_mat and ctl.tool != PlayerController.Tool.PANTOGRAPH) else _style_slot)
 		if i >= ClassDefs.MATS.size():
 			_paint_chip.color = Blocks.paint_color(ctl.selected_color)
-			_slot_counts[i].text = "[%s] colour" % Inputs.key_name("color_picker")
+			_slot_counts[i].text = ("%s: colour" % Inputs.key_name("workshop")) if Inputs.using_pad else ("[%s] colour" % Inputs.key_name("color_picker"))
 		else:
 			_slot_counts[i].text = "inf" if m.free_mode else "x%d" % int(rat.mats[ClassDefs.MATS[i]])
 	if rat.equipped != "":
@@ -546,6 +551,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _dialog != null and event.is_action_pressed("ui_cancel"):
 		close_dialog()       # B on a gamepad backs out of any dialog
 		get_viewport().set_input_as_handled()
+	elif TABS.has(_dialog_kind) and event is InputEventJoypadButton \
+			and (event.is_action_pressed("cycle_gadget") or event.is_action_pressed("gadget")):
+		get_viewport().set_input_as_handled()
+		cycle_tab(-1 if event.is_action_pressed("cycle_gadget") else 1)
+	elif _dialog != null and UiKit.is_pad_nav(event) and get_viewport().gui_get_focus_owner() == null:
+		get_viewport().set_input_as_handled()   # a controller picked up mid-dialog: land on a button
+		UiKit.focus_first(_dialog, _focus_pick)
 	elif event.is_action_pressed("workshop"):
 		# on a gamepad the one View button opens your pack wherever there's no workshop
 		var pad := event is InputEventJoypadButton
@@ -561,18 +573,43 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		start_requested.emit()
 	elif m.free_mode and not m.lobby and event.is_action_pressed("save_map"):
-		var ok := m.world.save_to(VoxelWorld.MAPS_DIR + "/free_build.bwmap", {"machines": m.siege.to_save()})
-		_push_toast("Map saved to %s" % ProjectSettings.globalize_path("user://maps/free_build.bwmap") if ok else "Map save failed - see log", UiKit.BRASS)
-	elif m.free_mode and not m.lobby and event.is_action_pressed("load_map") and m.networked:
-		_push_toast("Loading a map is only possible offline", UiKit.PAPER)
+		quick_save()
 	elif m.free_mode and not m.lobby and event.is_action_pressed("load_map"):
-		if m.world.load_from("user://maps/free_build.bwmap"):
-			m.tnt.clear()
-			m.siege.from_save(m.world.loaded_extra.get("machines", []))
-			rat.unstick()
-			_push_toast("Map loaded", UiKit.BRASS)
-		else:
-			_push_toast("No valid saved map found (F5 saves one)", UiKit.TEAM[1])
+		quick_load()
+
+
+func quick_save() -> void:
+	## Free Build: F5, or the pause menu.
+	var ok := m.world.save_to(VoxelWorld.MAPS_DIR + "/free_build.bwmap", {"machines": m.siege.to_save()})
+	_push_toast("Map saved to %s" % ProjectSettings.globalize_path("user://maps/free_build.bwmap") if ok else "Map save failed - see log", UiKit.BRASS)
+
+
+func quick_load() -> void:
+	## Free Build: F9, or the pause menu.
+	if m.networked:
+		_push_toast("Loading a map is only possible offline", UiKit.PAPER)
+	elif m.world.load_from("user://maps/free_build.bwmap"):
+		m.tnt.clear()
+		m.siege.from_save(m.world.loaded_extra.get("machines", []))
+		rat.unstick()
+		_push_toast("Map loaded", UiKit.BRASS)
+	else:
+		_push_toast("No valid saved map found (%s saves one)" % Inputs.key_name("save_map"), UiKit.TEAM[1])
+
+
+func cycle_tab(step: int) -> void:
+	## LB / RB in the workshop, pack and paint pots: the next tab along.
+	var tabs := _tab_kinds()
+	var i := tabs.find(_dialog_kind)
+	if i >= 0:
+		open_dialog(tabs[(i + step + tabs.size()) % tabs.size()])
+
+
+func _tab_kinds() -> Array:
+	## The workshop tab only shows where you can shop or reach a stash.
+	if m.can_shop(rat) or m.can_use_stash(rat):
+		return TABS
+	return TABS.slice(1)
 
 
 func _toggle(kind: String) -> void:
@@ -591,6 +628,7 @@ func close_dialog() -> void:
 	_dialog_kind = ""
 	_dialog_notice = null
 	_dialog_scrap = null
+	_focus_pick = null
 	_owned_labels.clear()
 	_stash_labels.clear()
 	ctl.ui_open = false
@@ -624,14 +662,39 @@ func open_dialog(kind: String) -> void:
 			v = UiKit.center_panel(_root, 640, 460)
 			_fill_results(v)
 	_dialog = v.get_meta("root")
+	if Inputs.using_pad or kind == "results":
+		UiKit.focus_first(_dialog, _focus_pick)   # (with a mouse, nothing is pre-selected)
 
 
 func _dialog_header(v: VBoxContainer, title: String, close_key: String) -> void:
+	if TABS.has(_dialog_kind):
+		_dialog_tabs(v)
 	var h := HBoxContainer.new()
 	var t := UiKit.label(title, 26, UiKit.BRASS)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(t)
-	h.add_child(UiKit.button("Close [%s]" % close_key, close_dialog, Vector2(140, 36)))
+	h.add_child(UiKit.button("Close [%s]" % (Inputs.back_name() if Inputs.using_pad else close_key), close_dialog, Vector2(140, 36)))
+	v.add_child(h)
+
+
+func _dialog_tabs(v: VBoxContainer) -> void:
+	var names := {"workshop": "Workshop" if m.can_shop(rat) else "Team Stash", "inventory": "Pack", "colors": "Colours"}
+	var keys := {"workshop": "workshop", "inventory": "inventory", "colors": "color_picker"}
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 6)
+	for kind: String in _tab_kinds():
+		var label := String(names[kind])
+		if not Inputs.using_pad:
+			label += "  [%s]" % Inputs.key_name(keys[kind])
+		var b := UiKit.button(label, func() -> void:
+			if _dialog_kind != kind:
+				open_dialog(kind), Vector2(150, 34))
+		b.toggle_mode = true
+		b.button_pressed = kind == _dialog_kind
+		b.set_meta("tab", kind)
+		h.add_child(b)
+	if Inputs.using_pad:
+		h.add_child(UiKit.label("  %s / %s switch" % [Inputs.button_name(JOY_BUTTON_LEFT_SHOULDER), Inputs.button_name(JOY_BUTTON_RIGHT_SHOULDER)], 14, UiKit.PAPER.darkened(0.2)))
 	v.add_child(h)
 
 
@@ -654,7 +717,10 @@ func _fill_workshop(v: VBoxContainer) -> void:
 			_stash_labels[key] = lbl
 			var btns := HBoxContainer.new()
 			btns.add_theme_constant_override("separation", 4)
-			btns.add_child(UiKit.button("Put 10", _stash.bind(key, 10), Vector2(80, 34)))
+			var put := UiKit.button("Put 10", _stash.bind(key, 10), Vector2(80, 34))
+			if _focus_pick == null:
+				_focus_pick = put
+			btns.add_child(put)
 			btns.add_child(UiKit.button("Put all", _stash.bind(key, 9999), Vector2(80, 34)))
 			btns.add_child(UiKit.button("Take 10", _stash.bind(key, -10), Vector2(84, 34)))
 			btns.add_child(UiKit.button("Take all", _stash.bind(key, -9999), Vector2(88, 34)))
@@ -674,7 +740,10 @@ func _fill_workshop(v: VBoxContainer) -> void:
 		text.add_child(UiKit.wrapped(item["desc"], 13, UiKit.PAPER.darkened(0.2)))
 		var cost := ClassDefs.price(rat.cls, String(item["id"]), m.free_mode)
 		var price := "free" if cost == 0 else "%d scrap" % cost
-		list.add_child(UiKit.row(Icons.with_icon(String(item["id"]), text, 32), UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))))
+		var buy := UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))
+		if _focus_pick == null:
+			_focus_pick = buy
+		list.add_child(UiKit.row(Icons.with_icon(String(item["id"]), text, 32), buy))
 	if not m.free_mode and shopping:
 		v.add_child(UiKit.label("Change class (at base, 15 s cooldown)", 15, UiKit.BRASS))
 		var classes := HBoxContainer.new()
@@ -717,8 +786,12 @@ func _say(text: String, is_error: bool) -> void:
 
 func _fill_colors(v: VBoxContainer) -> void:
 	_dialog_header(v, "Paint Pots", Inputs.key_name("color_picker"))
-	v.add_child(UiKit.wrapped("Pick a colour, then slot %s places painted blocks with right mouse (one dirt each, or stone when you have no dirt). With the chisel (%s) right mouse adds painted microvoxels. The bottom row is see-through glass (whole blocks only)." % [
-		Inputs.key_name("slot_%d" % (ClassDefs.MATS.size() + 1)), Inputs.key_name("chisel")], 14, UiKit.PAPER.darkened(0.15)))
+	var paint_text := "Pick a colour, then slot %s places painted blocks with right mouse (one dirt each, or stone when you have no dirt). With the chisel (%s) right mouse adds painted microvoxels. The bottom row is see-through glass (whole blocks only)." % [
+		Inputs.key_name("slot_%d" % (ClassDefs.MATS.size() + 1)), Inputs.key_name("chisel")]
+	if Inputs.using_pad:
+		paint_text = "Pick a colour, then %s places painted blocks (one dirt each, or stone when you have no dirt). With the chisel (%s / %s past the paint slot) %s adds painted microvoxels. The bottom row is see-through glass (whole blocks only)." % [
+			Inputs.key_name("place"), Inputs.key_name("prev_slot"), Inputs.key_name("next_slot"), Inputs.key_name("place")]
+	v.add_child(UiKit.wrapped(paint_text, 14, UiKit.PAPER.darkened(0.15)))
 	var grid := GridContainer.new()
 	grid.columns = 10
 	grid.add_theme_constant_override("h_separation", 6)
@@ -747,6 +820,8 @@ func _fill_colors(v: VBoxContainer) -> void:
 			b.add_theme_color_override("font_color", UiKit.INK)
 			col = Color(col.r, col.g, col.b, 0.55)
 		var chosen := k == ctl.selected_color
+		if chosen:
+			_focus_pick = b
 		b.add_theme_stylebox_override("normal", UiKit.box(col, UiKit.PAPER if chosen else UiKit.WOOD_DARK, 10, 5 if chosen else 2, 4))
 		b.add_theme_stylebox_override("hover", UiKit.box(col.lightened(0.15), UiKit.BRASS, 10, 4, 4))
 		b.add_theme_stylebox_override("pressed", UiKit.box(col.darkened(0.15), UiKit.BRASS, 10, 5, 4))
@@ -769,7 +844,7 @@ func pick_color(k: int) -> void:
 
 func _fill_inventory(v: VBoxContainer) -> void:
 	_dialog_header(v, "The Ratpack", Inputs.key_name("inventory"))
-	v.add_child(UiKit.label("Click a gadget to put it in your Q slot.", 14, UiKit.PAPER.darkened(0.15)))
+	v.add_child(UiKit.label("Pick a gadget for your %s slot." % Inputs.key_name("gadget"), 14, UiKit.PAPER.darkened(0.15)))
 	var sc := UiKit.scroll(240)
 	var list: VBoxContainer = sc[1]
 	v.add_child(sc[0])
@@ -787,6 +862,8 @@ func _fill_inventory(v: VBoxContainer) -> void:
 		var equipped := rat.equipped == g
 		var b := UiKit.button("Equipped" if equipped else "Equip to Q", _equip.bind(g), Vector2(140, 38))
 		b.disabled = equipped
+		if _focus_pick == null and not equipped:
+			_focus_pick = b
 		list.add_child(UiKit.row(Icons.with_icon(g, text, 32), b))
 	if not any:
 		list.add_child(UiKit.wrapped("Your pack is empty. Mine scrap, then visit the workshop (%s) at your base." % Inputs.key_name("workshop"), 15))
@@ -808,7 +885,7 @@ func _equip(g: String) -> void:
 
 
 func _fill_pause(v: VBoxContainer) -> void:
-	_dialog_header(v, "Paused" if not m.networked else "Menu (the online game keeps going)", "Esc")
+	_dialog_header(v, "Paused" if not m.networked else "Menu (the online game keeps going)", Inputs.key_name("pause"))
 	var music_label := UiKit.label("Music volume  %d%%" % roundi(float(Config.get_value("music_volume")) * 100.0), 17, UiKit.BRASS)
 	var music := UiKit.slider(0.0, 1.0, 0.05, float(Config.get_value("music_volume")), func(value: float) -> void:
 		Config.set_value("music_volume", value)
@@ -824,11 +901,46 @@ func _fill_pause(v: VBoxContainer) -> void:
 	settings.changed.connect(ctl.apply_settings)
 	body.add_child(settings)
 	body.add_child(UiKit.label("How to play", 18, UiKit.BRASS))
+	var pad := UiKit.wrapped(Inputs.pad_help(), 14, UiKit.BRASS.lightened(0.3))
+	if Inputs.using_pad:
+		body.add_child(pad)
 	body.add_child(UiKit.wrapped(MainMenu.HELP, 14))
+	if not Inputs.using_pad:
+		body.add_child(pad)
+	# things a keyboard does with a key of their own, as buttons for a controller
+	var acts := HBoxContainer.new()
+	acts.alignment = BoxContainer.ALIGNMENT_CENTER
+	acts.add_theme_constant_override("separation", 10)
+	if m.lobby and not m.replica and m.lobby_left < 0.0:
+		acts.add_child(UiKit.button("Start the match", func() -> void:
+			close_dialog()
+			start_requested.emit(), Vector2(170, 40)))
+	if not m.lobby:
+		var respawn := UiKit.button("Respawn at base", func() -> void: pass, Vector2(170, 40))
+		respawn.pressed.connect(pause_respawn.bind(respawn))
+		acts.add_child(respawn)
+	if bool(rat.cls["fly"]):
+		acts.add_child(UiKit.button("Flight on / off", func() -> void:
+			rat.flying = not rat.flying
+			close_dialog()
+			_push_toast("Flight ON" if rat.flying else "Flight off", UiKit.BRASS), Vector2(170, 40)))
+	if m.free_mode and not m.lobby:
+		acts.add_child(UiKit.button("Quick save", func() -> void:
+			close_dialog()
+			quick_save(), Vector2(150, 40)))
+		if not m.networked:
+			acts.add_child(UiKit.button("Quick load", func() -> void:
+				close_dialog()
+				quick_load(), Vector2(150, 40)))
+	if acts.get_child_count() > 0:
+		v.add_child(acts)
+		(sc[0] as Control).custom_minimum_size.y = 340   # room for the extra row
 	var h := HBoxContainer.new()
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 12)
-	h.add_child(UiKit.button("Resume", close_dialog, Vector2(180, 44)))
+	var resume := UiKit.button("Resume", close_dialog, Vector2(180, 44))
+	_focus_pick = resume
+	h.add_child(resume)
 	if not m.replica:   # offline or hosting: you hold the real map
 		h.add_child(UiKit.button("Export map", export_map, Vector2(180, 44)))
 	h.add_child(UiKit.button("Quit to menu", _exit, Vector2(180, 44)))
@@ -837,6 +949,17 @@ func _fill_pause(v: VBoxContainer) -> void:
 		quit.pressed.connect(_quit_pressed.bind(quit))
 		h.add_child(quit)
 	v.add_child(h)
+
+
+func pause_respawn(button: Button = null) -> void:
+	## Ctrl+K on a keyboard. Asks once first, as it leaves your cheese and
+	## materials behind.
+	if button != null and button.text != "Really respawn?":
+		button.text = "Really respawn?"
+		return
+	close_dialog()
+	m.respawn(rat)
+	_push_toast("Back at base. Your cheese and materials stayed behind.", UiKit.PAPER)
 
 
 func _quit_pressed(button: Button) -> void:

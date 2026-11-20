@@ -128,7 +128,7 @@ func _refresh() -> void:
 		return
 	if _done:
 		_title.text = "Learn to Play - done!"
-		_text.text = "You banked your first cheese. In a real match the first team to the goal wins. Esc > Quit to menu, then try a Cheese Race against bots."
+		_text.text = "You banked your first cheese. In a real match the first team to the goal wins. %s > Quit to menu, then try a Cheese Race against bots." % Inputs.key_name("pause")
 		return
 	_title.text = "Learn to Play  -  step %d of %d" % [step + 1, STEPS.size()]
 	_text.text = text_for(step)
