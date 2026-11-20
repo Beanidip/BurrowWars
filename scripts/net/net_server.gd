@@ -90,15 +90,14 @@ func on_hello(id: int, hello: Dictionary) -> void:
 	rat.net_pre = Match.net_state(rat)
 	seats[id] = rat
 	_last_input[id] = Time.get_ticks_msec()
-	Net._s_welcome.rpc_id(id, {
+	Net.send_welcome(id, {
 		"settings": m.settings,
 		"rat": rat.id,
-		"world": m.world.snapshot(),
 		"snap": _snapshot(),
 		"private": _private(rat),
 		"kick": rat.net_kick,
 		"server": String(m.settings.get("server_name", "")),
-	})
+	}, m.world.snapshot())
 	m.toast.emit("%s joined the %s team" % [pname, Match.TEAM_NAMES[rat.team]], -1)
 	Log.info("net: peer %d seated as %s (rat %d, team %d)" % [id, pname, rat.id, rat.team])
 
@@ -351,7 +350,7 @@ func _physics_process(_delta: float) -> void:
 		if _frame % SNAP_EVERY == 0:
 			var snap := var_to_bytes(_snapshot())   # encoded once, sent to every seat as-is
 			for id: int in seats:
-				if peers.has(id):
+				if peers.has(id) and not Net.backed_up(id):   # (a backed-up WebSocket skips one; the next replaces it)
 					Net._s_snap.rpc_id(id, snap)
 		for id: int in seats:
 			if (_frame % PRIVATE_EVERY == 0 or _dirty_private.has(id)) and peers.has(id):

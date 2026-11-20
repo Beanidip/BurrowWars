@@ -469,7 +469,7 @@ func _show_online() -> void:
 	_fetch_servers()
 
 	_address_edit = LineEdit.new()
-	_address_edit.placeholder_text = "address or address:port"
+	_address_edit.placeholder_text = "address, address:port or wss://..."
 	_address_edit.text = String(Config.get_value("last_address"))
 	_address_edit.custom_minimum_size = Vector2(300, 34)
 	var join_row := HBoxContainer.new()
@@ -541,7 +541,7 @@ static func split_address(text: String) -> Array:
 func _join(address: String) -> void:
 	if not _save_identity():
 		return
-	var hp := split_address(address)
+	var hp := [address.strip_edges(), 0] if Net.is_ws_url(address) else split_address(address)
 	if String(hp[0]) == "":
 		_status.text = "Type the server's address (ask the host for it)."
 		return
@@ -551,11 +551,18 @@ func _join(address: String) -> void:
 	if err != "":
 		_status.text = err
 		return
-	_status.text = "Connecting to %s:%d ..." % [hp[0], hp[1]]
+	_status.text = "Connecting to %s ..." % (String(hp[0]) if Net.is_ws_url(address) else "%s:%d" % [hp[0], hp[1]])
 	var waiting := _status
 	Net.join_failed.connect(func(reason: String) -> void:
 		if is_instance_valid(waiting):
 			waiting.text = reason, CONNECT_ONE_SHOT)
+
+
+func _process(_delta: float) -> void:
+	# joining: the map arrives in parts after the server seats us
+	var got := Net.join_progress()
+	if got >= 0.0 and _status != null and is_instance_valid(_status):
+		_status.text = "Joined - downloading the map... %d%%" % roundi(got * 100.0)
 
 
 func _fetch_servers() -> void:

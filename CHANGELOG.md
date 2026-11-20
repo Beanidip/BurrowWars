@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase B: public servers
+
+| Change | Files |
+|---|---|
+| **WebSocket servers**: `--server --transport ws` listens on TCP WebSocket instead of ENet, so browsers can join (desktop players too, with a `ws://` / `wss://` address). `--tls-cert` / `--tls-key` serve `wss://` directly; docs show the simpler Caddy setup with a free certificate. Player-hosted games stay on ENet. The menu's Join box takes `wss://` addresses; a browser build reaches a bare address over `wss://` | `net/net.gd`, `net/dedicated_server.gd`, `ui/main_menu.gd`, `docs/MULTIPLAYER.md` |
+| Joining sends the map in 48 KB parts after the welcome (it was one message), paced so a WebSocket's send buffer never overflows; the menu shows the download. A WebSocket player whose connection backs up skips snapshots, and one that stops reading for 15 s is dropped. Network protocol 10 | `net/net.gd`, `net/net_server.gd`, `ui/main_menu.gd` |
+| Tests: the full client test runs again over WebSocket, plus a `wss://` join with a throwaway certificate; the map reassembly is unit-tested (old-round parts ignored, damaged maps refused) | `tools/net_check.sh`, `tests/net_client_test.gd`, `tests/test_runner.gd` |
+
 ## Unreleased - Phase A2: controller and Steam Deck
 
 | Change | Files |

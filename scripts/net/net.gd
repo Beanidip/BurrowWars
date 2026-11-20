@@ -10,15 +10,31 @@ extends Node
 ## All RPC endpoints live on this autoload so their node path (/root/Net) is
 ## identical on every peer. They only forward to the active NetServer or
 ## NetClient, which hold the logic.
+##
+## Two transports carry the same RPCs:
+## - ENet (UDP): player-hosted games and direct-IP / LAN play. "host:port".
+## - WebSocket (TCP): public dedicated servers, the only kind a browser can
+##   reach. "ws://host:port" or "wss://host[:port][/path]" (wss = TLS, which a
+##   browser on an https page such as itch.io requires). A server runs one or
+##   the other; desktop players can join both.
+## The map a joining player needs is sent in parts after the welcome, paced so
+## a WebSocket's send buffer never overflows.
 
 signal joined(info: Dictionary)        # client: the server seated us (new session or new round)
 signal join_failed(reason: String)     # client: could not connect or was refused
 signal disconnected(reason: String)    # client: lost the server mid-game
 
 const DEFAULT_PORT := 24565
-const PROTOCOL := 9                    # bump whenever the wire format or block ids change
+const PROTOCOL := 10                   # bump whenever the wire format or block ids change
 const MAX_CLIENTS := 15
 const NAME_MAX := 16
+const WORLD_PART := 48 * 1024          # bytes of map per message while joining
+const WORLD_MAX := 64 * 1024 * 1024    # a client refuses a map bigger than this
+const WS_OUT := 1 << 20                # WebSocket send buffer per peer (server) / receive buffer (client)
+const WS_IN := 256 * 1024              # WebSocket receive buffer per peer (server) / send buffer (client)
+const WS_STALL := 15.0                 # seconds a WebSocket peer may sit on a full buffer before it's dropped
+
+enum Transport { ENET, WEBSOCKET }
 
 enum Role { OFFLINE, SERVER, CLIENT }
 
@@ -29,6 +45,16 @@ var hellos: Dictionary = {}            # server: peer id -> the hello it sent (s
 var player_name := ""
 var _hello := {}
 var _refused := false
+var transport := Transport.ENET
+var tls_unsafe := false                # tests only: accept a self-signed wss certificate
+var _world_out: Dictionary = {}        # server: peer -> {"serial", "parts", "next"} still to send
+var _world_in: Dictionary = {}         # client: the welcome waiting for its map parts
+var _welcome_serial := 0
+var _stall: Dictionary = {}            # server: WebSocket peer -> seconds its send buffer has been nearly full
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS   # keep sending the map while a host's game is paused
 
 
 func game_version() -> String:
@@ -50,38 +76,102 @@ static func clean_name(raw: Variant) -> String:
 
 # ---------------------------------------------------------------- start / stop
 
-func host(port: int) -> String:
+static func enet_available() -> bool:
+	## ENet is UDP, which browsers can't do: a web build only has WebSocket.
+	return ClassDB.class_exists("ENetMultiplayerPeer") and not OS.has_feature("web")
+
+
+static func is_ws_url(address: String) -> bool:
+	var a := address.strip_edges().to_lower()
+	return a.begins_with("ws://") or a.begins_with("wss://")
+
+
+static func ws_url_for(address: String, port: int) -> String:
+	## What a bare "host" / "host:port" means where only WebSocket exists (a
+	## browser): TLS, except to this machine.
+	var host_part := address.strip_edges()
+	var local := host_part in ["localhost", "127.0.0.1", "::1"]
+	if host_part.contains(":") and not host_part.begins_with("["):
+		host_part = "[%s]" % host_part   # a bare IPv6 address
+	return "%s://%s:%d" % ["ws" if local else "wss", host_part, port]
+
+
+func host(port: int, options: Dictionary = {}) -> String:
 	## Opens a server on this machine. Returns "" or an error for the player.
+	## options: "transport": "ws" for WebSocket (default ENet); "tls_cert" and
+	## "tls_key": PEM files, to serve wss:// directly instead of behind a proxy.
 	close()
-	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(port, MAX_CLIENTS)
-	if err != OK:
-		return "Could not open port %d (error %d). Is another server already running?" % [port, err]
+	var ws := String(options.get("transport", "enet")) in ["ws", "websocket", "wss"] or not enet_available()
+	var peer: MultiplayerPeer
+	if ws:
+		var tls: TLSOptions = null
+		if String(options.get("tls_cert", "")) != "":
+			var cert := X509Certificate.new()
+			var key := CryptoKey.new()
+			if cert.load(String(options["tls_cert"])) != OK or key.load(String(options.get("tls_key", ""))) != OK:
+				return "Could not read the TLS certificate or key (%s, %s)" % [options.get("tls_cert"), options.get("tls_key", "")]
+			tls = TLSOptions.server(key, cert)
+		var wsp := WebSocketMultiplayerPeer.new()
+		wsp.outbound_buffer_size = WS_OUT
+		wsp.inbound_buffer_size = WS_IN
+		wsp.max_queued_packets = 4096
+		var err := wsp.create_server(port, "*", tls)
+		if err != OK:
+			return "Could not open TCP port %d (error %d). Is another server already running?" % [port, err]
+		peer = wsp
+		transport = Transport.WEBSOCKET
+	else:
+		var ep: MultiplayerPeer = ClassDB.instantiate("ENetMultiplayerPeer")
+		var err: int = ep.call("create_server", port, MAX_CLIENTS)
+		if err != OK:
+			return "Could not open port %d (error %d). Is another server already running?" % [port, err]
+		peer = ep
+		transport = Transport.ENET
 	multiplayer.multiplayer_peer = peer
 	role = Role.SERVER
 	hellos.clear()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	Log.info("net: hosting on port %d" % port)
+	Log.info("net: hosting on %s port %d" % ["WebSocket (TCP)" if ws else "ENet (UDP)", port])
 	return ""
 
 
 func join(address: String, port: int, hello: Dictionary) -> String:
+	## address: "host" (with `port`), or a ws:// / wss:// URL. In a browser a
+	## bare host is reached over wss://.
 	close()
-	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_client(address, port)
-	if err != OK:
-		return "Could not start connecting to %s:%d (error %d)" % [address, port, err]
+	var peer: MultiplayerPeer
+	var where := "%s:%d" % [address, port]
+	if is_ws_url(address) or not enet_available():
+		var url := address.strip_edges() if is_ws_url(address) else ws_url_for(address, port)
+		var wsp := WebSocketMultiplayerPeer.new()
+		wsp.inbound_buffer_size = WS_OUT
+		wsp.outbound_buffer_size = WS_IN
+		var tls: TLSOptions = TLSOptions.client_unsafe() if tls_unsafe else null
+		var err := wsp.create_client(url, tls)
+		if err != OK:
+			return "Could not start connecting to %s (error %d)" % [url, err]
+		peer = wsp
+		where = url
+		transport = Transport.WEBSOCKET
+	else:
+		var ep: MultiplayerPeer = ClassDB.instantiate("ENetMultiplayerPeer")
+		var err: int = ep.call("create_client", address, port)
+		if err != OK:
+			return "Could not start connecting to %s:%d (error %d)" % [address, port, err]
+		peer = ep
+		transport = Transport.ENET
 	multiplayer.multiplayer_peer = peer
 	role = Role.CLIENT
 	_refused = false
+	_world_in = {}
 	_hello = hello.duplicate()
 	_hello["v"] = PROTOCOL
 	_hello["gv"] = game_version()
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
-	Log.info("net: connecting to %s:%d" % [address, port])
+	Log.info("net: connecting to %s" % where)
 	return ""
 
 
@@ -97,6 +187,72 @@ func close() -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	role = Role.OFFLINE
 	hellos.clear()
+	_world_out.clear()
+	_world_in = {}
+	_stall.clear()
+
+
+# ---------------------------------------------------------------- joining: the map in parts
+
+func send_welcome(id: int, info: Dictionary, world: Dictionary) -> void:
+	## Server: seat a player. The welcome goes first; the map follows in parts
+	## (_process sends them as the connection has room).
+	var bytes := var_to_bytes(world)
+	var parts: Array[PackedByteArray] = []
+	for at in range(0, bytes.size(), WORLD_PART):
+		parts.append(bytes.slice(at, at + WORLD_PART))
+	_welcome_serial += 1
+	var w := info.duplicate()
+	w["ws"] = _welcome_serial
+	w["parts"] = parts.size()
+	w["bytes"] = bytes.size()
+	_s_welcome.rpc_id(id, w)
+	_world_out[id] = {"serial": _welcome_serial, "parts": parts, "next": 0}
+	_pump_world()
+
+
+func backed_up(id: int, limit := 0.75) -> bool:
+	## Server: is this peer's send buffer filling up? (WebSocket only: ENet
+	## drops unreliable packets itself.) Snapshots skip a backed-up peer.
+	if transport != Transport.WEBSOCKET or not (multiplayer.multiplayer_peer is WebSocketMultiplayerPeer):
+		return false
+	if not multiplayer.get_peers().has(id):
+		return false
+	var wp := (multiplayer.multiplayer_peer as WebSocketMultiplayerPeer).get_peer(id)
+	return wp != null and wp.get_current_outbound_buffered_amount() > int(WS_OUT * limit)
+
+
+func _pump_world() -> void:
+	for id: int in _world_out.keys():
+		var job: Dictionary = _world_out[id]
+		var parts: Array[PackedByteArray] = job["parts"]
+		if not multiplayer.get_peers().has(id):
+			_world_out.erase(id)
+			continue
+		while int(job["next"]) < parts.size() and not backed_up(id, 0.5):
+			var i := int(job["next"])
+			_s_world.rpc_id(id, int(job["serial"]), i, parts[i])
+			job["next"] = i + 1
+		if int(job["next"]) >= parts.size():
+			_world_out.erase(id)
+
+
+func _process(delta: float) -> void:
+	if role != Role.SERVER:
+		return
+	if not _world_out.is_empty():
+		_pump_world()
+	if transport == Transport.WEBSOCKET:
+		# a client that stopped reading would fill its buffer for ever: let it go
+		for id: int in multiplayer.get_peers():
+			if backed_up(id, 0.9):
+				_stall[id] = float(_stall.get(id, 0.0)) + delta
+				if float(_stall[id]) > WS_STALL:
+					Log.warn("net: peer %d stopped reading; disconnecting" % id)
+					_stall.erase(id)
+					(multiplayer.multiplayer_peer as WebSocketMultiplayerPeer).disconnect_peer(id)
+			else:
+				_stall.erase(id)
 
 
 # ---------------------------------------------------------------- connection events
@@ -117,8 +273,12 @@ func _on_connected() -> void:
 
 
 func _on_connection_failed() -> void:
+	var ws := transport == Transport.WEBSOCKET
 	close()
-	join_failed.emit("Could not reach the server. Check the address and port, and that the host's firewall allows UDP %d." % DEFAULT_PORT)
+	if ws:
+		join_failed.emit("Could not reach the server. Check the address (ws:// or wss://), and that the server is running and its port is open.")
+	else:
+		join_failed.emit("Could not reach the server. Check the address and port, and that the host's firewall allows UDP %d." % DEFAULT_PORT)
 
 
 func _on_server_disconnected() -> void:
@@ -166,7 +326,47 @@ func _c_aim(yaw: Variant, pitch: Variant) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func _s_welcome(info: Dictionary) -> void:
+	## The map follows in `parts` messages; joined fires once it's all here.
+	var parts := int(info.get("parts", 0))
+	var size := int(info.get("bytes", 0))
+	if parts <= 0 or size <= 0 or size > WORLD_MAX or parts != ceili(float(size) / WORLD_PART):
+		_world_in = {}
+		Log.warn("net: bad welcome from the server (%d parts, %d bytes)" % [parts, size])
+		return
+	_world_in = {"info": info, "serial": int(info.get("ws", 0)), "data": PackedByteArray(), "next": 0, "parts": parts, "bytes": size}
+
+
+@rpc("authority", "call_remote", "reliable")
+func _s_world(serial: int, index: int, data: PackedByteArray) -> void:
+	if _world_in.is_empty() or serial != int(_world_in["serial"]) or index != int(_world_in["next"]):
+		return   # from an older welcome (a new round started meanwhile)
+	var buf: PackedByteArray = _world_in["data"]
+	buf.append_array(data)
+	_world_in["data"] = buf
+	_world_in["next"] = index + 1
+	if index + 1 < int(_world_in["parts"]):
+		return
+	var info: Dictionary = _world_in["info"]
+	var ok := buf.size() == int(_world_in["bytes"])
+	_world_in = {}
+	var world: Variant = bytes_to_var(buf) if ok else null   # never decodes objects
+	if not (world is Dictionary):
+		Log.warn("net: the map from the server did not arrive whole")
+		close()
+		join_failed.emit("The map from the server arrived damaged. Try joining again.")
+		return
+	info.erase("parts")
+	info.erase("bytes")
+	info.erase("ws")
+	info["world"] = world
 	joined.emit(info)
+
+
+func join_progress() -> float:
+	## Client: how much of the map has arrived (0..1), or -1 when not joining.
+	if _world_in.is_empty():
+		return -1.0
+	return float(_world_in["next"]) / maxf(1.0, float(_world_in["parts"]))
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")

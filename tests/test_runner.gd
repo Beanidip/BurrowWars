@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4462,6 +4462,54 @@ func _pad_axis(axis: int, value: float) -> InputEventJoypadMotion:
 	e.axis = axis
 	e.axis_value = value
 	return e
+
+
+func test_map_in_parts() -> void:
+	## Joining: the map follows the welcome in parts, is put back together,
+	## and parts from an older welcome (a new round started) are ignored.
+	var world := {"d": PackedByteArray(), "m": {}, "g": {}}
+	var big := PackedByteArray()
+	big.resize(130000)
+	for i in big.size():
+		big[i] = (i * 7) % 251
+	world["d"] = big
+	var bytes := var_to_bytes(world)
+	var parts: Array[PackedByteArray] = []
+	for at in range(0, bytes.size(), Net.WORLD_PART):
+		parts.append(bytes.slice(at, at + Net.WORLD_PART))
+	check(parts.size() == 3, "a 130 KB map goes in 3 parts (%d)" % parts.size())
+	var got: Array = []
+	var on_join := func(info: Dictionary) -> void: got.append(info)
+	Net.joined.connect(on_join)
+	Net._s_welcome({"rat": 4, "ws": 7, "parts": parts.size(), "bytes": bytes.size()})
+	check(got.is_empty() and Net.join_progress() == 0.0, "the welcome alone doesn't start the game")
+	Net._s_world(7, 0, parts[0])
+	Net._s_world(6, 1, PackedByteArray([1, 2, 3]))   # left over from the previous round
+	Net._s_world(7, 2, parts[2])                      # out of order: ignored
+	check(got.is_empty() and is_equal_approx(Net.join_progress(), 1.0 / 3.0), "stray and out-of-order parts are ignored")
+	Net._s_world(7, 1, parts[1])
+	Net._s_world(7, 2, parts[2])
+	check(got.size() == 1 and int(got[0]["rat"]) == 4, "the last part starts the game")
+	check(got.size() == 1 and got[0]["world"] is Dictionary and (got[0]["world"]["d"] as PackedByteArray) == big, "with the map exactly as sent")
+	check(got.size() == 1 and not got[0].has("parts"), "and no joining bookkeeping left in the welcome")
+	check(Net.join_progress() < 0.0, "nothing more to wait for")
+	# a lying welcome is refused
+	Net._s_welcome({"ws": 8, "parts": 1, "bytes": Net.WORLD_MAX + 1})
+	check(Net.join_progress() < 0.0, "a welcome promising a huge map is refused")
+	# a damaged map: the client gives up cleanly
+	var failed: Array = []
+	var on_fail := func(r: String) -> void: failed.append(r)
+	Net.join_failed.connect(on_fail)
+	Net._s_welcome({"ws": 9, "parts": 1, "bytes": 100})
+	Net._s_world(9, 0, PackedByteArray([1, 2, 3]))
+	check(got.size() == 1 and failed.size() == 1, "a damaged map fails the join instead of starting")
+	Net.join_failed.disconnect(on_fail)
+	Net.joined.disconnect(on_join)
+	# addresses
+	check(Net.is_ws_url("wss://bw.example.org/play") and Net.is_ws_url(" WS://1.2.3.4:9000") and not Net.is_ws_url("1.2.3.4:24565"),
+		"ws:// and wss:// addresses are recognised")
+	check(Net.ws_url_for("bw.example.org", 24565) == "wss://bw.example.org:24565" and Net.ws_url_for("127.0.0.1", 9) == "ws://127.0.0.1:9"
+		and Net.ws_url_for("2001:db8::1", 9) == "wss://[2001:db8::1]:9", "a bare address becomes wss:// (ws:// to this machine) where only WebSocket exists")
 
 
 func test_gamepad_input() -> void:

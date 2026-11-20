@@ -47,7 +47,9 @@ func join_server() -> GameSession:
 		var failed := [false]
 		var on_fail := func(_r: String) -> void: failed[0] = true
 		Net.join_failed.connect(on_fail)
-		Net.join("127.0.0.1", port(), {"name": "Tester", "team": 1, "class": "digger"})
+		var url := OS.get_environment("BW_URL")   # a ws:// or wss:// server instead of ENet
+		Net.tls_unsafe = OS.get_environment("BW_TLS_UNSAFE") == "1"   # the test's self-signed certificate
+		Net.join(url if url != "" else "127.0.0.1", port(), {"name": "Tester", "team": 1, "class": "digger"})
 		await wait_for(func() -> bool: return failed[0] or (main.session != null and is_instance_valid(main.session) and main.session.m != null), 6.0)
 		Net.join_failed.disconnect(on_fail)
 		if main.session != null and is_instance_valid(main.session) and main.session.player != null:
@@ -68,6 +70,14 @@ func _run() -> void:
 	check(s != null, "joined the dedicated server and got a session")
 	if s == null:
 		get_tree().quit(1)
+		return
+	if OS.get_environment("BW_URL") != "":
+		var wsp := Net.transport == Net.Transport.WEBSOCKET and multiplayer.multiplayer_peer is WebSocketMultiplayerPeer
+		check(wsp, "connected over WebSocket (%s)" % OS.get_environment("BW_URL"))
+	if OS.get_environment("BW_NET_TEST") == "join":
+		check(s.m.world.get_cell(Vector3i(VoxelWorld.SX / 2, 1, VoxelWorld.SZ / 2)) != Blocks.AIR, "the map arrived whole")
+		print("---- net join: %d failed ----" % _fails)
+		get_tree().quit(1 if _fails > 0 else 0)
 		return
 	var m := s.m
 	var me := s.player

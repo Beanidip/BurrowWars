@@ -1,13 +1,21 @@
 # Multiplayer
 
-Burrow Wars plays online over UDP (Godot's ENet). Up to 16 rats per match; humans take bot
-seats as they join, and a bot takes the seat back when they leave, so teams always stay full.
+Burrow Wars plays online over one of two transports, carrying exactly the same game:
+
+| Transport | Used by | Address looks like |
+|---|---|---|
+| **ENet** (UDP) | games hosted from the menu, LAN and direct-IP play | `1.2.3.4` or `1.2.3.4:24565` |
+| **WebSocket** (TCP) | public dedicated servers; the only kind a **browser** can join | `ws://1.2.3.4:24565` or `wss://play.example.org` |
+
+Desktop players can join both. A server runs one transport. Up to 16 rats per match; humans take
+bot seats as they join, and a bot takes the seat back when they leave, so teams always stay full.
 
 ## Playing
 
 **Join a game:** main menu > **Play Online**. Type a name, pick a preferred team and class,
-then press **Join** on a server in the list, or type an address (`1.2.3.4` or `1.2.3.4:24565`)
-and press **Join**.
+then press **Join** on a server in the list, or type an address (`1.2.3.4`, `1.2.3.4:24565`,
+or a `ws://` / `wss://` address for a WebSocket server) and press **Join**. A controller can do
+all of this: a name is suggested for you, and the list's Join buttons need no typing.
 
 **Host a game for friends:** **Play Online** > **Host Cheese Race...** sets up a normal Cheese Race
 and opens a server on your machine (default UDP port **24565**). You play in it like any other
@@ -61,12 +69,56 @@ On Windows: `BurrowWars.exe --headless -- --server`.
 | `--seed N` | random | Fix the first map (later rounds are random). |
 | `--free` | off | Run Free Build instead of Cheese Race. |
 | `--map FILE` | none | Start every round on a saved/exported `.bwmap` (from Esc > Export map) instead of a new map. |
+| `--transport ws` | ENet (UDP) | Listen for **WebSocket** (TCP) instead: browsers can join, and so can desktop players with a `ws://` / `wss://` address. Use this for public servers. |
+| `--tls-cert FILE --tls-key FILE` | none | With `--transport ws`: serve `wss://` directly with this PEM certificate and key. Usually simpler: put Caddy in front (below). |
+
+### Browsers need `wss://`
+
+A browser page served over https (itch.io is) may only open **secure** WebSockets: `wss://`,
+with a certificate for a real domain name. Plain `ws://` works from desktop builds and from a
+browser on the same machine (`localhost`), but not from itch.io. So a server that browser players
+can join needs:
+1. a domain name (or subdomain) pointing at the server, for example `play.example.org`;
+2. a certificate for it. The easiest way is [Caddy](https://caddyserver.com), which gets and
+   renews a free Let's Encrypt certificate by itself and passes WebSocket connections through.
+
+Run the game server on WebSocket, listening only for Caddy:
+
+```bash
+./BurrowWars.x86_64 --headless -- --server --transport ws --port 24565 --name "Burrow Wars EU #1"
+```
+
+and give Caddy this `/etc/caddy/Caddyfile`:
+
+```
+play.example.org {
+	reverse_proxy 127.0.0.1:24565
+}
+```
+
+Several servers on one machine can share the name, one path each:
+
+```
+play.example.org {
+	handle_path /eu1 {
+		reverse_proxy 127.0.0.1:24565
+	}
+	handle_path /eu2 {
+		reverse_proxy 127.0.0.1:24566
+	}
+}
+```
+
+Players then join `wss://play.example.org` (or `wss://play.example.org/eu1`). Open TCP **80** and
+**443** in the firewall (Caddy needs 80 to get the certificate) and keep the game's own port closed
+to the outside. To skip Caddy, pass your own certificate with `--tls-cert` / `--tls-key` and open
+the game's TCP port instead; the address is then `wss://play.example.org:24565`.
 
 ### Hosting one on a VPS
 
 Any small Linux VPS works (1 vCPU, 1 GB RAM is plenty; one server process uses a few percent
-of a core). Open the UDP port in the provider's firewall, copy the Linux build over, and keep
-it running with systemd:
+of a core). Open the port in the provider's firewall (UDP for ENet; for WebSocket, TCP 80 and 443
+with Caddy as above), copy the Linux build over, and keep it running with systemd:
 
 ```ini
 # /etc/systemd/system/burrowwars.service
@@ -77,7 +129,7 @@ After=network-online.target
 [Service]
 User=burrow
 WorkingDirectory=/opt/burrowwars
-ExecStart=/opt/burrowwars/BurrowWars.x86_64 --headless -- --server --name "Burrow Wars #1"
+ExecStart=/opt/burrowwars/BurrowWars.x86_64 --headless -- --server --transport ws --name "Burrow Wars #1"
 Restart=always
 
 [Install]
@@ -90,7 +142,8 @@ sudo systemctl enable --now burrowwars
 
 **Bandwidth** (measured): a snapshot of a full 4v4 match is about 1.5 KB, sent 20 times a
 second, plus about 0.4 KB of private inventory 4 times a second: roughly **32 KB/s per connected
-player** (about 2 Mbit/s for 8 players). Joining sends the whole map once (about 16 KB).
+player** (about 2 Mbit/s for 8 players). With 32 rats a snapshot is about 5 KB. Joining sends the
+whole map once: about 110 KB for a fresh map, more for a heavily carved one, in 48 KB parts.
 
 ### Listing it in the game
 
@@ -123,11 +176,16 @@ The list shows name, address and region. It does not yet show live player counts
 - **Streams.** Reliable: block and carving changes, effects, toasts and the win, batched once
   per tick. Unreliable 20 Hz: rats, pickups, markers, machines, shots, Mobile TNT, scores.
   Reliable 4 Hz (and right after each request): the player's own inventory.
-- **Files.** `scripts/net/net.gd` (autoload, connection and RPC endpoints),
+- **Joining.** The welcome comes first, then the map in 48 KB parts. On WebSocket each player's
+  send buffer is 1 MB: map parts wait for room, a snapshot is skipped for a player whose buffer
+  is three-quarters full (the next one replaces it), and a player who stops reading for 15 s is
+  dropped. The client checks the parts' order, count and size before building anything.
+- **Files.** `scripts/net/net.gd` (autoload, transports, joining, RPC endpoints),
   `net_server.gd`, `net_client.gd`, `dedicated_server.gd`.
 - **Tests.** `tools/net_check.sh` (run by `tools/check.sh`) starts real processes on localhost:
-  dedicated server + scripted client, player-hosted game + client, and a dedicated server
-  rolling a connected player onto a new map after a win.
+  dedicated server + scripted client (over ENet, and again over WebSocket), a `wss://` join with a
+  throwaway certificate, player-hosted game + client, and a dedicated server rolling a connected
+  player onto a new map after a win.
 
 ## Limits (honest list)
 
@@ -137,6 +195,8 @@ The list shows name, address and region. It does not yet show live player counts
   by the server.
 - No accounts, kick or ban commands, chat, or player-count/ping in the server list yet.
 - Player-hosted games need port forwarding for internet play (no relay or NAT punch-through).
-- Traffic is not encrypted (ENet over plain UDP). Nothing secret is sent.
+- ENet and `ws://` traffic is not encrypted; `wss://` is. Nothing secret is sent either way.
+- WebSocket runs over TCP, so a lost packet holds up the ones behind it: on a bad connection
+  other rats can stutter more than over ENet.
 - Other rats are drawn by smoothing toward the latest snapshot (no lag compensation), so a
   bonk on a fast-moving rat at high ping can miss; the server allows 0.7 blocks of slack.

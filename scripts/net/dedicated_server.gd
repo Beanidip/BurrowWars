@@ -8,8 +8,13 @@ extends Node
 ##         [--goal 10] [--team-size 4] [--skill 1] [--free] [--round-break 15]
 ##         [--lobby 30]                  (seconds in the playground before each round; 0 = none)
 ##         [--map path/to/saved.bwmap]   (every round then starts on that map)
+##         [--transport ws]              (WebSocket on TCP instead of ENet on UDP:
+##                                        what browsers need; desktop players can join too)
+##         [--tls-cert cert.pem --tls-key key.pem]   (serve wss:// directly; or put
+##                                        the server behind a proxy such as Caddy instead)
 ##
 ## or, from an exported build:  BurrowWars.exe --headless -- --server
+## See docs/MULTIPLAYER.md for running a public server.
 
 const ROUND_BREAK := 15.0      # default seconds between a win and the next map
 const LOBBY_TIME := 30.0       # default seconds in the playground before each round
@@ -34,7 +39,8 @@ static func parse_args() -> Dictionary:
 			var key := a.substr(2)
 			if key in ["server", "free"]:
 				out[key] = true
-			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map"] and i + 1 < args.size():
+			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map",
+					"transport", "tls-cert", "tls-key"] and i + 1 < args.size():
 				out[key] = args[i + 1]
 				i += 1
 		i += 1
@@ -45,12 +51,15 @@ static func parse_args() -> Dictionary:
 
 func _ready() -> void:
 	var port := int(options.get("port", Net.DEFAULT_PORT))
-	var err := Net.host(port)
+	var err := Net.host(port, {"transport": String(options.get("transport", "enet")),
+		"tls_cert": String(options.get("tls-cert", "")), "tls_key": String(options.get("tls-key", ""))})
 	if err != "":
 		Log.warn("dedicated server: " + err)
 		get_tree().quit(1)
 		return
-	Log.info("dedicated server '%s' listening on UDP %d" % [_server_name(), port])
+	var ws := Net.transport == Net.Transport.WEBSOCKET
+	Log.info("dedicated server '%s' listening on %s %d%s" % [_server_name(), "TCP (WebSocket)" if ws else "UDP", port,
+		" with TLS (wss://)" if ws and String(options.get("tls-cert", "")) != "" else ""])
 	_next()
 
 
