@@ -129,6 +129,7 @@ func _start(s: Dictionary) -> void:
 	net = NetServer.new()
 	net.name = "NetServer"
 	net.m = m
+	net.ac.kick_out = true   # a public server removes players who keep failing the movement checks
 	add_child(net)
 
 

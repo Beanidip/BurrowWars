@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4462,6 +4462,248 @@ func _pad_axis(axis: int, value: float) -> InputEventJoypadMotion:
 	e.axis = axis
 	e.axis_value = value
 	return e
+
+
+func _ac_arena() -> Array:
+	## [match, rat, AntiCheat, clock] in the test arena with open sky above.
+	var m := new_match()
+	flat_arena(m, ARENA, 6)
+	for dx in range(-6, 7):
+		for dz in range(-6, 7):
+			for dy in range(6, 28):
+				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.AIR)
+	var r := arena_rat(m, 0, "digger")
+	for i in 30:
+		r.step(DT)
+	var ac := AntiCheat.new()
+	ac.log_violations = false
+	var clock := [100000]
+	ac.reset(7, r, clock[0])
+	return [m, r, ac, clock]
+
+
+func _ac_play(r: Rat, ac: AntiCheat, clock: Array, seconds: float, each: Callable) -> Array:
+	## Runs the real rat physics and reports its position 30 times a second,
+	## as a player's game does. Returns whatever the checks objected to.
+	var bad: Array = []
+	for i in int(seconds / DT):
+		each.call(i)
+		r.step(DT)
+		r.jump_pressed = false
+		r.gear_pressed = false
+		if i % 2 == 1:
+			clock[0] += 33
+			var v := ac.check_move(7, r, r.position, clock[0])
+			if v != "":
+				bad.append("%.2f s: %s" % [i * DT, v])
+	return bad
+
+
+func test_anti_cheat_honest_play() -> void:
+	## The movement checks never object to anything the real physics does.
+	var ctx := _ac_arena()
+	var m: Match = ctx[0]
+	var r: Rat = ctx[1]
+	var ac: AntiCheat = ctx[2]
+	var clock: Array = ctx[3]
+	check(r.on_floor, "the test rat stands on the arena floor")
+	var floor_y := r.position.y
+	# walk, jump, double jump at the top
+	var bad := _ac_play(r, ac, clock, 2.0, func(i: int) -> void:
+		r.wish = Vector3(1, 0, 0) if i < 40 else Vector3.ZERO
+		r.jump_pressed = i == 0 or i == 20)
+	check(bad.is_empty(), "a jump and a double jump pass %s" % str(bad))
+	# a ledge: up onto a 2-high block and off the far side
+	var ledge := ARENA + Vector3i(-3, 0, 0)
+	m.world.set_block(ledge, Blocks.STONE)
+	m.world.set_block(ledge + Vector3i(0, 1, 0), Blocks.STONE)
+	r.position = Vector3(ledge) + Vector3(0.5, 2.0, 0.5)
+	ac.reset(7, r, clock[0])
+	bad = _ac_play(r, ac, clock, 1.5, func(_i: int) -> void: r.wish = Vector3(0, 0, 1))
+	check(bad.is_empty() and r.position.y < floor_y + 0.1, "walking off a ledge and falling passes %s" % str(bad))
+	# a corner: walk diagonally into a pillar and slide round it
+	var pillar := ARENA + Vector3i(2, 0, 2)
+	for dy in 3:
+		m.world.set_block(pillar + Vector3i(0, dy, 0), Blocks.STONE)
+	r.position = Vector3(pillar) + Vector3(-0.8, 0, -0.8)
+	ac.reset(7, r, clock[0])
+	bad = _ac_play(r, ac, clock, 1.5, func(_i: int) -> void: r.wish = Vector3(1, 0, 1).normalized())
+	check(bad.is_empty(), "sliding round a corner is not walking through it %s" % str(bad))
+	# a spring: fall onto it, bounce, double jump at the top of the bounce
+	var spring := ARENA + Vector3i(-2, -1, -3)
+	m.world.set_block(spring, Blocks.SPRING)
+	r.position = Vector3(spring) + Vector3(0.5, 4.0, 0.5)
+	r.vel = Vector3.ZERO
+	r.wish = Vector3.ZERO
+	ac.reset(7, r, clock[0])
+	var top := [0.0]
+	bad = _ac_play(r, ac, clock, 3.0, func(i: int) -> void:
+		top[0] = maxf(top[0], r.position.y - floor_y)
+		r.jump_pressed = i > 20 and r.vel.y < 0.3 and r.vel.y > -0.3)
+	check(top[0] > 4.0, "the spring bounced the rat (%.1f blocks up)" % top[0])
+	check(bad.is_empty(), "spring bounces pass %s" % str(bad))
+	# a jetpack burn after a jump, then the fall
+	m.world.set_block(spring, Blocks.STONE)
+	r.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	r.vel = Vector3.ZERO
+	for i in 10:
+		r.step(DT)
+	r.gear = "jetpack"
+	r.gear_cd = 0.0
+	ac.reset(7, r, clock[0])
+	top[0] = 0.0
+	bad = _ac_play(r, ac, clock, 4.5, func(i: int) -> void:
+		top[0] = maxf(top[0], r.position.y - floor_y)
+		r.jump_pressed = i == 0
+		r.gear_pressed = i == 12)
+	check(top[0] > 9.0, "the jetpack carried the rat up (%.1f blocks)" % top[0])
+	check(bad.is_empty(), "a jetpack flight passes %s" % str(bad))
+	r.gear = ""
+	# swimming up a flooded shaft, and climbing a ladder
+	var shaft := ARENA + Vector3i(4, 0, -4)
+	for dy in 5:
+		m.world.set_block(shaft + Vector3i(0, dy, 0), Blocks.WATER)
+		m.world.set_block(shaft + Vector3i(1, dy, 0), Blocks.LADDER)
+	r.position = Vector3(shaft) + Vector3(0.5, 0, 0.5)
+	r.vel = Vector3.ZERO
+	ac.reset(7, r, clock[0])
+	bad = _ac_play(r, ac, clock, 2.0, func(_i: int) -> void:
+		r.jump_held = true
+		r.wish = Vector3.ZERO)
+	check(bad.is_empty(), "swimming up passes %s" % str(bad))
+	r.position = Vector3(shaft) + Vector3(1.5, 0, 0.5)
+	r.vel = Vector3.ZERO
+	ac.reset(7, r, clock[0])
+	var y0 := r.position.y
+	bad = _ac_play(r, ac, clock, 1.5, func(_i: int) -> void: r.jump_held = true)
+	r.jump_held = false
+	check(r.position.y > y0 + 3.0 and bad.is_empty(), "climbing a ladder passes (%.1f up) %s" % [r.position.y - y0, str(bad)])
+	# thrown by the server (an impulse grenade): as high as that throw goes
+	r.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	r.vel = Vector3(4, Config.IMPULSE_MAX_UP, 0)
+	ac.reset(7, r, clock[0])
+	bad = _ac_play(r, ac, clock, 2.0, func(_i: int) -> void: r.wish = Vector3.ZERO)
+	check(bad.is_empty(), "a server-side throw passes %s" % str(bad))
+	end(m)
+
+
+func test_anti_cheat_catches_cheats() -> void:
+	## Forged movement and floods, as a modified game would send them.
+	var ctx := _ac_arena()
+	var m: Match = ctx[0]
+	var r: Rat = ctx[1]
+	var ac: AntiCheat = ctx[2]
+	var clock: Array = ctx[3]
+	var floor_y := r.position.y
+	var start := r.position
+	# a 2-thick wall right in front
+	for dz in range(-2, 3):
+		for dy in 3:
+			for dx in [1, 2]:
+				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.STONE)
+	var report := func(pos: Vector3, ms: int = 33) -> String:
+		clock[0] += ms
+		return ac.check_move(7, r, pos, clock[0])
+	# noclip: one report from in front of the wall to behind it
+	var v: String = report.call(start + Vector3(3.0, 0, 0), 300)
+	check(v.begins_with("moved through"), "stepping through a wall is caught (%s)" % v)
+	check(ac.good_position(7, r).distance_to(start) < 0.01, "and the rat goes back to where it was legally")
+	ac.reset(7, r, clock[0])   # (the server's correction)
+	# noclip, slowly: standing inside the wall
+	v = report.call(start + Vector3(1.0, 0, 0))
+	check(v == "", "a moment inside a block is let go (someone may just have built there)")
+	var x := 1.0
+	while v == "" and x < 3.0:
+		x += 0.15   # walking pace
+		v = report.call(start + Vector3(x, 0, 0))
+	check(v.begins_with("inside solid") and x < 2.6, "staying inside it is caught before getting through (%s, at +%.2f)" % [v, x])
+	ac.reset(7, r, clock[0])
+	# fly hack: rising steadily from the floor
+	var flew := ""
+	for i in 40:
+		flew = report.call(start + Vector3(0, 0.3 * (i + 1), 0))
+		if flew != "":
+			check(0.3 * (i + 1) < AntiCheat.JUMP_RISE + AntiCheat.RISE_SLACK + 0.5, "caught by %.1f blocks up" % (0.3 * (i + 1)))
+			break
+	check(flew.contains("higher than"), "flying up is caught (%s)" % flew)
+	ac.reset(7, r, clock[0])
+	# hover hack: a hop, then hanging there
+	var hung := ""
+	var t := 0
+	while t < 4000 and hung == "":
+		t += 33
+		hung = report.call(start + Vector3(0, 1.2, 0))
+	check(hung.contains("higher than") and t < 2600, "hanging in the air is caught (after %.1f s)" % (t / 1000.0))
+	ac.reset(7, r, clock[0])
+	# a jetpack's climb without a jetpack
+	r.gear = ""
+	var jet := ""
+	for i in 40:
+		jet = report.call(start + Vector3(0, Config.JETPACK_LIFT * 0.033 * (i + 1), 0))
+		if jet != "":
+			break
+	check(jet != "", "a jetpack climb without the jetpack is caught")
+	ac.reset(7, r, clock[0])
+	# Free Build flyers may fly
+	var flyer := m.spawn_rat(0, "maestro", false)
+	flyer.position = start
+	ac.reset(8, flyer, clock[0])
+	var fly_ok := true
+	for i in 40:
+		clock[0] += 33
+		fly_ok = fly_ok and ac.check_move(8, flyer, start + Vector3(0, 0.3 * (i + 1), 0), clock[0]) == ""
+	check(fly_ok, "a class that flies may fly")
+	# strikes add up, fade, and (on a public server) remove the player
+	ac.kick_out = true
+	var removed := false
+	var n := 0
+	while not removed and n < 20:
+		n += 1
+		removed = ac.strike(7, "test", 1.0, clock[0])
+	check(removed and n == 8 or (removed and n == 7), "a player is removed after %d strikes (%d)" % [int(AntiCheat.STRIKE_LIMIT), n])
+	var before := ac.strikes(7)
+	ac.strike(7, "test", 0.0, clock[0] + 60000)
+	check(absf(ac.strikes(7) - (before - 2.0)) < 0.01, "strikes fade: one per %d s (%.1f -> %.1f)" % [int(AntiCheat.STRIKE_FADE), before, ac.strikes(7)])
+	# rate limits: a burst is fine, a flood is dropped
+	var passed := 0
+	for i in 200:
+		passed += 1 if ac.allow(9, "act", 5000) else 0
+	check(passed == 60, "a burst of 60 requests goes through, the rest of a flood is dropped (%d of 200)" % passed)
+	passed = 0
+	for i in 100:
+		passed += 1 if ac.allow(9, "act", 6000) else 0
+	check(passed == 30, "then 30 a second (%d)" % passed)
+	check(ac.strikes(9) >= 2.0, "a flood costs strikes (%.1f)" % ac.strikes(9))
+	# through the real server entry points
+	var ns := NetServer.new()
+	ns.m = m
+	var me := arena_rat(m, 1, "scout")
+	for i in 30:
+		me.step(DT)
+	me.net_peer = 11
+	ns.seats[11] = me
+	ns.ac.log_violations = false
+	ns.ac.reset(11, me)
+	me.net_pre = Match.net_state(me)
+	var here := me.position
+	var kick0 := me.net_kick
+	ns._last_input[11] = Time.get_ticks_msec() - 400
+	ns.on_input(11, {"k": me.net_kick, "p": here + Vector3(3.0, 0, 0), "v": Vector3.ZERO, "y": 0.0, "f": 1, "s": me.stamina})
+	check(me.position.distance_to(here) < 0.01 and me.net_kick == kick0 + 1, "a forged move through a wall is refused and the player corrected")
+	check(ns.ac.strikes(11) >= 1.0, "and costs a strike")
+	me.stamina = 20.0
+	me.net_pre = Match.net_state(me)
+	ns._last_input[11] = Time.get_ticks_msec() - 100
+	ns.on_input(11, {"k": me.net_kick, "p": me.position, "v": Vector3.ZERO, "y": 0.0, "f": 1, "s": 100.0})
+	check(me.stamina < 24.0, "stamina claimed back faster than it refills is refused (%.1f)" % me.stamina)
+	var acts := 0
+	for i in 300:
+		var d0 := int(ns.ac._peers[11]["dropped"])
+		ns.on_act(11, "set_equipped", ["nothing"])
+		acts += 1 if int(ns.ac._peers[11]["dropped"]) == d0 else 0
+	check(acts <= 62, "a flood of requests is cut to the burst allowance (%d of 300 run)" % acts)
+	ns.free()
+	end(m)
 
 
 func test_map_in_parts() -> void:

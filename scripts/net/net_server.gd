@@ -5,7 +5,9 @@ extends Node
 ##  - seats joining players in a rat (taking over a bot), and hands the rat
 ##    back to a bot when they leave;
 ##  - executes their requests through the normal validated Match methods;
-##  - accepts their own rat's movement, within a speed limit;
+##  - accepts their own rat's movement, within a speed limit and the
+##    physics checks in AntiCheat (no noclip, flying or hovering), and rate
+##    limits everything a player sends;
 ##  - streams terrain changes, effects and toasts (reliable), a 20 Hz
 ##    snapshot of everything that moves (unreliable), and each player's
 ##    private inventory (reliable, 4 Hz);
@@ -28,6 +30,7 @@ var _frame := 0
 var _last_input: Dictionary = {}   # peer id -> msec of the last accepted input
 var _dirty_private: Dictionary = {}
 var _fx_t: Dictionary = {}         # "peer:kind" -> msec of the last effect that peer reported
+var ac := AntiCheat.new()          # movement checks, rate limits and strikes
 const CLIENT_FX := ["spring", "jetpack", "dash", "jump", "land", "splash", "splash_out", "shield"]
 
 
@@ -90,6 +93,8 @@ func on_hello(id: int, hello: Dictionary) -> void:
 	rat.net_pre = Match.net_state(rat)
 	seats[id] = rat
 	_last_input[id] = Time.get_ticks_msec()
+	ac.forget(id)
+	ac.reset(id, rat)
 	Net.send_welcome(id, {
 		"settings": m.settings,
 		"rat": rat.id,
@@ -106,6 +111,7 @@ func on_peer_left(id: int) -> void:
 	var rat: Rat = seats.get(id)
 	seats.erase(id)
 	_last_input.erase(id)
+	ac.forget(id)
 	for k: String in CLIENT_FX:
 		_fx_t.erase("%d:%s" % [id, k])
 	if rat == null or not is_instance_valid(rat):
@@ -150,10 +156,12 @@ func _unique(pname: String) -> String:
 
 func on_input(id: int, pkt: Dictionary) -> void:
 	var rat: Rat = seats.get(id)
-	if rat == null:
+	if rat == null or not ac.allow(id, "input"):
 		return
 	if int(pkt.get("k", -1)) != rat.net_kick:
 		return   # sent before the player saw our last correction: stale
+	if rat.net_dirty or Match.net_state(rat) != rat.net_pre:
+		return   # the server moved the rat since (a respawn, a bonk...): its correction goes out next tick
 	var p: Variant = pkt.get("p")
 	var v: Variant = pkt.get("v")
 	if not (p is Vector3) or not (v is Vector3) or not (pkt.get("y") is float):
@@ -167,8 +175,15 @@ func on_input(id: int, pkt: Dictionary) -> void:
 	var limit := MAX_SPEED * dt + 1.5
 	if pos.distance_to(rat.position) > limit or pos.y < -6.0 or pos.x < -2.0 or pos.z < -2.0 \
 			or pos.x > VoxelWorld.SX + 2.0 or pos.z > VoxelWorld.SZ + 2.0 or pos.y > VoxelWorld.SY + 30.0:
-		_send_kick(id, rat)   # too far, too fast: put them back where we believe they are
+		_correct(id, rat, "moved %.1f blocks in %.2f s" % [pos.distance_to(rat.position), dt])   # too far, too fast
 		return
+	var bad := ac.check_move(id, rat, pos, now)
+	if bad != "":
+		_correct(id, rat, bad)
+		return
+	var regen := Config.STAMINA_REGEN * dt + 2.0   # stamina refills no faster than it does
+	rat.stamina = clampf(float(pkt.get("s", rat.stamina)), 0.0, minf(rat.max_stamina(), rat.stamina + regen)) \
+		if pkt.get("s") is float else rat.stamina
 	rat.position = pos
 	rat.vel = (v as Vector3).limit_length(60.0)
 	rat.yaw = float(pkt["y"])
@@ -177,7 +192,6 @@ func on_input(id: int, pkt: Dictionary) -> void:
 	rat.on_ladder = (f & 2) != 0
 	rat.in_water = (f & 4) != 0
 	rat.flying = (f & 8) != 0 and bool(rat.cls["fly"])
-	rat.stamina = clampf(float(pkt.get("s", rat.stamina)), 0.0, rat.max_stamina())
 	if pkt.get("a") is String and String(pkt["a"]) != "":
 		rat.play_action(String(pkt["a"]), 0.3)
 	if pkt.get("fx") is Array:
@@ -193,15 +207,27 @@ func on_input(id: int, pkt: Dictionary) -> void:
 
 func on_aim(id: int, yaw: float, pitch: float) -> void:
 	var rat: Rat = seats.get(id)
-	if rat != null and is_finite(yaw) and is_finite(pitch):
+	if rat != null and is_finite(yaw) and is_finite(pitch) and ac.allow(id, "aim"):
 		m.siege.aim(rat, yaw, pitch)
 
 
 func _send_kick(id: int, rat: Rat) -> void:
 	rat.net_kick += 1
 	rat.net_pre = Match.net_state(rat)
-	Net._s_kick.rpc_id(id, {"k": rat.net_kick, "p": rat.position, "v": rat.vel, "st": rat.stun, "kn": rat.knock,
-		"sl": rat.slow, "sa": rat.stamina, "fl": rat.flying})
+	ac.reset(id, rat)   # wherever the server put the rat is legal, at the speed it gave it
+	if Net.connected(id):
+		Net._s_kick.rpc_id(id, {"k": rat.net_kick, "p": rat.position, "v": rat.vel, "st": rat.stun, "kn": rat.knock,
+			"sl": rat.slow, "sa": rat.stamina, "fl": rat.flying})
+
+
+func _correct(id: int, rat: Rat, reason: String) -> void:
+	## A move the rat couldn't have made: back to where it last was legally.
+	rat.position = ac.good_position(id, rat)
+	rat.vel = Vector3.ZERO
+	_send_kick(id, rat)
+	if ac.strike(id, reason):
+		Log.warn("anti-cheat: removing peer %d (%s): %s" % [id, rat.display_name, ", ".join(ac.recent(id))])
+		Net.drop_peer(id, "Removed by the server: your game kept making moves that aren't possible here (%s). If you're not cheating, check your connection and join again." % reason)
 
 
 # ---------------------------------------------------------------- requests
@@ -235,7 +261,7 @@ static func _aim(raw: Variant) -> Variant:
 
 func on_act(id: int, method: String, a: Array) -> void:
 	var rat: Rat = seats.get(id)
-	if rat == null or not is_instance_valid(rat):
+	if rat == null or not is_instance_valid(rat) or not ac.allow(id, "act"):
 		return
 	var res: Variant = null
 	match method:
@@ -342,7 +368,8 @@ func _physics_process(_delta: float) -> void:
 	# corrections first, so they are on the wire before the next snapshot
 	for id: int in seats:
 		var rat: Rat = seats[id]
-		if is_instance_valid(rat) and Match.net_state(rat) != rat.net_pre:
+		if is_instance_valid(rat) and (rat.net_dirty or Match.net_state(rat) != rat.net_pre):
+			rat.net_dirty = false
 			_send_kick(id, rat)
 	var peers := multiplayer.get_peers()   # once per tick
 	if not seats.is_empty():

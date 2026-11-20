@@ -169,10 +169,25 @@ The list shows name, address and region. It does not yet show live player counts
   to the server, which runs the same validated method for that player's rat (`NetServer.on_act`,
   with type checks on every argument). Refusals come back as notices.
 - **Movement.** Your own rat moves locally for instant response and reports its state 30 times a
-  second. The server accepts it within a speed limit (40 blocks/s), otherwise snaps the rat back.
-  When the authority moves a rat itself (bonk, blast, trap, lava, respawn, stamina spent on an
-  ability), the player gets a *kick* with the new state, and reports sent before that kick are
-  ignored.
+  second. The server checks every report (`scripts/net/anti_cheat.gd`) and puts the rat back where
+  it last was legally if it fails:
+  - speed: at most 40 blocks/s;
+  - **walls**: a rat may not stand inside solid ground for more than 0.2 s (someone may just
+    have built there), nor pass through more than 0.45 blocks of it between two reports;
+  - **height**: since it last stood on something, a rat can rise only as high as a jump and a
+    double jump (3.4 blocks), a spring (6.8) or a jetpack (11.8 more, if it wears one) carry it,
+    or as a throw from the server allows, and after that it must be falling. That catches flying
+    and hovering. Ladders and water count as standing; classes that fly (Free Build) are free to;
+  - **stamina** refills no faster than it really does.
+  When the authority moves a rat itself (bonk, blast, trap, lava, respawn, teleport, stamina spent
+  on an ability), the player gets a *kick* with the new state, and reports sent before that kick
+  are ignored. That includes changes made between ticks (a respawn request, another player's bonk).
+- **Rate limits.** Requests: 30 a second (bursts of 60). Movement reports and aim: 45 a second
+  (bursts of 90). The rest of a flood is dropped.
+- **Strikes.** Each failed check is a strike, logged with the reason (`anti-cheat: peer ...`).
+  One strike fades every 30 s. On a dedicated server a player who reaches 8 is removed with a
+  message saying why (they can rejoin). A player-hosted game only corrects; it never removes
+  anyone.
 - **Streams.** Reliable: block and carving changes, effects, toasts and the win, batched once
   per tick. Unreliable 20 Hz: rats, pickups, markers, machines, shots, Mobile TNT, scores.
   Reliable 4 Hz (and right after each request): the player's own inventory.
@@ -190,9 +205,12 @@ The list shows name, address and region. It does not yet show live player counts
 ## Limits (honest list)
 
 - Hiding enemy names out of sight is done by each player's game; the server still sends every rat's position, so a modified client could show them.
-- Movement is trusted within the speed limit, so a modified client could still fly or walk
-  through walls slowly. Everything else (digging, building, scores, inventories) is validated
-  by the server.
+- Movement is checked against walls, height and speed (above), with generous margins so lag never
+  costs an honest player more than a rare correction. Inside those margins a modified client can
+  still cheat a little: move at the top speed all the time, or skip a dash's stamina cost on its
+  own side. Everything else (digging, building, scores, inventories) is validated by the server.
+- Removed players are not banned: a public server sees every WebSocket player arrive from its
+  proxy's address, so there is nothing reliable to ban by yet. Accounts (Steam) would fix that.
 - No accounts, kick or ban commands, chat, or player-count/ping in the server list yet.
 - Player-hosted games need port forwarding for internet play (no relay or NAT punch-through).
 - ENet and `ws://` traffic is not encrypted; `wss://` is. Nothing secret is sent either way.

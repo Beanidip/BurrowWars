@@ -211,6 +211,22 @@ func send_welcome(id: int, info: Dictionary, world: Dictionary) -> void:
 	_pump_world()
 
 
+func connected(id: int) -> bool:
+	## Server: is this peer on the line? (Tests drive NetServer without one.)
+	return role == Role.SERVER and multiplayer.get_peers().has(id)
+
+
+func drop_peer(id: int, reason: String) -> void:
+	## Server: tell a player why, then disconnect them a moment later (so the
+	## message gets there first).
+	if not connected(id):
+		return
+	_s_refuse.rpc_id(id, reason)
+	get_tree().create_timer(0.5, true, false, true).timeout.connect(func() -> void:
+		if connected(id):
+			multiplayer.multiplayer_peer.disconnect_peer(id))
+
+
 func backed_up(id: int, limit := 0.75) -> bool:
 	## Server: is this peer's send buffer filling up? (WebSocket only: ENet
 	## drops unreliable packets itself.) Snapshots skip a backed-up peer.

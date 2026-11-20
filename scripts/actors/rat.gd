@@ -76,6 +76,7 @@ var gear_pressed := false
 var net_peer := 0
 var net_local := false
 var net_pre: Array = []           # server: movement state before this tick, to spot authority changes
+var net_dirty := false            # server: the authority moved this remote player between ticks
 var net_kick := 0                 # server: bumped whenever the authority moved this rat itself
 
 # presentation hooks (read by RatSprite)

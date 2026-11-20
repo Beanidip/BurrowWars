@@ -281,7 +281,12 @@ func step(dt: float) -> void:
 		return
 	for r in rats:
 		if r.net_peer != 0:
-			# a remote player's own game moves this body; we keep its timers
+			# a remote player's own game moves this body; we keep its timers.
+			# Changed since the server last agreed with their game? Then the
+			# server did it between ticks (their respawn request, another
+			# player's bonk): NetServer tells them.
+			if not r.net_pre.is_empty() and net_state(r) != r.net_pre:
+				r.net_dirty = true
 			r.step_timers(dt)
 			r.net_pre = net_state(r)
 	if not over:
