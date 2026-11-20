@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased - Siege and workshop tuning
+
+| Change | Files |
+|---|---|
+| **Wrecking Crane:** the ball no longer bounces off what it hits (it used to get stuck rebounding against a wall, or when hanging in terrain). It smashes through block after block: each block in its path is hit once per pass with its usual ball damage, and each costs the ball some speed (less if the block breaks). A slow ball passes through harmlessly | `match/siege.gd`, `match/class_defs.gd` |
+| **Scrap Cannon:** each shot costs the gunner 2 scrap (free in Free Build, the playground and cheat-code matches). The blast is now a 3x3x3: 3 dig hits on the struck block, 2 on the six touching it, 1 on the rest (was the struck block plus four). A direct hit throws a rat much harder, and the blast also shoves enemy rats within 2.6 blocks away | `match/siege.gd`, `core/config.gd`, `match/class_defs.gd`, `ui/main_menu.gd` |
+| **Workshop:** each category is listed once (Mobility, Construction, Traps, Siege, Gear) instead of starting a new heading whenever the list switched category. Wall Spring, Impulse Grenade and the Teleporter Set are under Mobility | `match/class_defs.gd`, `ui/hud.gd` |
+| The Impulse Grenade's flash bulges out of the surface the grenade stuck to (up off a floor, out of a wall) instead of being half buried in the ground | `match/match_view.gd` |
+
 ## Unreleased - Cheat code, release plan
 
 | Change | Files |

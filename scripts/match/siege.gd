@@ -30,6 +30,7 @@ class Machine:
 	var under := Blocks.AIR          # what the machine is parked on top of (AIR or a HIGHWAY layer)
 	var theta := 0.0      # crane swing angle (0 = hanging straight down)
 	var omega := 0.0
+	var smashed: Dictionary = {}   # crane: cells the ball already hit on this pass (Vector3i -> true)
 	var recoil := 0.0     # presentation hint
 
 
@@ -202,6 +203,10 @@ func fire(rat: Rat) -> String:
 		return "wait"
 	match mc.kind:
 		Blocks.CANNON:
+			if not m.unlimited():
+				if rat.scrap < Config.CANNON_SCRAP:
+					return "Each shot costs %d scrap - mine some first" % Config.CANNON_SCRAP
+				rat.scrap -= Config.CANNON_SCRAP
 			mc.cd = Config.CANNON_COOLDOWN
 			mc.recoil = 1.0
 			var s := Shot.new()
@@ -356,41 +361,57 @@ func _relocate(mc: Machine, dest: Vector3i, time: float) -> bool:
 	return true
 
 
+const BALL_KEEP_BROKE := 0.85     # swing speed kept after smashing a block to pieces
+const BALL_KEEP_HELD := 0.6       # ...after hitting one that held (it still goes through)
+
+
 func _swing(mc: Machine, dt: float) -> void:
-	## Damped pendulum, integrated in small fixed slices. The ball damages
-	## what it touches in proportion to its speed, then rebounds.
+	## Damped pendulum, integrated in small fixed slices. The ball never
+	## bounces off or sticks: it smashes through whatever is in its way, block
+	## after block. Each block it meets is hit once per pass, in proportion to
+	## its speed, and each costs it some of that speed; a slow ball passes
+	## through without harm.
 	var slices := 3
 	var h := dt / float(slices)
 	for i in slices:
+		var was := mc.omega
 		mc.omega += (-(SHOT_GRAVITY / CRANE_CABLE) * sin(mc.theta) - 0.22 * mc.omega) * h
-		var before := mc.theta
 		mc.theta = clampf(mc.theta + mc.omega * h, -1.45, 1.45)
+		if signf(mc.omega) != signf(was):
+			mc.smashed.clear()   # turned round: the next pass hits everything afresh
 		if absf(mc.omega) < 0.25:
 			continue
 		var ball := ball_pos(mc)
 		var fwd := Vector3(-sin(mc.yaw), 0, -cos(mc.yaw))
 		var tangent := (fwd * cos(mc.theta) + Vector3.UP * sin(mc.theta)) * signf(mc.omega)
-		var probe := ball + tangent * BALL_RADIUS
+		var side := fwd.cross(Vector3.UP)
+		var up := tangent.cross(side).normalized()
 		var speed := absf(mc.omega) * CRANE_CABLE
-		if m.world.solid_point(probe):
+		# the ball's leading face: its front point and four around it
+		var lead := ball + tangent * BALL_RADIUS
+		for probe: Vector3 in [lead, lead + side * 0.3, lead - side * 0.3, lead + up * 0.3, lead - up * 0.3]:
+			if not m.world.solid_point(probe):
+				continue
 			var cell := Vector3i(floori(probe.x), floori(probe.y), floori(probe.z))
-			if cell != mc.cell:
-				var id := m.world.get_cell(cell)
-				var hits := ball_power(id) if speed >= Config.CRANE_MIN_SPEED else 0
-				var gated := m.world.gate_at(cell) >= 0
-				if gated:
-					hits = 0   # the gate takes the blow, not whatever is inside it
-				if speed >= Config.CRANE_MIN_SPEED and gated:
-					m.hit_gate(cell, 1)
-					m.fx.emit("clang", Vector3(cell), id)
-				if hits > 0 and not m._damage(m.rat_by_id(mc.owner), cell, hits, true):
-					m.fx.emit("hit", Vector3(cell), {"id": id, "ratio": float(m.world.damage.get(cell, 0)) / maxf(1.0, float(Blocks.HITS[id]))})
-				elif hits > 0:
+			if cell == mc.cell or mc.smashed.has(cell):
+				continue
+			mc.smashed[cell] = true
+			if speed < Config.CRANE_MIN_SPEED:
+				continue   # too slow to hurt anything: it just passes
+			var id := m.world.get_cell(cell)
+			var broke := false
+			if m.world.gate_at(cell) >= 0:
+				m.hit_gate(cell, 1)   # the gate takes the blow, not whatever is inside it
+				m.fx.emit("clang", Vector3(cell), id)
+			elif ball_power(id) > 0:
+				broke = m._damage(m.rat_by_id(mc.owner), cell, ball_power(id), true)
+				if broke:
 					m.fx.emit("break", Vector3(cell), id)
-				m.fx.emit("thud", ball, speed)
-			mc.theta = before
-			mc.omega = -mc.omega * 0.35
-			continue
+				else:
+					m.fx.emit("hit", Vector3(cell), {"id": id, "ratio": float(m.world.damage.get(cell, 0)) / maxf(1.0, float(Blocks.HITS[id]))})
+			m.fx.emit("thud", ball, speed)
+			mc.omega *= BALL_KEEP_BROKE if broke else BALL_KEEP_HELD
+			speed = absf(mc.omega) * CRANE_CABLE
 		if speed > 2.5:
 			for r in m.rats:
 				var foe := r.team != mc.team or (m.lobby and r.id != mc.operator)
@@ -421,8 +442,8 @@ func _fly(s: Shot, dt: float) -> bool:
 				if r.shield_t > 0.0:
 					m.fx.emit("shield_block", r.position, null)   # the ball glances off the shield
 					return true
-				r.vel = (s.vel.normalized() * 8.0 + Vector3(0, 5.0, 0)) * m.launch_power()
-				r.knock = 0.5
+				r.vel = (s.vel.normalized() * Config.CANNON_PUSH + Vector3(0, Config.CANNON_LIFT, 0)) * m.launch_power()
+				r.knock = 0.6
 				r.on_floor = false
 				if r.carried > 0:
 					m._drop(r, 1, Config.BONK_PICKUP_LOCK)
@@ -440,17 +461,30 @@ func _impact(s: Shot) -> void:
 	m.fx.emit("impact", s.pos, m.world.get_cell(cell))
 	if m.lobby and cell == MapGenerator.LOBBY_BULL:
 		m.bullseye(shooter)
-	# 3x dig damage to the struck block...
+	# a 3x3x3 blast: the struck block takes CANNON_HIT dig hits, the six
+	# touching it two, the edges and corners one
 	m._damage(shooter, cell, Config.CANNON_HIT, true)
-	# ...and one hit each to the four blocks around it, in the plane the shot struck
-	var a := s.vel.abs()
-	var ring: Array[Vector3i] = [Vector3i(0, 1, 0), Vector3i(0, -1, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]
-	if a.y >= a.x and a.y >= a.z:
-		ring = [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]
-	elif a.z >= a.x:
-		ring = [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 1, 0), Vector3i(0, -1, 0)]
-	for n in ring:
-		m._damage(shooter, cell + n, 1, true)
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			for dz in range(-1, 2):
+				var n := absi(dx) + absi(dy) + absi(dz)
+				if n > 0:
+					m._damage(shooter, cell + Vector3i(dx, dy, dz), 2 if n == 1 else 1, true)
+	# and it shoves the other team's rats near it away
+	var centre := Vector3(cell) + Vector3(0.5, 0.5, 0.5)
+	for r in m.rats:
+		var foe := r.team != s.team or (m.lobby and r.id != s.owner)
+		var d := r.center().distance_to(centre)
+		if not foe or d > Config.CANNON_SPLASH or r.shield_t > 0.0 or r.operating != -1:
+			continue
+		var away := (r.center() - centre)
+		away.y = 0.0
+		away = away.normalized() if away.length() > 0.05 else Vector3(-s.vel.x, 0, -s.vel.z).normalized()
+		var f := 1.0 - 0.5 * d / Config.CANNON_SPLASH   # full right by it, half at the edge
+		r.vel = (away * Config.CANNON_PUSH * 0.75 + Vector3(0, Config.CANNON_LIFT, 0)) * f * m.launch_power()
+		r.knock = maxf(r.knock, 0.4)
+		r.on_floor = false
+		m.fx.emit("bonk", r.position, null)
 
 
 # ---------------------------------------------------------------- persistence

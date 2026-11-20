@@ -370,9 +370,12 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sound("mine_wood", pos, 2.2, -4.0)
 		"impulse":
 			_sound("impulse", pos, 1.0, 3.0)
-			_sprite("impulse", pos - Vector3(0, 0.75, 0), 0.95)
+			# the flash bulges out of whatever the grenade stuck to (up off a
+			# floor, out of a wall); in mid-air it's centred on the grenade
+			var out := open_side(pos)
+			_sprite("impulse", pos + out * IMPULSE_LIFT, 0.95)
 			_shockwave(pos, Config.IMPULSE_RADIUS, Color(0.5, 0.8, 1.0))
-			_burst(pos, Color(0.55, 0.85, 1.0), 22, 9.0)      # the push, flying outward
+			_burst(pos + out * 0.3, Color(0.55, 0.85, 1.0), 22, 9.0)      # the push, flying outward
 		"crumb":
 			crumbs.add(pos)
 		"tele_place":
@@ -420,6 +423,19 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"respawn":
 			_sound("block_place", pos, 0.7)
 			_sprite("poof", pos, 0.7)
+
+
+const IMPULSE_LIFT := 1.0   # blocks the impulse flash sits out from the surface it burst on
+
+
+func open_side(pos: Vector3) -> Vector3:
+	## Which way is open air from a point on a surface: away from every solid
+	## block touching it (a floor gives up). Zero in mid-air.
+	var n := Vector3.ZERO
+	for d: Vector3 in [Vector3.UP, Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
+		if m.world.solid_point(pos + d * 0.45):
+			n -= d
+	return n.normalized() if n.length() > 0.01 else Vector3.ZERO
 
 
 func _shockwave(pos: Vector3, radius: float, color: Color) -> void:

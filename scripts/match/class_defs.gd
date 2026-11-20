@@ -68,18 +68,18 @@ const SHOP := [
 		"desc": "See-through door. Your team walks through. Two TNT blasts (or ten wrecking-ball hits) break it; cracks show the damage."},
 	{"id": "dynamite", "name": "Mobile TNT x2", "kind": "gadget", "qty": 2, "cost": 7, "cat": "Traps",
 		"desc": "Bouncy dynamite stick, 3 s fuse: a TNT blast wherever it ends up, Team Blocks and Gates included. Q throws it, Ctrl+Q sets it down gently. Springs launch it, conveyors carry it, ice lets it slide."},
-	{"id": "impulse", "name": "Impulse Grenade x2", "kind": "gadget", "qty": 2, "cost": 8, "cat": "Traps",
+	{"id": "impulse", "name": "Impulse Grenade x2", "kind": "gadget", "qty": 2, "cost": 8, "cat": "Mobility",
 		"desc": "Q throws it; it sticks to whatever it hits - ground, wall or rat - and a moment later bursts, throwing everyone near it away (you too), with loose cheese, dynamite and wind-ups. It damages nothing and nobody drops cheese. Ctrl+Q drops it at your feet: launch yourself."},
 	{"id": "sticky", "name": "Sticky Trap x2", "kind": "gadget", "qty": 2, "cost": 4, "cat": "Traps",
 		"desc": "Glue pad. Enemy rats wade through at half speed; rolling dynamite stops dead."},
 	{"id": "pitfall", "name": "Pitfall x2", "kind": "gadget", "qty": 2, "cost": 5, "cat": "Traps",
 		"desc": "Fake turf. Solid for your team, a hole for everyone and everything else."},
-	{"id": "wallspring", "name": "Wall Spring", "kind": "gadget", "qty": 1, "cost": 6, "cat": "Traps",
+	{"id": "wallspring", "name": "Wall Spring", "kind": "gadget", "qty": 1, "cost": 6, "cat": "Mobility",
 		"desc": "Sideways bumper block. Shoves away any rat that comes within a block of it, and flings back dynamite that runs into it."},
 	{"id": "cannon", "name": "Scrap Cannon", "kind": "gadget", "qty": 1, "cost": 26, "max": 2, "cat": "Siege",
-		"desc": "T to pilot it, mouse to aim, left mouse to fire. Hits one block for 3 dig hits and chips the four around it."},
+		"desc": "T to pilot it, mouse to aim, left mouse to fire (2 scrap a shot). Blasts a 3x3x3 hole - 3 dig hits in the middle - and throws enemies near it."},
 	{"id": "crane", "name": "Wrecking Crane", "kind": "gadget", "qty": 1, "cost": 30, "max": 2, "cat": "Siege",
-		"desc": "T to pilot it, mouse to turn, left mouse to pump the swing. The faster the ball, the harder it hits."},
+		"desc": "T to pilot it, mouse to turn, left mouse to pump the swing. The ball smashes through block after block; the faster it swings, the harder it hits."},
 	{"id": "dozer", "name": "Bulldozer", "kind": "gadget", "qty": 1, "cost": 28, "max": 2, "cat": "Siege",
 		"desc": "T to pilot it, left mouse to ram the blade: 3 wide, 2 high. Has no engine - feed it conveyors."},
 	{"id": "ice", "name": "Ice x4", "kind": "mat", "qty": 4, "cost": 3, "cat": "Construction",
@@ -90,7 +90,7 @@ const SHOP := [
 		"desc": "Press J to switch them on or off. While on, stepping off an edge blows a bubble under your feet instead of falling: a bridge as you walk, each bubble 2 scrap, popping after 10 s. Jump to drop off on purpose. One piece of gear at a time."},
 	{"id": "decoy", "name": "Cheese Decoy", "kind": "gadget", "qty": 1, "cost": 12, "cat": "Traps",
 		"desc": "Looks exactly like Golden Cheese - even its name, to the other team. An enemy who digs it gets a face full of stink and is dazed. Single use. Dig your own to take it back."},
-	{"id": "teleporter", "name": "Teleporter Set", "kind": "gadget", "qty": 2, "cost": 16, "max": 2, "cat": "Construction",
+	{"id": "teleporter", "name": "Teleporter Set", "kind": "gadget", "qty": 2, "cost": 16, "max": 2, "cat": "Mobility",
 		"desc": "A one-way pair of pads. Q puts down the entrance, then Q again the exit. Your team stands on the entrance for half a second and pops out at the exit; then it recharges for 6 s. Cheese can't go through. One set per rat: dig a pad of yours to pick it up and move it; if one gets broken, buying tops you up for half price."},
 	{"id": "windup", "name": "Wind-up Decoy", "kind": "gadget", "qty": 1, "cost": 14, "cat": "Traps",
 		"desc": "A clockwork rat in your colours, wearing your name and holding a Golden Cheese high. Q sets it marching the way you face: it hops up steps, turns at walls and drops crumbs like a real carrier. An enemy who bonks it gets a TNT blast. Left alone it goes off after 20 s."},
@@ -104,6 +104,24 @@ const MATS := ["dirt", "stone", "ice", "obsidian"]
 const MAT_BLOCK := {"dirt": Blocks.DIRT, "stone": Blocks.STONE, "ice": Blocks.ICE, "obsidian": Blocks.OBSIDIAN}
 ## Gadgets that can go inside your own team gate (see Blocks.GATE_GADGETS).
 const GATE_GADGETS := ["ladder", "spring", "highway", "conveyor", "wallspring"]
+## The workshop shows each category once, in this order.
+const SHOP_CATS := ["Mobility", "Construction", "Traps", "Siege", "Gear"]
+
+
+static func shop_in_order() -> Array:
+	## SHOP grouped by category (SHOP_CATS order), items keeping their order
+	## within a category; anything in an unlisted category comes last.
+	var out: Array = []
+	for cat: String in SHOP_CATS:
+		for item: Dictionary in SHOP:
+			if item["cat"] == cat:
+				out.append(item)
+	for item: Dictionary in SHOP:
+		if not SHOP_CATS.has(item["cat"]):
+			out.append(item)
+	return out
+
+
 const GADGETS := ["ladder", "spring", "highway", "conveyor", "trap", "tnt", "dynamite", "impulse", "sticky", "pitfall", "wallspring", "decoy", "windup", "squeaker", "gate", "teamblock", "stash", "teleporter", "cannon", "crane", "dozer"]
 const GADGET_NAME := {
 	"ladder": "Ladder", "spring": "Spring", "highway": "Highway", "conveyor": "Conveyor",

@@ -34,7 +34,7 @@ PANTOGRAPH (0)  Left-click two corners to copy a build (up to 9 blocks a side, c
 
 MOBILE TNT  Q throws a bouncing dynamite stick (Ctrl+Q sets it down). Springs launch it, conveyors carry it, ice lets it slide, wall springs bat it back, glue stops it, pitfalls swallow it.
 
-SIEGE  Buy a Scrap Cannon, Wrecking Crane or Bulldozer, place it with Q, look at it and press T. Mouse aims, left mouse works it, T leaves. Machines have no engines: put conveyors under or beside them. Stone shrugs off light hits; obsidian (12 hits) laughs at most things.
+SIEGE  Buy a Scrap Cannon, Wrecking Crane or Bulldozer, place it with Q, look at it and press T. Mouse aims, left mouse works it, T leaves. Each cannon shot costs 2 scrap. Machines have no engines: put conveyors under or beside them. Stone shrugs off light hits; obsidian (12 hits) laughs at most things.
 
 ALSO  V toggles first/third person. Enemy name tags only show while you can see that rat. Ctrl+K respawns at base (you leave your cheese and materials behind). Lava sends you home. Esc pauses."""
 

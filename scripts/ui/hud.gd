@@ -780,7 +780,7 @@ func _fill_workshop(v: VBoxContainer) -> void:
 			btns.add_child(UiKit.button("Take all", _stash.bind(key, -9999), Vector2(88, 34)))
 			list.add_child(UiKit.row(Icons.with_icon(key, lbl, 24), btns))
 	var last_cat := ""
-	for item: Dictionary in (ClassDefs.SHOP if shopping else []):
+	for item: Dictionary in (ClassDefs.shop_in_order() if shopping else []):
 		if item["cat"] != last_cat:
 			last_cat = item["cat"]
 			list.add_child(UiKit.label(last_cat, 18, UiKit.BRASS))

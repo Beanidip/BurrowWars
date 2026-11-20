@@ -238,6 +238,11 @@ func _run() -> void:
 		tabs += 1 if c.has_meta("tab") else 0
 	check(tabs == 3, "Workshop | Pack | Colours tabs (%d)" % tabs)
 	check(fits((hud._dialog as Control).get_child(1) as Control), "workshop fits 1280x800")
+	var headings: Array[String] = []
+	for c in hud._dialog.find_children("*", "Label", true, false):
+		if (c as Label).text in ClassDefs.SHOP_CATS:
+			headings.append((c as Label).text)
+	check(headings == ClassDefs.SHOP_CATS, "the workshop shows each category once (%s)" % str(headings))
 	check(small_text(hud._dialog).is_empty(), "workshop text is at least %d px %s" % [MIN_TEXT, str(small_text(hud._dialog))])
 	for i in 6:
 		await pad(JOY_BUTTON_DPAD_DOWN)

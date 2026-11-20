@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -2532,7 +2532,9 @@ func test_cannon() -> void:
 	m.siege.aim(r, -PI / 2.0, 0.06)
 	var arc := m.siege.predict(mc)
 	check(arc.size() >= 2 and floori(arc[-1].x) == ARENA.x + 7, "aiming preview ends on the wall")
+	r.scrap = 7
 	check(m.siege.fire(r) == "" and m.siege.shots.size() == 1, "fires a physical projectile")
+	check(r.scrap == 5, "a shot costs the gunner %d scrap (%d left)" % [Config.CANNON_SCRAP, r.scrap])
 	check(m.siege.fire(r) == "wait", "cannon has a cooldown")
 	var travelled := 0
 	while m.siege.shots.size() > 0 and travelled < 200:
@@ -2540,20 +2542,27 @@ func test_cannon() -> void:
 		travelled += 1
 	check(travelled > 5 and travelled < 60, "projectile takes visible time to arrive (%d ticks)" % travelled)
 	var three := 0
+	var twos := 0
 	var ones := 0
 	var struck := Vector3i.ZERO
 	for c: Vector3i in m.world.damage:
 		if int(m.world.damage[c]) == 3:
 			three += 1
 			struck = c
+		elif int(m.world.damage[c]) == 2:
+			twos += 1
 		elif int(m.world.damage[c]) == 1:
 			ones += 1
 	check(three == 1 and struck.x == ARENA.x + 7, "struck block takes 3x dig damage")
-	check(ones == 4, "exactly four neighbouring blocks take excavation damage (%d)" % ones)
-	var ring_ok := true
+	# the wall is one block thick, so the 3x3x3 blast finds 9 of its blocks
+	var faces_ok := true
 	for n: Vector3i in [Vector3i(0, 1, 0), Vector3i(0, -1, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]:
-		ring_ok = ring_ok and int(m.world.damage.get(struck + n, 0)) == 1
-	check(ring_ok, "the four are the blocks around the impact")
+		faces_ok = faces_ok and int(m.world.damage.get(struck + n, 0)) == 2
+	var corners_ok := true
+	for n: Vector3i in [Vector3i(0, 1, 1), Vector3i(0, 1, -1), Vector3i(0, -1, 1), Vector3i(0, -1, -1)]:
+		corners_ok = corners_ok and int(m.world.damage.get(struck + n, 0)) == 1
+	check(twos == 4 and faces_ok, "the blocks touching it take 2 hits (%d)" % twos)
+	check(ones == 4 and corners_ok, "the blast reaches the corners of a 3x3x3 too, for 1 hit (%d)" % ones)
 	check(arc[-1].distance_to(Vector3(struck) + Vector3(0.5, 0.5, 0.5)) < 1.2, "shot lands where the preview said")
 	check(kinds.has("cannon") and kinds.has("impact"), "firing and impact feedback are emitted")
 	# second shot at the same spot: stone (4) breaks, neighbours are at 2
@@ -2561,13 +2570,41 @@ func test_cannon() -> void:
 	m.siege.fire(r)
 	run(m, 1.0)
 	check(m.world.get_cell(struck) == Blocks.AIR, "a second hit breaks the stone")
-	check(int(r.mats["stone"]) == 1, "cannon-mined stone goes to the gunner")
+	var holes := 0
+	for n: Vector3i in [Vector3i(0, 1, 0), Vector3i(0, -1, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]:
+		holes += 1 if m.world.get_cell(struck + n) == Blocks.AIR else 0
+	check(holes == 4, "and the four stones touching it (2 + 2 hits)")
+	check(int(r.mats["stone"]) == 5, "cannon-mined stone goes to the gunner (%d)" % int(r.mats["stone"]))
 	# obsidian resists by its durability
 	m.world.set_block(struck, Blocks.OBSIDIAN)
 	run(m, Config.CANNON_COOLDOWN)
 	m.siege.fire(r)
 	run(m, 1.0)
 	check(m.world.get_cell(struck) == Blocks.OBSIDIAN and int(m.world.damage.get(struck, 0)) == 3, "obsidian takes the hit and stands (3 of 12)")
+	# out of scrap: no shot
+	run(m, Config.CANNON_COOLDOWN)
+	check(r.scrap == 1 and m.siege.fire(r).begins_with("Each shot costs") and m.siege.shots.is_empty(), "with under 2 scrap it won't fire")
+	# knockback: a direct hit throws a rat hard, and the blast shoves the rats around it
+	var foe := arena_rat(m, 1, "scout", Vector3(4.5, 0, 0))
+	var near := arena_rat(m, 1, "digger", Vector3(6.0, 0, 1.6))
+	var mate := arena_rat(m, 0, "digger", Vector3(6.0, 0, -1.6))
+	run(m, 0.3)
+	r.scrap = 10
+	var shot := SiegeSystem.Shot.new()
+	shot.pos = foe.center() - Vector3(1.0, 0, 0)
+	shot.vel = Vector3(Config.CANNON_SPEED, 0, 0)
+	shot.owner = r.id
+	shot.team = 0
+	m.siege._fly(shot, 0.1)
+	check(foe.vel.x > 10.0 and foe.vel.y > 5.0 and foe.knock > 0.0, "a direct hit throws a rat hard (%s)" % str(foe.vel))
+	shot = SiegeSystem.Shot.new()
+	shot.pos = Vector3(ARENA) + Vector3(6.5, 0.5, 0.5)
+	shot.vel = Vector3(Config.CANNON_SPEED, 0, 0)
+	shot.owner = r.id
+	shot.team = 0
+	m.siege._impact(shot)
+	check(near.vel.length() > 5.0 and near.vel.z > 0.0 and near.knock > 0.0, "the blast shoves an enemy beside it away (%s)" % str(near.vel))
+	check(mate.knock <= 0.0 and mate.vel.length() < 1.0, "but not the gunner's teammate")
 	# leaving restores normal movement
 	check(r.operating != -1, "still at the controls")
 	m.siege.release(r)
@@ -4907,6 +4944,85 @@ func test_audio_buses() -> void:
 		check(layout.get("bus/2/name") == &"SFX" and layout.get("bus/2/send") == &"Master", "SFX is in it, sending to Master")
 	check(AudioServer.bus_count == 3 and AudioServer.get_bus_index("Music") == 1 and AudioServer.get_bus_index("SFX") == 2,
 		"and the game runs with exactly those three buses (%d)" % AudioServer.bus_count)
+
+
+func test_wrecking_ball_smashes_through() -> void:
+	## The ball goes through what's in its way instead of bouncing off it:
+	## one swing smashes several blocks, and it can't get stuck in terrain.
+	var setup := siege_setup("crane")
+	var m: Match = setup[0]
+	var r: Rat = setup[1]
+	var mc: SiegeSystem.Machine = setup[2]
+	m.siege.aim(r, -PI / 2.0, 0.0)
+	m.siege.release(r)
+	var wall: Array[Vector3i] = []
+	for dx in [4, 5]:
+		for dy in [0, 1]:
+			wall.append(ARENA + Vector3i(dx, dy, 0))
+	for c in wall:
+		m.world.set_block(c, Blocks.DIRT)
+	mc.theta = 0.0
+	mc.omega = 3.4   # a full swing, outward through the wall
+	var furthest := -99.0
+	var turned_in_wall := false
+	var last_x := SiegeSystem.ball_pos(mc).x
+	for i in 60:
+		m.step(DT)
+		var x := SiegeSystem.ball_pos(mc).x
+		if x < last_x - 0.001 and x < ARENA.x + 5.0:
+			turned_in_wall = true
+		if mc.omega <= 0.0:
+			break
+		furthest = maxf(furthest, x)
+		last_x = x
+	var broken := 0
+	for c in wall:
+		broken += 1 if m.world.get_cell(c) == Blocks.AIR else 0
+	check(broken >= 3, "one swing smashes through several blocks (%d of 4 broken)" % broken)
+	check(not turned_in_wall and furthest > ARENA.x + 5.0, "without bouncing back off the first (reached x %.1f)" % (furthest - ARENA.x))
+	end(m)
+	# a ball hanging inside a block still swings
+	setup = siege_setup("crane")
+	m = setup[0]
+	r = setup[1]
+	mc = setup[2]
+	m.siege.aim(r, -PI / 2.0, 0.0)
+	var rest := SiegeSystem.ball_pos(mc)
+	var inside := Vector3i(floori(rest.x), floori(rest.y), floori(rest.z))
+	m.world.set_block(inside, Blocks.STONE)
+	m.world.set_block(inside + Vector3i(1, 0, 0), Blocks.STONE)
+	var top := 0.0
+	var t := 0.0
+	while t < 6.0:
+		m.siege.fire(r)
+		m.step(DT)
+		t += DT
+		top = maxf(top, absf(mc.omega) * SiegeSystem.CRANE_CABLE)
+	check(top > 4.0, "pumping a ball that hangs inside rock still gets it swinging (%.1f blocks/s)" % top)
+	check(m.world.get_cell(inside + Vector3i(1, 0, 0)) != Blocks.STONE or int(m.world.damage.get(inside + Vector3i(1, 0, 0), 0)) > 0,
+		"and it chews into the rock around it")
+	end(m)
+
+
+func test_workshop_categories() -> void:
+	## The workshop lists each category once, with everything that belongs to it.
+	var items := ClassDefs.shop_in_order()
+	check(items.size() == ClassDefs.SHOP.size(), "every item is still for sale (%d)" % items.size())
+	var seen: Array[String] = []
+	for item: Dictionary in items:
+		if seen.is_empty() or seen[-1] != String(item["cat"]):
+			seen.append(String(item["cat"]))
+	check(seen == ["Mobility", "Construction", "Traps", "Siege", "Gear"], "each category once, in order (%s)" % str(seen))
+	var cat_of := {}
+	for item: Dictionary in ClassDefs.SHOP:
+		cat_of[item["id"]] = item["cat"]
+	for id: String in ["wallspring", "impulse", "teleporter", "ladder", "spring"]:
+		check(cat_of.get(id) == "Mobility", "%s is under Mobility" % id)
+	for id: String in ["trap", "tnt", "dynamite", "sticky", "pitfall", "decoy", "windup", "squeaker"]:
+		check(cat_of.get(id) == "Traps", "%s is under Traps" % id)
+	for item: Dictionary in ClassDefs.SHOP:
+		if item["kind"] == "gear":
+			check(item["cat"] == "Gear", "%s (gear) is under Gear" % item["name"])
 
 
 func test_map_in_parts() -> void:
