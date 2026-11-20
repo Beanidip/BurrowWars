@@ -76,6 +76,23 @@ func _run() -> void:
 		check(wsp, "connected over WebSocket (%s)" % OS.get_environment("BW_URL"))
 	if OS.get_environment("BW_NET_TEST") == "join":
 		check(s.m.world.get_cell(Vector3i(VoxelWorld.SX / 2, 1, VoxelWorld.SZ / 2)) != Blocks.AIR, "the map arrived whole")
+		var want := OS.get_environment("BW_EXPECT_RATS")
+		if want != "":
+			await wait(1.0)
+			check(s.m.rats.size() == want.to_int(), "all %s rats are on our screen (%d)" % [want, s.m.rats.size()])
+			var named := 0
+			for r in s.m.rats:
+				named += 1 if r.display_name != "Rat" and r.display_name != "" else 0
+			check(named == s.m.rats.size(), "every rat has its name (%d of %d)" % [named, s.m.rats.size()])
+			check(s.player.display_name == "Tester", "ours too")
+			var moved := 0
+			var before := {}
+			for r in s.m.rats:
+				before[r.id] = r.position
+			await wait(3.0)
+			for r in s.m.rats:
+				moved += 1 if r != s.player and before.has(r.id) and r.position.distance_to(before[r.id]) > 0.5 else 0
+			check(moved >= 10, "and they move (%d of %d)" % [moved, s.m.rats.size() - 1])
 		print("---- net join: %d failed ----" % _fails)
 		get_tree().quit(1 if _fails > 0 else 0)
 		return

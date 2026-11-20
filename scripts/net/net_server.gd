@@ -17,6 +17,7 @@ extends Node
 const SNAP_EVERY := 3          # physics frames per snapshot (60 Hz / 3 = 20 Hz)
 const PRIVATE_EVERY := 15      # 4 Hz
 const MAX_SPEED := 40.0        # blocks/s a rat may legitimately cover (springs, dashes, falls)
+const MAX_RATS := 32           # 16v16
 
 var m: Match
 var seats: Dictionary = {}     # peer id -> Rat
@@ -31,6 +32,10 @@ var _last_input: Dictionary = {}   # peer id -> msec of the last accepted input
 var _dirty_private: Dictionary = {}
 var _fx_t: Dictionary = {}         # "peer:kind" -> msec of the last effect that peer reported
 var ac := AntiCheat.new()          # movement checks, rate limits and strikes
+var max_players := Net.HOST_MAX_CLIENTS   # connected players (a dedicated server raises it to Net.MAX_CLIENTS)
+var _roster_sig := ""              # rats' names as last sent
+var _roster_left := 0              # snapshots that still carry the names after a change
+var _snaps := 0
 const CLIENT_FX := ["spring", "jetpack", "dash", "jump", "land", "splash", "splash_out", "shield"]
 
 
@@ -63,6 +68,10 @@ func player_count() -> int:
 func on_hello(id: int, hello: Dictionary) -> void:
 	if seats.has(id):
 		return
+	if seats.size() >= max_players:
+		if Net.connected(id):
+			Net._s_refuse.rpc_id(id, "The server is full (%d players)." % max_players)
+		return
 	var pname := Net.clean_name(hello.get("name", ""))
 	if pname == "":
 		pname = "Rat %d" % (id % 1000)
@@ -79,7 +88,7 @@ func on_hello(id: int, hello: Dictionary) -> void:
 	if rat == null and not m.free_mode:
 		rat = _free_bot(1 - want)
 	if rat == null:
-		if m.rats.size() >= 16:
+		if m.rats.size() >= MAX_RATS:
 			Net._s_refuse.rpc_id(id, "The server is full.")
 			return
 		rat = m.spawn_rat(want if m.lobby or not m.free_mode else 0, cls, false)
@@ -98,7 +107,7 @@ func on_hello(id: int, hello: Dictionary) -> void:
 	Net.send_welcome(id, {
 		"settings": m.settings,
 		"rat": rat.id,
-		"snap": _snapshot(),
+		"snap": _snapshot(true),
 		"private": _private(rat),
 		"kick": rat.net_kick,
 		"server": String(m.settings.get("server_name", "")),
@@ -417,13 +426,26 @@ func _flush_events(peers: PackedInt32Array) -> void:
 	_won = -1
 
 
-func _snapshot() -> Dictionary:
-	var rats: Array = []
+func roster() -> Dictionary:
+	var names := {}
 	for r in m.rats:
-		var f := (1 if r.on_floor else 0) | (2 if r.on_ladder else 0) | (4 if r.in_water else 0) | (8 if r.flying else 0) \
-			| (16 if r.is_bot else 0)
-		rats.append([r.id, r.team, r.class_id, r.display_name, f, r.position, r.vel, r.yaw, r.anim_action, r.anim_action_t,
-			r.carried, r.stun, r.knock, r.operating])
+		names[r.id] = r.display_name
+	return names
+
+
+func _snapshot(with_names := false) -> Dictionary:
+	## Rats go as compact binary records (NetCodec); their names only when
+	## they change (then in the next 20 snapshots, as some may be lost) and
+	## once a second.
+	_snaps += 1
+	var sig := ""
+	for r in m.rats:
+		sig += "%d:%s|" % [r.id, r.display_name]
+	if sig != _roster_sig:
+		_roster_sig = sig
+		_roster_left = 20
+	var send_names := with_names or _roster_left > 0 or _snaps % 20 == 0
+	_roster_left = maxi(0, _roster_left - 1)
 	var picks: Array = []
 	for p in m.pickups:
 		picks.append([p.uid, p.kind, p.pos])
@@ -437,8 +459,11 @@ func _snapshot() -> Dictionary:
 	var sticks: Array = []
 	for s in m.dynamite.sticks:
 		sticks.append([s.uid, s.pos, s.vel, s.fuse, s.resting, s.impulse, s.stuck])
-	return {"t": m.time, "sc": [m.scores[0], m.scores[1]], "o": m.over, "w": m.winner, "r": rats, "p": picks,
+	var snap := {"t": m.time, "sc": [m.scores[0], m.scores[1]], "o": m.over, "w": m.winner, "r": NetCodec.encode_rats(m.rats), "p": picks,
 		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "wd": m.windup.snapshot(), "tp": m.tele_pads(), "lt": m.lobby_left}
+	if send_names:
+		snap["ro"] = roster()
+	return snap
 
 
 func _private(r: Rat) -> Dictionary:

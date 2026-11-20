@@ -79,7 +79,12 @@ static func in_any_base(cell: Vector3i, margin := 0.5) -> bool:
 
 
 static func spawn_point(team: int, slot := 0) -> Vector3:
-	var p := Vector3(BASE_MIN + 3.5 + float(slot % 2) * 1.2, GROUND, BASE_MIN + 3.5 + float((slot / 2) % 2) * 1.2)
+	## Sixteen spots on a 4x4 grid in the middle of the base: the first four
+	## are the middle 2x2, the rest ring them (16v16 on a dedicated server).
+	const OFF := [0.0, 1.2, -1.2, 2.4]
+	var gx: float = OFF[slot % 2 + 2 * ((slot / 4) % 2)]
+	var gz: float = OFF[(slot / 2) % 2 + 2 * ((slot / 8) % 2)]
+	var p := Vector3(BASE_MIN + 3.5 + gx, GROUND, BASE_MIN + 3.5 + gz)
 	return p if team == 0 else rot_point(p)
 
 

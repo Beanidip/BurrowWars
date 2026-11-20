@@ -1304,7 +1304,7 @@ func respawn(rat: Rat) -> void:
 		return
 	siege.release(rat)
 	drop_everything(rat)
-	var slot := rat.id % 4
+	var slot := rat.id % 16
 	rat.position = spawn_point(rat.team, slot)
 	rat.vel = Vector3.ZERO
 	rat.stun = 0.0

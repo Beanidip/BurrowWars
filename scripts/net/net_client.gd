@@ -19,6 +19,7 @@ var _fire_t := 0
 var _aim_t := 0
 var _sent_action_t := 0.0
 var _fx_notes: Dictionary = {}   # effects our own rat caused since the last report
+var _names: Dictionary = {}      # rat id -> name (the server sends them only when they change)
 
 
 func _init(p_match: Match, info: Dictionary) -> void:
@@ -126,7 +127,13 @@ func on_snap(s: Dictionary) -> void:
 	if bool(s.get("o", false)) and not m.over:
 		m.over = true
 		m.won.emit(m.winner)
-	_apply_rats(s.get("r", []))
+	var ro: Variant = s.get("ro")
+	if ro is Dictionary:
+		for id: Variant in ro:
+			if id is int and ro[id] is String:
+				_names[id] = Net.clean_name(ro[id])
+	var rats: Variant = s.get("r")
+	_apply_rats(NetCodec.decode_rats(rats, _names) if rats is PackedByteArray else [])
 	_apply_pickups(s.get("p", []))
 	m.markers.clear()
 	for mk: Variant in s.get("mk", []):

@@ -26,7 +26,8 @@ signal disconnected(reason: String)    # client: lost the server mid-game
 
 const DEFAULT_PORT := 24565
 const PROTOCOL := 10                   # bump whenever the wire format or block ids change
-const MAX_CLIENTS := 15
+const MAX_CLIENTS := 31                # a dedicated server: 16v16 (every seat a player)
+const HOST_MAX_CLIENTS := 15           # a game hosted from the menu: 8v8 with the host
 const NAME_MAX := 16
 const WORLD_PART := 48 * 1024          # bytes of map per message while joining
 const WORLD_MAX := 64 * 1024 * 1024    # a client refuses a map bigger than this
@@ -99,7 +100,8 @@ static func ws_url_for(address: String, port: int) -> String:
 func host(port: int, options: Dictionary = {}) -> String:
 	## Opens a server on this machine. Returns "" or an error for the player.
 	## options: "transport": "ws" for WebSocket (default ENet); "tls_cert" and
-	## "tls_key": PEM files, to serve wss:// directly instead of behind a proxy.
+	## "tls_key": PEM files, to serve wss:// directly instead of behind a proxy;
+	## "max_clients" (default HOST_MAX_CLIENTS).
 	close()
 	var ws := String(options.get("transport", "enet")) in ["ws", "websocket", "wss"] or not enet_available()
 	var peer: MultiplayerPeer
@@ -122,7 +124,7 @@ func host(port: int, options: Dictionary = {}) -> String:
 		transport = Transport.WEBSOCKET
 	else:
 		var ep: MultiplayerPeer = ClassDB.instantiate("ENetMultiplayerPeer")
-		var err: int = ep.call("create_server", port, MAX_CLIENTS)
+		var err: int = ep.call("create_server", port, clampi(int(options.get("max_clients", HOST_MAX_CLIENTS)), 1, MAX_CLIENTS))
 		if err != OK:
 			return "Could not open port %d (error %d). Is another server already running?" % [port, err]
 		peer = ep

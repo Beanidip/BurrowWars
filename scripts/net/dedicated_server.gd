@@ -51,7 +51,7 @@ static func parse_args() -> Dictionary:
 
 func _ready() -> void:
 	var port := int(options.get("port", Net.DEFAULT_PORT))
-	var err := Net.host(port, {"transport": String(options.get("transport", "enet")),
+	var err := Net.host(port, {"transport": String(options.get("transport", "enet")), "max_clients": Net.MAX_CLIENTS,
 		"tls_cert": String(options.get("tls-cert", "")), "tls_key": String(options.get("tls-key", ""))})
 	if err != "":
 		Log.warn("dedicated server: " + err)
@@ -97,7 +97,7 @@ func _settings() -> Dictionary:
 		"seed": seed_value if seed_value > 0 else randi_range(1, 999999),
 		"goal": 9999 if free else clampi(int(options.get("goal", 10)), 1, 250),
 		"map_file": String(options.get("map", "")),
-		"team_size": clampi(int(options.get("team-size", 4)), 1, 8),
+		"team_size": clampi(int(options.get("team-size", 4)), 1, 16),
 		"bot_rest": [7.0, 3.0, 0.0][skill],
 		"server_name": _server_name(),
 	}
@@ -130,6 +130,7 @@ func _start(s: Dictionary) -> void:
 	net.name = "NetServer"
 	net.m = m
 	net.ac.kick_out = true   # a public server removes players who keep failing the movement checks
+	net.max_players = Net.MAX_CLIENTS
 	add_child(net)
 
 

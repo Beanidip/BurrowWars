@@ -7,8 +7,10 @@ Burrow Wars plays online over one of two transports, carrying exactly the same g
 | **ENet** (UDP) | games hosted from the menu, LAN and direct-IP play | `1.2.3.4` or `1.2.3.4:24565` |
 | **WebSocket** (TCP) | public dedicated servers; the only kind a **browser** can join | `ws://1.2.3.4:24565` or `wss://play.example.org` |
 
-Desktop players can join both. A server runs one transport. Up to 16 rats per match; humans take
-bot seats as they join, and a bot takes the seat back when they leave, so teams always stay full.
+Desktop players can join both. A server runs one transport. A dedicated server holds up to
+**16v16** (31 players and bots in the empty seats); a game hosted from the menu up to **8v8**
+(15 players join the host). Humans take bot seats as they join, and a bot takes the seat back
+when they leave, so teams always stay full.
 
 ## Playing
 
@@ -62,7 +64,7 @@ On Windows: `BurrowWars.exe --headless -- --server`.
 | `--port N` | 24565 | UDP port. Run several servers on one machine with different ports. |
 | `--name "..."` | Burrow Wars server | Shown to players (16 characters max). |
 | `--goal N` | 10 | Cheese to win a round (1-250). The map always holds at least 2.5x the goal. |
-| `--team-size N` | 4 | Seats per team, bots included (1-8). |
+| `--team-size N` | 4 | Seats per team, bots included (1-16). |
 | `--skill 0/1/2` | 1 | Bot skill: relaxed, normal, fierce. |
 | `--round-break S` | 15 | Seconds between a win and the next map. |
 | `--lobby S` | 30 | Seconds in the playground before each round (the countdown only runs while someone is connected). `0` = no lobby. Ignored with `--free`. |
@@ -140,10 +142,16 @@ WantedBy=multi-user.target
 sudo systemctl enable --now burrowwars
 ```
 
-**Bandwidth** (measured): a snapshot of a full 4v4 match is about 1.5 KB, sent 20 times a
-second, plus about 0.4 KB of private inventory 4 times a second: roughly **32 KB/s per connected
-player** (about 2 Mbit/s for 8 players). With 32 rats a snapshot is about 5 KB. Joining sends the
-whole map once: about 110 KB for a fresh map, more for a heavily carved one, in 48 KB parts.
+**Bandwidth** (measured): each rat travels as a 27-byte record and names only when they change,
+so a snapshot of a full **16v16** match is about **1.1 KB** (it was about 4.9 KB), sent 20 times a
+second, plus about 0.4 KB of private inventory 4 times a second: roughly **24 KB/s per connected
+player**, about **6 Mbit/s** for a full server of 31. Joining sends the whole map once: about
+110 KB for a fresh map, more for a heavily carved one, in 48 KB parts.
+
+**CPU** (measured on the test machine): a 16v16 match with 30 bots takes about 6 ms per tick on
+average (worst about 19 ms) of the 16.7 ms a 60 Hz tick has, nearly all of it the bots thinking.
+Each human who joins replaces a bot, so a full server of players costs less. A 1-vCPU VPS runs
+one full server; give it 2 vCPUs to run two.
 
 ### Listing it in the game
 
@@ -189,7 +197,9 @@ The list shows name, address and region. It does not yet show live player counts
   message saying why (they can rejoin). A player-hosted game only corrects; it never removes
   anyone.
 - **Streams.** Reliable: block and carving changes, effects, toasts and the win, batched once
-  per tick. Unreliable 20 Hz: rats, pickups, markers, machines, shots, Mobile TNT, scores.
+  per tick. Unreliable 20 Hz: rats (binary records, `net_codec.gd`: position to 1/128 block,
+  velocity to 1/256 block/s, names in a roster sent for a second after any change and once a
+  second), pickups, markers, machines, shots, Mobile TNT, scores.
   Reliable 4 Hz (and right after each request): the player's own inventory.
 - **Joining.** The welcome comes first, then the map in 48 KB parts. On WebSocket each player's
   send buffer is 1 MB: map parts wait for room, a snapshot is skipped for a player whose buffer

@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -4702,6 +4702,77 @@ func test_anti_cheat_catches_cheats() -> void:
 		ns.on_act(11, "set_equipped", ["nothing"])
 		acts += 1 if int(ns.ac._peers[11]["dropped"]) == d0 else 0
 	check(acts <= 62, "a flood of requests is cut to the burst allowance (%d of 300 run)" % acts)
+	ns.free()
+	end(m)
+
+
+func test_sixteen_a_side() -> void:
+	## 16v16 on a dedicated server: compact snapshots, names sent only when
+	## they change, sixteen spawn spots per base, and the player caps.
+	var m := new_match({"team_size": 1})
+	var i0 := m.rats.size()
+	while m.rats.size() < 32:
+		m.spawn_rat(m.rats.size() % 2, ClassDefs.ORDER[m.rats.size() % 4], true)
+	check(m.rats.size() == 32 and i0 <= 2, "32 rats in one match")
+	# every rat starts on its own spot inside its base
+	for team in 2:
+		var spots := {}
+		var inside := true
+		var zone := MapGenerator.base_zone(team)
+		for slot in 16:
+			var p := MapGenerator.spawn_point(team, slot)
+			spots[Vector2(snappedf(p.x, 0.01), snappedf(p.z, 0.01))] = true
+			inside = inside and zone.grow(-0.4).has_point(Vector3(p.x, zone.get_center().y, p.z))
+		check(spots.size() == 16 and inside, "team %d has 16 separate spawn spots, all well inside the base (%d)" % [team, spots.size()])
+	# the binary rat records come back as sent (within their precision)
+	var r: Rat = m.rats[3]
+	r.position = Vector3(127.3, 70.25, 0.4)
+	r.vel = Vector3(-37.5, 22.0, 0.01)
+	r.yaw = -0.5
+	r.anim_action = "build"
+	r.anim_action_t = 0.62
+	r.carried = 3
+	r.stun = 1.5
+	r.knock = 0.3
+	r.operating = 123456
+	r.on_ladder = true
+	r.set_class("maestro", false)
+	var back := NetCodec.decode_rats(NetCodec.encode_rats(m.rats), {r.id: "Squeaky"})
+	check(back.size() == 32, "all 32 records decode")
+	var e: Array = back[3]
+	check(int(e[0]) == r.id and int(e[1]) == r.team and String(e[2]) == "maestro" and String(e[3]) == "Squeaky", "id, team, class and name")
+	check((e[5] as Vector3).distance_to(r.position) < 0.01 and (e[6] as Vector3).distance_to(r.vel) < 0.01, "position and velocity (%s %s)" % [e[5], e[6]])
+	check(absf(wrapf(float(e[7]) - r.yaw, -PI, PI)) < 0.001, "facing")
+	check(String(e[8]) == "build" and absf(float(e[9]) - 0.62) < 0.03 and int(e[10]) == 3, "animation and carried cheese")
+	check(absf(float(e[11]) - 1.5) < 0.03 and absf(float(e[12]) - 0.3) < 0.03 and int(e[13]) == 123456, "stun, knockback and machine")
+	check((int(e[4]) & 2) != 0 and (int(e[4]) & 16) != 0, "flags (on a ladder, a bot)")
+	check(NetCodec.decode_rats(PackedByteArray([1, 2, 3]), {}).is_empty(), "a malformed record list decodes to nothing")
+	# snapshot size, and names only when they change
+	var ns := NetServer.new()
+	ns.m = m
+	var first := ns._snapshot()
+	check(first.has("ro") and (first["ro"] as Dictionary).size() == 32, "the first snapshots carry everyone's name")
+	for i in 25:
+		ns._snapshot()
+	var quiet := ns._snapshot()
+	var size := var_to_bytes(quiet).size()
+	check(not quiet.has("ro"), "names stay home while nobody changes")
+	check(size < 1400, "a 32-rat snapshot is small (%d bytes; it was about 4900)" % size)
+	m.rats[5].display_name = "Newcomer"
+	var changed := ns._snapshot()
+	check(changed.has("ro") and String(changed["ro"][m.rats[5].id]) == "Newcomer", "a new name goes out straight away")
+	var with_names := 0
+	for i in 40:
+		with_names += 1 if ns._snapshot().has("ro") else 0
+	check(with_names >= 20 and with_names <= 23, "and for a second after, then once a second (%d of 40)" % with_names)
+	# caps
+	check(Net.MAX_CLIENTS == 31 and Net.HOST_MAX_CLIENTS == 15 and NetServer.MAX_RATS == 32, "caps: 31 players on a dedicated server, 15 joining a hosted game")
+	ns.max_players = 2
+	ns.seats[101] = m.rats[1]
+	ns.seats[102] = m.rats[2]
+	ns.on_hello(103, {"name": "Late", "team": 0, "class": "digger"})
+	check(not ns.seats.has(103), "a full server seats nobody else")
+	ns.seats.clear()
 	ns.free()
 	end(m)
 

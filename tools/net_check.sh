@@ -34,6 +34,8 @@ WAIT_SERVER=1 pair "net: hosted lobby, the host starts the match" env BW_NET_TES
   :: BW_PORT=24596 BW_NET_TEST=lobby
 pair "net: WebSocket server + client (what browsers use)" "$GODOT" --headless --path . -- --server --transport ws --port 24595 --seed 777 --goal 3 --team-size 2 --lobby 0 \
   :: BW_URL=ws://127.0.0.1:24595
+pair "net: 16v16 WebSocket server, a player joins" "$GODOT" --headless --path . -- --server --transport ws --port 24593 --team-size 16 --lobby 0 \
+  :: BW_URL=ws://127.0.0.1:24593 BW_NET_TEST=join BW_EXPECT_RATS=32
 if command -v openssl >/dev/null; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=localhost" \
     -keyout "$logdir/key.pem" -out "$logdir/cert.pem" >/dev/null 2>&1

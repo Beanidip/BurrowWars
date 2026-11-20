@@ -222,7 +222,7 @@ func _setup_page() -> void:
 	goal_label.text = _goal_text()
 	_page.add_child(UiKit.row(goal_label, goal_slider))
 	var size_label := UiKit.label("", 17)
-	var size_slider := UiKit.slider(1, 4, 1, _team_size, func(v: float) -> void:
+	var size_slider := UiKit.slider(1, 8, 1, _team_size, func(v: float) -> void:
 		_team_size = int(v)
 		size_label.text = _size_text()
 	)
