@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Cheat code, release plan
+
+| Change | Files |
+|---|---|
+| **Cheat code** in a hosted playground lobby: the host types Up Up Down Down Left Right Left Right B A (arrow keys and B, A, or D-pad and B, A), and the match they start gives everyone, bots included, infinite scrap, materials and gadgets (the workshop is free, nothing runs out). It's still a normal Cheese Race: digging, cheese and winning are unchanged. A fanfare and a toast for everyone, a banner in the playground and a reminder when the match starts; typing it again turns it off; it stays on through "Back to the lobby". Guests get a "nice try". While the code is being typed its keys do nothing else. Tested with a real host and guest | `match/cheat_code.gd`, `match/match.gd`, `ui/hud.gd`, `core/main.gd`, `match/match_view.gd`, `net/net_server.gd`, `net/net_client.gd`, `match/dynamite.gd`, `match/windup.gd`, `actors/player_controller.gd`, `actors/bot_brain.gd` |
+| Fixed: at the start of each new round (or when the host starts a match from the lobby), the first movement report from the previous round could count as a cheat and snap the player back. Each seat's correction count now starts from a random number | `net/net_server.gd` |
+| Release plan: a free itch.io alpha with donations, then a free Steam Playtest, then the price decided by traction, with checklists. The itch alpha uses the no-threads browser build (runs everywhere, Safari included); the local test server sends the same header as itch.io | `docs/RELEASE_PLAN.md`, `docs/ITCH.md`, `docs/RELEASE_REVIEW.md`, `tools/serve_web.py`, `tools/itch_push.sh` |
+
 ## Unreleased - Phase D: the browser version (itch.io)
 
 | Change | Files |

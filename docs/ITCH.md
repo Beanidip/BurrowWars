@@ -23,8 +23,13 @@ to check it (the game starts, a Cheese Race loads, no errors).
 
 | Build | Folder / zip | Needs | Use it |
 |---|---|---|---|
-| **Threaded** | `build/web/`, `build/BurrowWars_web.zip` | itch's **SharedArrayBuffer support** option (below) | **Recommended.** The map is built on several cores, so it loads faster and digging never stutters. |
-| No threads | `build/web-nothreads/`, `build/BurrowWars_web_nothreads.zip` | nothing | A fallback, if some players' browsers show an error with the threaded build. Loads a little slower and can hitch while digging. |
+| **No threads** | `build/web-nothreads/`, `build/BurrowWars_web_nothreads.zip` | nothing | **For the public alpha.** Runs in every browser, Safari included, with no experimental itch option. Loads a little slower and may hitch for a moment when a block breaks. |
+| Threaded | `build/web/`, `build/BurrowWars_web.zip` | itch's **SharedArrayBuffer support** option (below) | Smoother: the map is built on several cores. Try it once you know your players' browsers. |
+
+Why the alpha uses the no-threads build: itch's SharedArrayBuffer option is marked
+**experimental** by itch, and it works by sending a header (`Cross-Origin-Embedder-Policy:
+credentialless`) that, according to itch forum reports, **Safari doesn't support (unverified)**. A
+public alpha should run for everyone, so the build without threads is the safe default.
 
 Both are about 14 MB zipped (42 MB unpacked, most of it the engine).
 
@@ -47,21 +52,22 @@ remote-deploy icons at the top right; it exports and opens the game in your brow
 
 ## Putting it on itch.io
 
-1. **Create a new project** on itch.io: Kind of project **HTML**. Pricing: **No payments** (free)
-   or **Donations**, as you decided.
-2. **Upload** `build/BurrowWars_web.zip` and tick **This file will be played in the browser**.
+1. **Create a new project** on itch.io: Kind of project **HTML**. Pricing: **$0 or donate** (the
+   free alpha with optional donations, `docs/RELEASE_PLAN.md`).
+2. **Upload** `build/BurrowWars_web_nothreads.zip` and tick **This file will be played in the browser**.
 3. Under **Embed options**:
    - Viewport dimensions **1280 x 720**;
    - **Fullscreen button**: on;
    - **Mobile friendly**: off (the game needs a keyboard and mouse or a controller);
    - **Automatically start on page load**: off (the click on Run game also lets the sound start);
-   - **SharedArrayBuffer support**: **on** (needed by the threaded build). I couldn't open itch's
-     edit page from here, so where exactly the checkbox sits is **unverified**; it's among the
-     embed / frame options.
+   - **SharedArrayBuffer support**: leave it **off** for the no-threads build. Only the threaded
+     build needs it. It's in the **Embed options** section, marked experimental (per itch's own
+     forum posts; I couldn't open the edit page itself).
 4. **Downloads** for desktop players: upload the Windows `.exe` (or a zip of it) and the Linux
    build as separate files and set their platform icons.
-5. Save, open the page, press Run game, and play a match. If it shows an error about missing
-   features (SharedArrayBuffer), check the option in step 3, or upload the no-threads zip instead.
+5. Save, open the page, press Run game, and play a match. If you upload the threaded build
+   instead and the page shows an error about missing features (SharedArrayBuffer), the option in
+   step 3 is off.
 
 ### Later updates with butler
 
@@ -72,7 +78,8 @@ Install it, run `butler login` once, then after building:
 tools/itch_push.sh your-itch-name/burrow-wars
 ```
 
-It pushes `build/web` to the `html5` channel and the Windows and Linux builds to `windows` and
+It pushes the no-threads build to the `html5` channel (`BW_WEB=threaded` in front pushes the
+threaded one) and the Windows and Linux builds to `windows` and
 `linux`, tagged with the game's version. The first time, mark the `html5` upload as "played in the
 browser" on the itch page as in step 2.
 

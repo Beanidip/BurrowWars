@@ -55,6 +55,15 @@ Realistic estimate for a solo developer:
 - **Art style:** the current sprite style and sheet layouts stay; the art spec describes them.
 - **Phase A:** approved, on branch `phase-a-foundations`.
 
+**Round 3 (2026-11-20): pricing decided as a three-phase release** (details and checklists in
+[`RELEASE_PLAN.md`](RELEASE_PLAN.md)):
+1. a free public alpha on itch.io ("$0 or donate"), browser and desktop;
+2. a free Steam Playtest;
+3. then, depending on traction, a one-time purchase of about $4.99-9.99, or free with cosmetic
+   supporter packs.
+
+The "$3 on Steam" idea above is replaced by this.
+
 **Revised answers**
 - **Own servers:** *yes, small.* One or two VPS with a domain and TLS for public and browser play. Steam friend games stay peer-to-peer and free.
 - **itch.io:** *yes*: desktop plus browser.
@@ -507,7 +516,7 @@ Left for the Steam phase (needs Steamworks):
 
 Still open:
 - Steam (Steamworks account, GodotSteam, achievements, the on-screen keyboard) and macOS signing.
-- Your pricing decision (free on Steam too, or a paid Steam version with a free itch demo) before the itch page goes up.
+- Phase 1 of the release plan (`RELEASE_PLAN.md`): clear the legacy placeholder art and sound for a public alpha, set up the servers and the itch page.
 - Android, if you want it (not started; see the questions in chat).
 
 Still to check on real hardware:
