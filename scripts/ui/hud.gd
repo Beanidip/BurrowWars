@@ -54,6 +54,9 @@ var _style_slot: StyleBoxFlat
 var _style_slot_on: StyleBoxFlat
 var _cheese_tex: Texture2D
 var _focus_pick: Control        # where a controller's focus starts in the open dialog
+var _want_capture := false      # play is on: the mouse should be captured
+var _had_capture := false       # (browser) we had it, so losing it means Esc was pressed
+var _click_hint: Label          # (browser) "Click to play" while the page has the mouse
 
 ## Workshop, pack and paint pots are tabs of one dialog, so a controller can
 ## reach all three (LB / RB switch between them).
@@ -74,6 +77,15 @@ func _ready() -> void:
 	_build_top()
 	_build_bottom()
 	_build_crosshair()
+	if OS.has_feature("web"):
+		_click_hint = UiKit.label("Click to play", 28, UiKit.PAPER)
+		_click_hint.add_theme_stylebox_override("normal", UiKit.box(Color(0.1, 0.07, 0.05, 0.85), UiKit.BRASS, 10, 2, 14))
+		_click_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		_click_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_click_hint.grow_vertical = Control.GROW_DIRECTION_BOTH
+		_click_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_click_hint.visible = false
+		_root.add_child(_click_hint)
 	m.toast.connect(_on_toast)
 	m.won.connect(_on_won)
 	ctl.notice.connect(func(text: String) -> void: _push_toast(text, UiKit.PAPER))
@@ -88,7 +100,32 @@ func _ready() -> void:
 
 
 func _capture(on: bool) -> void:
+	_want_capture = on
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if on else Input.MOUSE_MODE_VISIBLE
+
+
+func _web_capture() -> void:
+	## In a browser the page owns the mouse: Esc takes it back before the game
+	## hears the key, and capturing it again needs a click. So: losing it
+	## mid-play pauses, and without it a "Click to play" prompt shows.
+	if _click_hint == null:
+		return
+	var playing := _want_capture and _dialog == null and not m.over
+	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	if playing and captured:
+		_had_capture = true
+	elif playing and _had_capture:
+		_had_capture = false
+		open_dialog("pause")
+		playing = false
+	_click_hint.visible = playing and not captured
+
+
+func _input(event: InputEvent) -> void:
+	# (browser) the click that takes the mouse back is not a dig
+	if _click_hint != null and _click_hint.visible and event is InputEventMouseButton and event.is_pressed():
+		get_viewport().set_input_as_handled()
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 # ---------------------------------------------------------------- layout
@@ -344,6 +381,7 @@ func lobby_text() -> String:
 func _process(_delta: float) -> void:
 	if rat == null:
 		return
+	_web_capture()
 	if _lobby_banner != null:
 		_lobby_banner.text = lobby_text()
 	_fit_side_panels()
@@ -977,6 +1015,11 @@ func export_map() -> String:
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
 	var path := "%s/%s_%s.bwmap" % [VoxelWorld.MAPS_DIR, "freebuild" if m.free_mode else "map", stamp]
 	var ok := m.world.save_to(path, {"machines": m.siege.to_save()})
+	if ok and OS.has_feature("web"):
+		# a browser keeps its files out of sight: hand the map over as a download too
+		JavaScriptBridge.download_buffer(FileAccess.get_file_as_bytes(path), path.get_file(), "application/octet-stream")
+		_push_toast("Exported %s - it's in your downloads, and under Map when you set up a game" % path.get_file(), UiKit.BRASS)
+		return path
 	_push_toast(("Exported %s - pick it under Map when you set up a game" % path.get_file()) if ok else "Export failed - see the log", UiKit.BRASS)
 	return path if ok else ""
 

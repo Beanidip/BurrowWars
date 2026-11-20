@@ -11,6 +11,7 @@ var settings: Dictionary = {}
 var net_info: Dictionary = {}   # online client: the server's welcome
 var loading: LoadingScreen      # Main's loading screen, lifted once the world is meshed (null: mesh near the player now)
 var loaded := false             # the world is meshed and the match running
+var _built_at := 0             # msec the session started building (for the log)
 var m: Match
 var net: Node                   # NetServer when hosting, NetClient when joined
 var player: Rat
@@ -19,6 +20,7 @@ var hud: Hud
 
 
 func _ready() -> void:
+	_built_at = Time.get_ticks_msec()
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
@@ -139,6 +141,7 @@ func _ready() -> void:
 func _on_prebuilt() -> void:
 	m.auto_step = true
 	loaded = true
+	Log.info("match ready: %s, %d rats, map built in %d ms" % [String(settings.get("mode", "race")), m.rats.size(), Time.get_ticks_msec() - _built_at])
 	if loading != null and is_instance_valid(loading):
 		loading.finish()
 	loading = null

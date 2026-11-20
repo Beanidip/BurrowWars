@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Phase D: the browser version (itch.io)
+
+| Change | Files |
+|---|---|
+| **Web builds**: a threaded build (recommended; needs itch's SharedArrayBuffer option) and a no-threads fallback, both about 14 MB zipped. `tools/web_build.sh` exports both, zips them for itch and boots each in headless Chromium (game starts, a Cheese Race loads, no console errors). `tools/serve_web.py` serves a build locally with the same headers as itch; `tools/itch_push.sh` uploads with butler. The web export templates are fetched straight from the official 4.7.2 template archive | `export_presets.cfg`, `tools/web_build.sh`, `tools/web_smoke.js`, `tools/serve_web.py`, `tools/itch_push.sh`, `docs/ITCH.md` |
+| In a browser: losing the mouse (Esc gives it back to the page) pauses the game, **P** pauses too, and "Click to play" shows until the game has the mouse (that click doesn't dig). No Host buttons (a browser can only join `wss://` servers), no Maps folder button, and Export map also downloads the file | `ui/hud.gd`, `core/inputs.gd`, `ui/main_menu.gd` |
+| The log says when a match is ready and how long the map took to build | `match/game_session.gd` |
+
 ## Unreleased - Phase B: public servers
 
 | Change | Files |

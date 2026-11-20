@@ -281,10 +281,18 @@ func _bind_key(action: String, keycode: int) -> void:
 	var ev := InputEventKey.new()
 	ev.physical_keycode = keycode as Key
 	InputMap.action_add_event(action, ev)
+	if action == "pause" and OS.has_feature("web"):
+		# in a browser Esc first gives the mouse back to the page (the game
+		# pauses when that happens, see Hud), so P pauses too
+		var p := InputEventKey.new()
+		p.physical_keycode = KEY_P
+		InputMap.action_add_event(action, p)
 
 
 func rebind(action: String, keycode: int) -> String:
 	## Returns "" on success, or the label of the conflicting action.
+	if OS.has_feature("web") and keycode == KEY_P and action != "pause":
+		return String(KEYS["pause"][1])
 	for other: String in KEYS:
 		if other != action and key_of(other) == keycode:
 			return KEYS[other][1]
@@ -307,4 +315,6 @@ func key_name(action: String) -> String:
 		return pad_name(action)
 	if MOUSE.has(action):
 		return "LMB" if MOUSE[action] == MOUSE_BUTTON_LEFT else "RMB"
+	if action == "pause" and OS.has_feature("web"):
+		return "%s / P" % OS.get_keycode_string(key_of(action))
 	return OS.get_keycode_string(key_of(action))

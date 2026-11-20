@@ -497,7 +497,22 @@ Left for the Steam phase (needs Steamworks):
 - the **on-screen keyboard** for text boxes (Steam's gamepad text input). Until then names are suggested and servers are picked from the list, and Steam + X brings up the Deck's keyboard by hand;
 - Steam Input glyph art (today the prompts are text: A, B, LB...).
 
+**Phase B (public servers): done** on branch `controller-network-web`.
+- WebSocket transport for dedicated servers (`wss://` via Caddy or built-in TLS); ENet stays for hosted and LAN games.
+- Anti-cheat: movement checked against the physics (walls, height, hovering, stamina), rate limits, strikes; dedicated servers remove repeat offenders.
+- 16v16 on dedicated servers (8v8 hosted), with compact snapshots (about 1.1 KB for 32 rats).
+- Server list with live status (players, mode, score, ping) from each server's `/status` page.
+
+**Phase D (browser version): done** on the same branch. Threaded and no-threads web builds, both boot-tested in headless Chromium; browser-specific pause and mouse handling; itch.io steps in `docs/ITCH.md`.
+
+Still open:
+- Steam (Steamworks account, GodotSteam, achievements, the on-screen keyboard) and macOS signing.
+- Your pricing decision (free on Steam too, or a paid Steam version with a free itch demo) before the itch page goes up.
+- Android, if you want it (not started; see the questions in chat).
+
 Still to check on real hardware:
+- the browser build on a real GPU, in Firefox and Safari, and on the itch.io page itself;
+- a public server on your VPS with Caddy (`wss://`), joined from the browser build;
 - fullscreen and Alt+Enter (the test machine has no window manager);
 - frame rates on a GPU, the Steam Deck and a Mac;
 - on the Deck: run the Linux build and the Windows build under Proton, play a match with the built-in controls, and check the text is comfortable on the 7" screen.

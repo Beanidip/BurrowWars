@@ -299,9 +299,10 @@ func _map_row() -> Control:
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
 	box.add_child(_map_pick)
-	box.add_child(UiKit.button("Maps folder", func() -> void:
-		DirAccess.make_dir_recursive_absolute(VoxelWorld.MAPS_DIR)
-		OS.shell_open(ProjectSettings.globalize_path(VoxelWorld.MAPS_DIR)), Vector2(140, 34)))
+	if not OS.has_feature("web"):   # (a browser has no folder to open)
+		box.add_child(UiKit.button("Maps folder", func() -> void:
+			DirAccess.make_dir_recursive_absolute(VoxelWorld.MAPS_DIR)
+			OS.shell_open(ProjectSettings.globalize_path(VoxelWorld.MAPS_DIR)), Vector2(140, 34)))
 	box.tooltip_text = "Maps saved with F5 in Free Build or with Export map in the Esc menu. Put .bwmap files from friends in the maps folder to import them."
 	return UiKit.row(UiKit.label("Map"), box)
 
@@ -489,8 +490,9 @@ func _show_online() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
 	buttons.add_child(UiKit.button("Back", _show_home, Vector2(160, 46)))
-	buttons.add_child(Icons.on_button(UiKit.button("Host Cheese Race...", _show_host_setup, Vector2(230, 46)), "cheese"))
-	buttons.add_child(Icons.on_button(UiKit.button("Host Free Build", _host_free, Vector2(210, 46)), "hammer"))
+	if Net.enet_available():   # a browser can't open a server, only join WebSocket ones
+		buttons.add_child(Icons.on_button(UiKit.button("Host Cheese Race...", _show_host_setup, Vector2(230, 46)), "cheese"))
+		buttons.add_child(Icons.on_button(UiKit.button("Host Free Build", _host_free, Vector2(210, 46)), "hammer"))
 	_page.add_child(buttons)
 	_back = _show_home
 	if Inputs.using_pad:
