@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased - Server soak test and the bugs it found
+
+| Change | Files |
+|---|---|
+| **Soak test** for public servers: `tools/soak_test.py` runs a 16v16 WebSocket server with short rounds and scripted players who join, play (walk, jump, dig, build, bonk), leave and rejoin, and reports memory and CPU over time, rounds, errors and anti-cheat actions. Dedicated servers now log a **health** line every minute (players, rounds, memory, objects, nodes, orphans, match and network time per tick, ticks per second, movement reports) | `tools/soak_test.py`, `tests/soak_client.gd`, `net/dedicated_server.gd`, `match/match.gd`, `net/net_server.gd`, `docs/MULTIPLAYER.md` |
+| Fixed: block changes made while a joining player's map downloaded were lost (or applied to the previous round's map), so players saw blocks that weren't there; a lost correction also left the server ignoring their movement. They're now held and replayed in order once the map is in | `net/net.gd`, `net/net_client.gd` |
+| Fixed: a rat with a block appearing inside it was lifted straight up to open sky (through a whole hill, from a tunnel); it now steps to the nearest free spot | `actors/rat.gd` |
+| Fixed: a server correction could put a player back into ground filled in since, starting a loop that got an honest player removed | `net/net_server.gd` |
+| Anti-cheat forgives blocks built in the last 2 s, and accepts a player's game stepping them out of ground that filled in where they stood when it lands on the same spot the server's own way out would (anything else, such as popping up through a hill, is still refused). Building as you walk no longer earns strikes. A lagging game may report being inside a block for half a second (was 0.2 s) before that alone counts; walking out of the far side is still caught | `net/anti_cheat.gd`, `net/net_server.gd` |
+| A new round froze the server for 1.3-1.9 s while it generated the map; the next map is now made in the background during the round break and lobby, so rounds start in about 15 ms. `--seed` fixes only the first map, as documented | `net/dedicated_server.gd` |
+| No more error spam when a WebSocket player leaves: the server no longer sends to closing connections, and no longer relays arrivals and departures between players (clients only talk to the server) | `net/net.gd`, `net/net_server.gd` |
+| Soak result: 45 minutes, 21 rounds, 370 joins, 152 leaves; no crash, no lost connections, memory levelled off (155 to 170 MB, growth slowing every 10 minutes), about 42% of one CPU core at a steady 60 ticks a second | `docs/MULTIPLAYER.md` |
+
 ## Unreleased - Bulldozer turning, effects volume, balance chart, asset lists
 
 | Change | Files |

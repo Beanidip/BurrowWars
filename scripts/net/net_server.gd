@@ -193,22 +193,20 @@ func on_input(id: int, pkt: Dictionary) -> void:
 	var now := Time.get_ticks_msec()
 	var dt := clampf(float(now - int(_last_input.get(id, now))) / 1000.0, 0.0, 1.0)
 	_last_input[id] = now
-	var limit := MAX_SPEED * dt + 1.5
-	var dist := pos.distance_to(rat.position)
-	if pos.y > rat.position.y and rat.blocked_at(rat.position):
-		# the ground appeared where we last had the rat (someone built there):
-		# its game lifts it out, up to a few blocks in one go
-		dist = maxf(Vector2(pos.x - rat.position.x, pos.z - rat.position.z).length(), pos.y - rat.position.y - 6.0)
-	if dist > limit or pos.y < -6.0 or pos.x < -2.0 or pos.z < -2.0 \
-			or pos.x > VoxelWorld.SX + 2.0 or pos.z > VoxelWorld.SZ + 2.0 or pos.y > VoxelWorld.SY + 30.0:
-		_correct(id, rat, "moved %.1f blocks in %.2f s" % [pos.distance_to(rat.position), dt], pos)   # too far, too fast
-		inputs["bad"] += 1
-		return
-	var bad := ac.check_move(id, rat, pos, now)
-	if bad != "":
-		_correct(id, rat, bad, pos)
-		inputs["bad"] += 1
-		return
+	if _lifted_out(rat, pos):
+		ac.moved_by_world(id, rat, pos, now)   # (the ground filled in under it: the same way out the server would take)
+	else:
+		var limit := MAX_SPEED * dt + 1.5
+		if pos.distance_to(rat.position) > limit or pos.y < -6.0 or pos.x < -2.0 or pos.z < -2.0 \
+				or pos.x > VoxelWorld.SX + 2.0 or pos.z > VoxelWorld.SZ + 2.0 or pos.y > VoxelWorld.SY + 30.0:
+			_correct(id, rat, "moved %.1f blocks in %.2f s" % [pos.distance_to(rat.position), dt], pos)   # too far, too fast
+			inputs["bad"] += 1
+			return
+		var bad := ac.check_move(id, rat, pos, now)
+		if bad != "":
+			_correct(id, rat, bad, pos)
+			inputs["bad"] += 1
+			return
 	inputs["ok"] += 1
 	var regen := Config.STAMINA_REGEN * dt + 2.0   # stamina refills no faster than it does
 	rat.stamina = clampf(float(pkt.get("s", rat.stamina)), 0.0, minf(rat.max_stamina(), rat.stamina + regen)) \
@@ -247,6 +245,19 @@ func _send_kick(id: int, rat: Rat) -> void:
 	if Net.connected(id):
 		Net._s_kick.rpc_id(id, {"k": rat.net_kick, "p": rat.position, "v": rat.vel, "st": rat.stun, "kn": rat.knock,
 			"sl": rat.slow, "sa": rat.stamina, "fl": rat.flying})
+
+
+static func _lifted_out(rat: Rat, pos: Vector3) -> bool:
+	## Was this report the rat's game stepping it out of ground that filled in
+	## where the server last had it? (Rat.unstick from there, run here on the
+	## server's own copy of the world, lands on the same spot.)
+	if not rat.blocked_at(rat.position):
+		return false
+	var keep := rat.position
+	rat.unstick()
+	var way_out := rat.position
+	rat.position = keep
+	return way_out.distance_to(pos) < 0.75
 
 
 static func _v(p: Vector3) -> String:

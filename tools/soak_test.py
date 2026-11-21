@@ -155,8 +155,9 @@ def report(samples, exits, server_alive, minutes, players):
         problems.append(f"server memory keeps growing ({grow:.0f} MB/hour after warm-up)")
     if hwarm and min(h[12] for h in hwarm) < 55.0:
         problems.append(f"the server fell behind (only {min(h[12] for h in hwarm):.0f} ticks a second at worst; 60 is on time)")
-    if hwarm and max(h[7] for h in hwarm) > 0:
-        problems.append(f"orphan nodes on the server (up to {int(max(h[7] for h in hwarm))})")
+    # a node caught mid-cleanup can show as an orphan for a moment; only a lasting or growing count is a leak
+    if health and (health[-1][7] > 0 or max(h[7] for h in hwarm) > 3):
+        problems.append(f"orphan nodes on the server (up to {int(max(h[7] for h in hwarm))}, {int(health[-1][7])} at the end)")
 
     lines = [f"# Soak test report", "",
              f"{minutes:g} minutes, a 16v16 WebSocket dedicated server (goal {os.environ.get('SOAK_GOAL', '3')}, 10 s lobby, 5 s between rounds), "

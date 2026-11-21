@@ -132,6 +132,10 @@ func host(port: int, options: Dictionary = {}) -> String:
 		peer = ep
 		transport = Transport.ENET
 	multiplayer.multiplayer_peer = peer
+	# clients only ever talk to the server: no relaying between them, and no
+	# telling everyone about every arrival and departure (that also sent to
+	# players who were leaving themselves)
+	(multiplayer as SceneMultiplayer).server_relay = false
 	role = Role.SERVER
 	hellos.clear()
 	multiplayer.peer_connected.connect(_on_peer_connected)

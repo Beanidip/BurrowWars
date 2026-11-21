@@ -174,6 +174,53 @@ average (worst about 19 ms) of the 16.7 ms a 60 Hz tick has, nearly all of it th
 Each human who joins replaces a bot, so a full server of players costs less. A 1-vCPU VPS runs
 one full server; give it 2 vCPUs to run two.
 
+### Keeping an eye on it
+
+Every minute (`--log-every S` to change) the server writes a **health** line to its log:
+
+```
+health: 4 players, 28 bots, round 12 (race, 2-1, t=95s), mem 50.3 MB, objects 1764, nodes 58,
+orphans 0, sim 9.8 ms avg / 46.0 max, net 0.3 ms avg / 16.6 max, tps 60.0,
+reports 3664 ok / 0 stale / 0 after a server move / 0 dropped / 0 refused
+```
+
+- **mem, objects, nodes** should stay level over hours; steady growth means a leak. **orphans**
+  should stay 0.
+- **sim / net**: time per tick for the match and for networking. 60 ticks a second means the two
+  together must stay well under 16.7 ms on average; **tps** below 60 means the machine is too slow.
+- **reports**: players' movement reports. **refused** ones failed an anti-cheat check (each also
+  logs an `anti-cheat:` line saying where and why).
+
+`journalctl -u burrowwars -f` shows the log live with the systemd setup above.
+
+### Soak test before you open it to the public
+
+`tools/soak_test.py` runs a full 16v16 WebSocket server with short rounds and scripted players who
+join, play, leave and rejoin, then reports memory and CPU over time, rounds played, errors and any
+anti-cheat action against those honest players:
+
+```bash
+python3 tools/soak_test.py /path/to/godot 45 6
+```
+
+(45 minutes, 6 players; the report is `build/soak/report.md`). Running it on your VPS also tells you
+whether that machine keeps up. The rest of the 32 seats are filled by bots, so the server works as
+hard as a full one. Each test player is a whole copy of the game (about 150 MB and a fair share of a
+core), so run them on the VPS only if it has room, or point them at it from another computer:
+`BW_URL=wss://play.example.org BW_SOAK_ID=1 BW_SOAK_SECONDS=1800 godot --headless --path .
+res://tests/soak_client.tscn`.
+
+The report ends in **PASS** or lists the problems. What a healthy run looked like here (45 minutes,
+21 rounds, 370 joins, 152 leaves):
+
+- the process grew from 155 to 170 MB, then levelled off (each 10 minutes added less: +9, +3, +2,
+  +1 MB); Godot's own count went from 52.9 to 54.4 MB, and the object count stayed level
+- about 42% of one core on average, 59% at the busiest, and a steady 60 ticks a second
+- no errors, no lost connections, no failed joins, and no honest test player removed
+
+Memory that keeps climbing at the same rate, ticks below 60, or players removed by anti-cheat are
+the things to look into before strangers play.
+
 ### Listing it in the game
 
 The **Public servers** list in the menu is read from [`servers.json`](../servers.json) on the

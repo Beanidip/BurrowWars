@@ -4653,7 +4653,11 @@ func test_anti_cheat_catches_cheats() -> void:
 	while v == "" and x < 3.0:
 		x += 0.15   # walking pace
 		v = report.call(start + Vector3(x, 0, 0))
-	check(v.begins_with("inside solid") and x < 2.6, "staying inside it is caught before getting through (%s, at +%.2f)" % [v, x])
+	# a lagging game gets half a second inside before that alone counts; walking out of the far side is
+	# then the tunnel check's catch - either way it never gets through
+	check((v.begins_with("inside solid") or v.begins_with("moved through")) and x < 3.0,
+		"staying inside it is caught before getting through (%s, at +%.2f)" % [v, x])
+	check(ac.good_position(7, r).x < start.x + 0.9, "and goes back to this side of the wall (%s)" % ac.good_position(7, r))
 	ac.reset(7, r, clock[0])
 	# fly hack: rising steadily from the floor
 	var flew := ""
@@ -5162,6 +5166,35 @@ func test_unstick_nearest() -> void:
 		m.world.set_block(ARENA + Vector3i(dx, 0, 0), Blocks.STONE)
 	r.unstick()
 	check(not r.blocked() and r.position.y >= ARENA.y + 12.0, "sealed in rock, it still gets out (up to y+%.0f)" % (r.position.y - ARENA.y))
+	# on a server: a player's game stepping out the same way is legal; anywhere else is not
+	for dx in range(-4, 5):
+		m.world.set_block(ARENA + Vector3i(dx, 0, 0), Blocks.AIR)
+	var ns := NetServer.new()
+	ns.m = m
+	ns.ac.log_violations = false
+	r.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)
+	r.vel = Vector3.ZERO
+	r.net_peer = 12
+	ns.seats[12] = r
+	ns.ac.reset(12, r)
+	r.net_pre = Match.net_state(r)
+	m.world.set_block(ARENA, Blocks.DIRT)   # built where the server last had it
+	var inside := r.position
+	r.unstick()
+	var out := r.position
+	r.position = inside
+	var kick0 := r.net_kick
+	ns._last_input[12] = Time.get_ticks_msec() - 50
+	ns.on_input(12, {"k": r.net_kick, "p": out, "v": Vector3.ZERO, "y": 0.0, "f": 1, "s": r.stamina})
+	check(r.net_kick == kick0 and r.position.distance_to(out) < 0.01 and ns.ac.strikes(12) == 0.0,
+		"its game stepping it out to the server's own way out is accepted, no strike (%.1f)" % ns.ac.strikes(12))
+	r.position = inside   # (buried again)
+	r.net_pre = Match.net_state(r)
+	ns._last_input[12] = Time.get_ticks_msec() - 50
+	ns.on_input(12, {"k": r.net_kick, "p": inside + Vector3(0, 12.0, 0), "v": Vector3.ZERO, "y": 0.0, "f": 1, "s": r.stamina})
+	check(r.net_kick == kick0 + 1 and not r.blocked() and r.position.y < ARENA.y + 2.0,
+		"but popping up through the rock to open sky is refused: put back in the tunnel (at y+%.1f)" % (r.position.y - ARENA.y))
+	ns.free()
 	end(m)
 
 

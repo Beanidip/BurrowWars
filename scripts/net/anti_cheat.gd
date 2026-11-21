@@ -24,7 +24,7 @@ extends RefCounted
 
 const STRIKE_LIMIT := 8.0
 const STRIKE_FADE := 30.0          # seconds per strike forgiven
-const INSIDE_GRACE := 0.2          # seconds a rat may report itself inside a block (someone just built there)
+const INSIDE_GRACE := 0.5          # seconds a rat may report itself inside a block (a lagging game; leaving it is still checked)
 const TUNNEL_RUN := 0.45           # blocks of solid ground a move may cut through before it's noclip
 const LAG_GRACE := 0.75            # seconds of extra air time, for reports that arrive in a bunch
 const RISE_SLACK := 0.8            # blocks
@@ -85,6 +85,19 @@ func blocked_only_by_fresh(rat: Rat, pos: Vector3, now: int) -> bool:
 						return false
 					any = true
 	return any
+
+
+func moved_by_world(id: int, rat: Rat, pos: Vector3, now: int = -1) -> void:
+	## The ground filled in where the rat stood and its game stepped it to
+	## the nearest free spot, exactly where the server would put it: legal.
+	if now < 0:
+		now = Time.get_ticks_msec()
+	var st := _state(id, rat, now)
+	st.erase("fresh")
+	st["good"] = pos
+	st["inside"] = 0.0
+	st["last"] = now
+	_support(st, rat, pos, now, JUMP_RISE)
 
 
 func forget(id: int) -> void:
