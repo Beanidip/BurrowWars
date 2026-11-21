@@ -13,6 +13,9 @@ extends RefCounted
 ##  - stamina only refills as fast as it really does;
 ##  - requests and movement reports are rate limited (token buckets), so a
 ##    flood is dropped instead of slowing the server.
+## Blocks built in the last FRESH seconds don't count against anyone: a
+## player's game may not know about them yet, walk into one, and then lift
+## itself out of it (that happens to honest players building as they go).
 ## A failed check puts the rat back where the server last saw it legally and
 ## costs a strike. Strikes fade (one every STRIKE_FADE seconds); a player who
 ## piles up STRIKE_LIMIT is removed, if `kick_out` is on (dedicated servers).
@@ -32,10 +35,13 @@ const SUPPORT_PROBE := 0.15
 # token buckets: [per second, burst]
 const RATES := {"act": [30.0, 60.0], "input": [45.0, 90.0], "aim": [45.0, 90.0]}
 const FLOOD_STRIKE := 60           # dropped messages per strike
+const FRESH := 2.0                 # seconds a newly solid block is forgiven (it may not have reached a laggy player yet)
 
 var kick_out := false              # remove players who reach STRIKE_LIMIT (dedicated servers)
 var log_violations := true
 var _peers: Dictionary = {}        # peer id -> state Dictionary
+var _fresh: Dictionary = {}        # Vector3i -> msec it became solid
+var _changed: Dictionary = {}      # Vector3i -> msec of its last change of any kind (for the log)
 
 
 func _state(id: int, rat: Rat, now: int) -> Dictionary:
@@ -44,6 +50,41 @@ func _state(id: int, rat: Rat, now: int) -> Dictionary:
 			"base_y": rat.position.y, "base_t": now, "allow": JUMP_RISE, "jet": 0.0, "dropped": 0,
 			"buckets": {}, "log": []}
 	return _peers[id]
+
+
+func note_block(cell: Vector3i, new_id: int, now: int = -1) -> void:
+	## The world changed (NetServer forwards every block change).
+	if now < 0:
+		now = Time.get_ticks_msec()
+	_changed[cell] = now
+	if _changed.size() > 20000:
+		_changed.clear()
+	if new_id != Blocks.AIR and new_id != Blocks.WATER and new_id != Blocks.LAVA:
+		_fresh[cell] = now
+	if _fresh.size() > 4096:   # keep it small: drop the stale ones
+		for c: Vector3i in _fresh.keys():
+			if now - int(_fresh[c]) > FRESH * 1000.0:
+				_fresh.erase(c)
+
+
+func fresh(cell: Vector3i, now: int) -> bool:
+	return _fresh.has(cell) and now - int(_fresh[cell]) < FRESH * 1000.0
+
+
+func blocked_only_by_fresh(rat: Rat, pos: Vector3, now: int) -> bool:
+	## True when everything the rat's body overlaps at `pos` was only just
+	## built (so its game may not have it yet).
+	var w: VoxelWorld = rat._world
+	var any := false
+	for y in range(floori(pos.y + 0.001), floori(pos.y + Rat.HEIGHT - 0.001) + 1):
+		for z in range(floori(pos.z - Rat.RADIUS), floori(pos.z + Rat.RADIUS) + 1):
+			for x in range(floori(pos.x - Rat.RADIUS), floori(pos.x + Rat.RADIUS) + 1):
+				var c := Vector3i(x, y, z)
+				if Blocks.solid_for(w.get_cell(c), rat.team) or (not w.gates.is_empty() and int(w.gates.get(c, rat.team)) != rat.team):
+					if not fresh(c, now):
+						return false
+					any = true
+	return any
 
 
 func forget(id: int) -> void:
@@ -152,15 +193,15 @@ func check_move(id: int, rat: Rat, pos: Vector3, now: int = -1) -> String:
 		_support(st, rat, pos, now, JUMP_RISE)
 		return ""
 	# -- solid ground --------------------------------------------------
-	if rat.blocked_at(pos):
+	if rat.blocked_at(pos) and not blocked_only_by_fresh(rat, pos, now):
 		st["inside"] = float(st["inside"]) + dt
 		if float(st["inside"]) > INSIDE_GRACE:
 			return "inside solid ground for %.1f s" % float(st["inside"])
 		return ""   # for a moment: someone may just have built there
 	var good: Vector3 = st["good"]
-	var run := solid_run(rat, good, pos)
+	var run := solid_run(rat, good, pos, now)
 	if run > TUNNEL_RUN:
-		return "moved through %.1f blocks of solid ground" % run
+		return "moved through %.1f blocks of solid ground%s" % [run, _what_was_there(rat, good, pos, now)]
 	st["inside"] = 0.0
 	# -- height --------------------------------------------------------
 	if bool(rat.cls["fly"]):
@@ -220,7 +261,25 @@ func _boost_near(rat: Rat, pos: Vector3) -> float:
 	return best
 
 
-static func solid_run(rat: Rat, from: Vector3, to: Vector3) -> float:
+func _what_was_there(rat: Rat, from: Vector3, to: Vector3, now: int) -> String:
+	## For the log: the solid blocks along a rejected move, and how long ago
+	## each last changed (so a too-strict check shows itself).
+	var seen := {}
+	var parts: Array[String] = []
+	for i in range(0, 21):
+		var p := from.lerp(to, i / 20.0) + Vector3(0, 0.45, 0)
+		var c := Vector3i(floori(p.x), floori(p.y), floori(p.z))
+		if seen.has(c) or not _solid_point(rat, p):
+			continue
+		seen[c] = true
+		var age := "old" if not _changed.has(c) else "%.1fs" % ((now - int(_changed[c])) / 1000.0)
+		parts.append("%s@%d,%d,%d changed %s" % [Blocks.block_name(rat._world.get_cell(c)), c.x, c.y, c.z, age])
+		if parts.size() >= 4:
+			break
+	return "" if parts.is_empty() else " [" + ", ".join(parts) + "]"
+
+
+func solid_run(rat: Rat, from: Vector3, to: Vector3, now: int = -1) -> float:
 	## How much of the straight line from `from` to `to` (at knee and chest
 	## height) runs through ground solid for this rat, in blocks. A real move
 	## between two reports only ever grazes a corner.
@@ -234,7 +293,7 @@ static func solid_run(rat: Rat, from: Vector3, to: Vector3) -> float:
 		var best := 0.0
 		for i in range(1, steps):
 			var p := from.lerp(to, float(i) / float(steps)) + Vector3(0, h, 0)
-			if _solid_point(rat, p):
+			if _solid_point(rat, p) and not fresh(Vector3i(floori(p.x), floori(p.y), floori(p.z)), now):
 				run += d / float(steps)
 				best = maxf(best, run)
 			else:

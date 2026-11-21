@@ -37,6 +37,7 @@ func _init(p_match: Match, info: Dictionary) -> void:
 func _ready() -> void:
 	process_physics_priority = 10   # after the local rat has moved this frame
 	Net.client = self
+	Net.release_held(self)   # what the server sent while our map was on its way
 
 
 func _exit_tree() -> void:

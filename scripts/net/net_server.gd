@@ -32,6 +32,8 @@ var _last_input: Dictionary = {}   # peer id -> msec of the last accepted input
 var _dirty_private: Dictionary = {}
 var _fx_t: Dictionary = {}         # "peer:kind" -> msec of the last effect that peer reported
 var ac := AntiCheat.new()          # movement checks, rate limits and strikes
+var perf := [0, 0, 0]              # _physics_process timing (corrections, events, snapshots): [usec total, worst, ticks]
+var inputs := {"ok": 0, "dropped": 0, "stale": 0, "moved": 0, "bad": 0}   # movement reports, for health lines
 var max_players := Net.HOST_MAX_CLIENTS   # connected players (a dedicated server raises it to Net.MAX_CLIENTS)
 var _roster_sig := ""              # rats' names as last sent
 var _roster_left := 0              # snapshots that still carry the names after a change
@@ -43,6 +45,7 @@ func _ready() -> void:
 	process_physics_priority = 10   # after Match.step in the same frame
 	m.networked = true
 	m.world.block_changed.connect(_on_block)
+	m.world.block_changed.connect(func(cell: Vector3i, _old: int, new_id: int) -> void: ac.note_block(cell, new_id))
 	m.world.micro_changed.connect(_on_micro)
 	m.world.gate_layer_changed.connect(func(c: Vector3i) -> void: _gates[c] = true)
 	m.fx.connect(func(kind: String, pos: Vector3, data: Variant) -> void: _fx.append([kind, pos, data]))
@@ -89,7 +92,8 @@ func on_hello(id: int, hello: Dictionary) -> void:
 		rat = _free_bot(1 - want)
 	if rat == null:
 		if m.rats.size() >= MAX_RATS:
-			Net._s_refuse.rpc_id(id, "The server is full.")
+			if Net.connected(id):
+				Net._s_refuse.rpc_id(id, "The server is full.")
 			return
 		rat = m.spawn_rat(want if m.lobby or not m.free_mode else 0, cls, false)
 	m.make_player(rat, id, pname)
@@ -168,11 +172,16 @@ func _unique(pname: String) -> String:
 
 func on_input(id: int, pkt: Dictionary) -> void:
 	var rat: Rat = seats.get(id)
-	if rat == null or not ac.allow(id, "input"):
+	if rat == null:
+		return
+	if not ac.allow(id, "input"):
+		inputs["dropped"] += 1
 		return
 	if int(pkt.get("k", -1)) != rat.net_kick:
+		inputs["stale"] += 1
 		return   # sent before the player saw our last correction: stale
 	if rat.net_dirty or Match.net_state(rat) != rat.net_pre:
+		inputs["moved"] += 1
 		return   # the server moved the rat since (a respawn, a bonk...): its correction goes out next tick
 	var p: Variant = pkt.get("p")
 	var v: Variant = pkt.get("v")
@@ -185,14 +194,22 @@ func on_input(id: int, pkt: Dictionary) -> void:
 	var dt := clampf(float(now - int(_last_input.get(id, now))) / 1000.0, 0.0, 1.0)
 	_last_input[id] = now
 	var limit := MAX_SPEED * dt + 1.5
-	if pos.distance_to(rat.position) > limit or pos.y < -6.0 or pos.x < -2.0 or pos.z < -2.0 \
+	var dist := pos.distance_to(rat.position)
+	if pos.y > rat.position.y and rat.blocked_at(rat.position):
+		# the ground appeared where we last had the rat (someone built there):
+		# its game lifts it out, up to a few blocks in one go
+		dist = maxf(Vector2(pos.x - rat.position.x, pos.z - rat.position.z).length(), pos.y - rat.position.y - 6.0)
+	if dist > limit or pos.y < -6.0 or pos.x < -2.0 or pos.z < -2.0 \
 			or pos.x > VoxelWorld.SX + 2.0 or pos.z > VoxelWorld.SZ + 2.0 or pos.y > VoxelWorld.SY + 30.0:
-		_correct(id, rat, "moved %.1f blocks in %.2f s" % [pos.distance_to(rat.position), dt])   # too far, too fast
+		_correct(id, rat, "moved %.1f blocks in %.2f s" % [pos.distance_to(rat.position), dt], pos)   # too far, too fast
+		inputs["bad"] += 1
 		return
 	var bad := ac.check_move(id, rat, pos, now)
 	if bad != "":
-		_correct(id, rat, bad)
+		_correct(id, rat, bad, pos)
+		inputs["bad"] += 1
 		return
+	inputs["ok"] += 1
 	var regen := Config.STAMINA_REGEN * dt + 2.0   # stamina refills no faster than it does
 	rat.stamina = clampf(float(pkt.get("s", rat.stamina)), 0.0, minf(rat.max_stamina(), rat.stamina + regen)) \
 		if pkt.get("s") is float else rat.stamina
@@ -232,12 +249,20 @@ func _send_kick(id: int, rat: Rat) -> void:
 			"sl": rat.slow, "sa": rat.stamina, "fl": rat.flying})
 
 
-func _correct(id: int, rat: Rat, reason: String) -> void:
+static func _v(p: Vector3) -> String:
+	return "-" if not p.is_finite() else "(%.1f, %.1f, %.1f)" % [p.x, p.y, p.z]
+
+
+func _correct(id: int, rat: Rat, reason: String, reported := Vector3.INF) -> void:
 	## A move the rat couldn't have made: back to where it last was legally.
-	rat.position = ac.good_position(id, rat)
+	var to := ac.good_position(id, rat)
+	var detail := "%s (reported %s, server had %s, put back to %s)" % [reason, _v(reported), _v(rat.position), _v(to)]
+	rat.position = to
+	if rat.blocked_at(rat.position):
+		rat.unstick()   # the ground there was filled in since: never put a rat back inside it
 	rat.vel = Vector3.ZERO
 	_send_kick(id, rat)
-	if ac.strike(id, reason):
+	if ac.strike(id, detail):
 		Log.warn("anti-cheat: removing peer %d (%s): %s" % [id, rat.display_name, ", ".join(ac.recent(id))])
 		Net.drop_peer(id, "Removed by the server: your game kept making moves that aren't possible here (%s). If you're not cheating, check your connection and join again." % reason)
 
@@ -363,7 +388,7 @@ func on_act(id: int, method: String, a: Array) -> void:
 				res = m.siege.turn(rat, clampi(a[0], -1, 1))
 		"fire":
 			res = m.siege.fire(rat)
-	if res is String and res != "" and res != "wait":
+	if res is String and res != "" and res != "wait" and Net.connected(id):
 		Net._s_notice.rpc_id(id, res)
 	_dirty_private[id] = true
 
@@ -379,6 +404,15 @@ func _on_micro(cell: Vector3i) -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_send_tick()
+	var us := Time.get_ticks_usec() - t0
+	perf[0] += us
+	perf[1] = maxi(perf[1], us)
+	perf[2] += 1
+
+
+func _send_tick() -> void:
 	_frame += 1
 	# corrections first, so they are on the wire before the next snapshot
 	for id: int in seats:
@@ -386,16 +420,16 @@ func _physics_process(_delta: float) -> void:
 		if is_instance_valid(rat) and (rat.net_dirty or Match.net_state(rat) != rat.net_pre):
 			rat.net_dirty = false
 			_send_kick(id, rat)
-	var peers := multiplayer.get_peers()   # once per tick
+	var peers := Net.sendable()   # once per tick: connected, and (WebSocket) not closing
 	if not seats.is_empty():
 		_flush_events(peers)
 		if _frame % SNAP_EVERY == 0:
 			var snap := var_to_bytes(_snapshot())   # encoded once, sent to every seat as-is
 			for id: int in seats:
-				if peers.has(id) and not Net.backed_up(id):   # (a backed-up WebSocket skips one; the next replaces it)
+				if peers.has(id) and Net.is_open(id) and not Net.backed_up(id):   # (a backed-up WebSocket skips one; the next replaces it)
 					Net._s_snap.rpc_id(id, snap)
 		for id: int in seats:
-			if (_frame % PRIVATE_EVERY == 0 or _dirty_private.has(id)) and peers.has(id):
+			if (_frame % PRIVATE_EVERY == 0 or _dirty_private.has(id)) and peers.has(id) and Net.is_open(id):
 				Net._s_private.rpc_id(id, _private(seats[id]))
 		_dirty_private.clear()
 	else:
@@ -411,7 +445,7 @@ func _clear_events() -> void:
 	_won = -1
 
 
-func _flush_events(peers: PackedInt32Array) -> void:
+func _flush_events(peers: Dictionary) -> void:
 	if _blocks.is_empty() and _micro.is_empty() and _gates.is_empty() and _fx.is_empty() and _toasts.is_empty() and _won < 0:
 		return
 	var mi: Array = []
@@ -422,7 +456,7 @@ func _flush_events(peers: PackedInt32Array) -> void:
 		gl.append([c, m.world.layered_gate(c)])
 	var pkt := var_to_bytes({"b": _blocks, "mi": mi, "g": gl, "fx": _fx, "to": _toasts, "won": _won})
 	for id: int in seats:
-		if peers.has(id):
+		if peers.has(id) and Net.is_open(id):   # (it may have closed during this tick)
 			Net._s_events.rpc_id(id, pkt)
 	_blocks = PackedInt32Array()
 	_micro = {}

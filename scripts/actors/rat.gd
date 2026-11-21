@@ -571,8 +571,36 @@ func overlaps_cell(c: Vector3i) -> bool:
 
 
 func unstick() -> void:
-	## Safety net: if terrain appeared on top of us, rise to the first free spot.
+	## Safety net: terrain appeared where we stand (someone built there, or our
+	## game heard about a block a moment late). Step to the nearest free spot:
+	## up onto the new block, or a little to one side. Only when none of those
+	## is free, rise to the first free spot above (in a tunnel under a hill
+	## that could be the hilltop, so it's the last resort).
+	if not blocked():
+		return
+	var base := position
+	var onto := floorf(base.y) + 1.0 - base.y   # stand on top of the block at our feet
+	var best := Vector3.INF
+	for off: Vector3 in UNSTICK_STEPS:
+		var o := Vector3(off.x, onto if off.y > 0.5 else (onto + 1.0 if off.y > 1.5 else 0.0), off.z)
+		if o.length() < best.length() and not blocked_at(base + o):
+			best = o
+	if best.is_finite():
+		position = base + best
+		return
 	var tries := 0
 	while blocked() and tries < 60:
 		position.y = floorf(position.y) + 1.0
 		tries += 1
+
+
+## unstick() candidates: x / z sideways, y = 0 (same height), 1 (onto the
+## block at our feet) or 2 (one higher still). The nearest free one wins.
+const UNSTICK_STEPS := [
+	Vector3(0, 1, 0), Vector3(0, 2, 0),
+	Vector3(0.4, 0, 0), Vector3(-0.4, 0, 0), Vector3(0, 0, 0.4), Vector3(0, 0, -0.4),
+	Vector3(0.8, 0, 0), Vector3(-0.8, 0, 0), Vector3(0, 0, 0.8), Vector3(0, 0, -0.8),
+	Vector3(0.6, 0, 0.6), Vector3(-0.6, 0, 0.6), Vector3(0.6, 0, -0.6), Vector3(-0.6, 0, -0.6),
+	Vector3(1.2, 0, 0), Vector3(-1.2, 0, 0), Vector3(0, 0, 1.2), Vector3(0, 0, -1.2),
+	Vector3(0.8, 1, 0), Vector3(-0.8, 1, 0), Vector3(0, 1, 0.8), Vector3(0, 1, -0.8),
+]

@@ -14,6 +14,7 @@ extends Node
 ##                                        the server behind a proxy such as Caddy instead)
 ##         [--status-port N]             (HTTP /status for the server list; default port + 1)
 ##         [--no-status]                 (no status page)
+##         [--log-every S]               (seconds between health lines in the log; default 60)
 ##
 ## or, from an exported build:  BurrowWars.exe --headless -- --server
 ## See docs/MULTIPLAYER.md for running a public server.
@@ -28,6 +29,10 @@ var _restart_in := -1.0
 var _status_t := 0.0
 var status_page: StatusServer
 var _started := 0
+var rounds := 0                  # rounds started since the server came up
+var _frames0 := 0                # physics frames at the last health line
+var _warm_task := -1             # the next round's map, being generated on a worker thread
+var _next_seed := 0
 
 
 static func parse_args() -> Dictionary:
@@ -44,7 +49,7 @@ static func parse_args() -> Dictionary:
 			if key in ["server", "free", "no-status"]:
 				out[key] = true
 			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map",
-					"transport", "tls-cert", "tls-key", "status-port"] and i + 1 < args.size():
+					"transport", "tls-cert", "tls-key", "status-port", "log-every"] and i + 1 < args.size():
 				out[key] = args[i + 1]
 				i += 1
 		i += 1
@@ -118,6 +123,7 @@ func _next() -> void:
 
 func _new_lobby() -> void:
 	_start(Match.lobby_settings({"server_name": _server_name()}))
+	_prepare_next()   # while everyone plays in the playground
 	m.lobby_left = _lobby_time()
 	Log.info("lobby: the next round starts %d s after someone is here" % int(m.lobby_left))
 
@@ -127,14 +133,38 @@ func _server_name() -> String:
 	return n if n != "" else "Burrow Wars server"
 
 
+func _goal() -> int:
+	return 9999 if bool(options.get("free", false)) else clampi(int(options.get("goal", 10)), 1, 250)
+
+
+func _prepare_next() -> void:
+	## Generate the next round's map on a worker thread while players wait
+	## (results, then the playground): building one takes over a second, and
+	## doing it when the round starts froze the whole server meanwhile.
+	if _warm_task != -1 or String(options.get("map", "")) != "":
+		return
+	_next_seed = randi_range(1, 999999)
+	var need := 0 if bool(options.get("free", false)) else MapGenerator.min_cheese(_goal())
+	_warm_task = WorkerThreadPool.add_task(MapGenerator.warm.bind(_next_seed, need), true, "next map")
+
+
+func _exit_tree() -> void:
+	if _warm_task != -1:
+		WorkerThreadPool.wait_for_task_completion(_warm_task)
+		_warm_task = -1
+
+
 func _settings() -> Dictionary:
 	var free := bool(options.get("free", false))
 	var skill := clampi(int(options.get("skill", 1)), 0, 2)
-	var seed_value := int(options.get("seed", 0))
+	var seed_value := int(options.get("seed", 0)) if rounds == 0 else 0   # --seed fixes the first map only
+	if seed_value <= 0 and _next_seed > 0:
+		seed_value = _next_seed   # the one generated in the background
+	_next_seed = 0
 	return {
 		"mode": "free" if free else "race",
 		"seed": seed_value if seed_value > 0 else randi_range(1, 999999),
-		"goal": 9999 if free else clampi(int(options.get("goal", 10)), 1, 250),
+		"goal": _goal(),
 		"map_file": String(options.get("map", "")),
 		"team_size": clampi(int(options.get("team-size", 4)), 1, 16),
 		"bot_rest": [7.0, 3.0, 0.0][skill],
@@ -143,8 +173,12 @@ func _settings() -> Dictionary:
 
 
 func _new_round() -> void:
+	if _warm_task != -1:
+		WorkerThreadPool.wait_for_task_completion(_warm_task)   # (normally finished long ago)
+		_warm_task = -1
 	var s := _settings()
 	_start(s)
+	rounds += 1
 	if not m.free_mode:
 		var size := int(s["team_size"])
 		for i in size * 2:
@@ -153,6 +187,7 @@ func _new_round() -> void:
 
 
 func _start(s: Dictionary) -> void:
+	var t0 := Time.get_ticks_msec()
 	if net != null:
 		net.queue_free()
 	if m != null:
@@ -164,6 +199,7 @@ func _start(s: Dictionary) -> void:
 	m.setup(s, false)
 	m.won.connect(func(team: int) -> void:
 		_restart_in = clampf(float(options.get("round-break", ROUND_BREAK)), 1.0, 300.0)
+		_prepare_next()
 		Log.info("round won by %s; next map in %d s" % [Match.TEAM_NAMES[team], int(_restart_in)]))
 	net = NetServer.new()
 	net.name = "NetServer"
@@ -171,6 +207,7 @@ func _start(s: Dictionary) -> void:
 	net.ac.kick_out = true   # a public server removes players who keep failing the movement checks
 	net.max_players = Net.MAX_CLIENTS
 	add_child(net)
+	Log.info("built %s in %d ms" % ["the playground" if m.lobby else "a new map", Time.get_ticks_msec() - t0])
 
 
 func _process(delta: float) -> void:
@@ -188,6 +225,36 @@ func _process(delta: float) -> void:
 		if _restart_in <= 0.0:
 			_next()
 	_status_t += delta
-	if _status_t >= 60.0:
+	if _status_t >= clampf(float(options.get("log-every", 60.0)), 5.0, 3600.0):
+		Log.info(health_line(_status_t))
 		_status_t = 0.0
-		Log.info("status: %d players, score %d-%d, t=%ds" % [net.player_count(), m.scores[0], m.scores[1], int(m.time)])
+
+
+func health_line(seconds: float) -> String:
+	## One line for the log: who's here and how the server is doing. Memory,
+	## objects and nodes that keep climbing over hours mean a leak; orphan
+	## nodes are nodes nobody freed. sim / net are the match's and the
+	## network's time per tick (60 ticks a second: together they must stay
+	## well under 16.7 ms); tps is the ticks actually run per second.
+	var bots := 0
+	for r in m.rats:
+		bots += 1 if r.is_bot else 0
+	var frames := Engine.get_physics_frames()
+	var tps := float(frames - _frames0) / maxf(0.001, seconds)
+	_frames0 = frames
+	var sim: Array = m.perf
+	var nt: Array = net.perf if net != null else [0, 0, 0]
+	var line := "health: %d players, %d bots, round %d (%s, %d-%d, t=%ds), mem %.1f MB, objects %d, nodes %d, orphans %d, sim %.2f ms avg / %.1f max, net %.2f ms avg / %.1f max, tps %.1f" % [
+		net.player_count(), bots, rounds, "lobby" if m.lobby else ("free" if m.free_mode else "race"), m.scores[0], m.scores[1],
+		int(m.time), Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
+		int(Performance.get_monitor(Performance.OBJECT_COUNT)), int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+		int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)),
+		float(sim[0]) / 1000.0 / maxf(1.0, float(sim[2])), float(sim[1]) / 1000.0,
+		float(nt[0]) / 1000.0 / maxf(1.0, float(nt[2])), float(nt[1]) / 1000.0, tps]
+	m.perf = [0, 0, 0]
+	if net != null:
+		net.perf = [0, 0, 0]
+		var n: Dictionary = net.inputs
+		line += ", reports %d ok / %d stale / %d after a server move / %d dropped / %d refused" % [n["ok"], n["stale"], n["moved"], n["dropped"], n["bad"]]
+		net.inputs = {"ok": 0, "dropped": 0, "stale": 0, "moved": 0, "bad": 0}
+	return line

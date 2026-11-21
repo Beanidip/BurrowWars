@@ -32,6 +32,7 @@ var world: VoxelWorld
 var settings: Dictionary = {}
 var free_mode := false
 var infinite := false               # nobody runs out of anything: scrap, materials, gadgets (the lobby cheat code)
+var perf := [0, 0, 0]               # step() timing for server health lines: [usec total, usec worst, steps]
 var infinite_next := false          # (lobby) the host entered the code: the match it starts is infinite
 var lobby := false                  # the playground everyone waits in before a hosted match
 var lobby_props: Dictionary = {}    # Vector3i -> true: playground fixtures nobody can break
@@ -265,6 +266,16 @@ func _physics_process(delta: float) -> void:
 
 
 func step(dt: float) -> void:
+	## One tick of the match, timed for the server's health lines.
+	var t0 := Time.get_ticks_usec()
+	_tick(dt)
+	var us := Time.get_ticks_usec() - t0
+	perf[0] += us
+	perf[1] = maxi(perf[1], us)
+	perf[2] += 1
+
+
+func _tick(dt: float) -> void:
 	time += dt
 	if replica:
 		# Only our own rat is simulated here; the server sends the rest.

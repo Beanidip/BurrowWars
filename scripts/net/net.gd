@@ -52,6 +52,8 @@ var _world_out: Dictionary = {}        # server: peer -> {"serial", "parts", "ne
 var _world_in: Dictionary = {}         # client: the welcome waiting for its map parts
 var _welcome_serial := 0
 var _stall: Dictionary = {}            # server: WebSocket peer -> seconds its send buffer has been nearly full
+var _holding := false                  # client: a welcome came; hold what follows until its session is up
+var _held: Array = []                  # client: [kind, payload] held meanwhile, in arrival order
 
 
 func _ready() -> void:
@@ -192,6 +194,8 @@ func close() -> void:
 	_world_out.clear()
 	_world_in = {}
 	_stall.clear()
+	_holding = false
+	_held.clear()
 
 
 # ---------------------------------------------------------------- joining: the map in parts
@@ -203,6 +207,8 @@ func send_welcome(id: int, info: Dictionary, world: Dictionary) -> void:
 	var parts: Array[PackedByteArray] = []
 	for at in range(0, bytes.size(), WORLD_PART):
 		parts.append(bytes.slice(at, at + WORLD_PART))
+	if not connected(id):
+		return   # (left while we were seating them)
 	_welcome_serial += 1
 	var w := info.duplicate()
 	w["ws"] = _welcome_serial
@@ -214,8 +220,30 @@ func send_welcome(id: int, info: Dictionary, world: Dictionary) -> void:
 
 
 func connected(id: int) -> bool:
-	## Server: is this peer on the line? (Tests drive NetServer without one.)
-	return role == Role.SERVER and multiplayer.get_peers().has(id)
+	## Server: can we send to this peer? (A WebSocket that is closing is still
+	## listed for a moment, but sending to it is an error.) Tests drive
+	## NetServer without any peers at all.
+	if role != Role.SERVER or not multiplayer.get_peers().has(id):
+		return false
+	return is_open(id)
+
+
+func sendable() -> Dictionary:
+	## Server: every peer that can be sent to right now (id -> true), once per tick.
+	var out := {}
+	if role != Role.SERVER:
+		return out
+	for id: int in multiplayer.get_peers():
+		if is_open(id):
+			out[id] = true
+	return out
+
+
+func is_open(id: int) -> bool:
+	if multiplayer.multiplayer_peer is WebSocketMultiplayerPeer:
+		var wp := (multiplayer.multiplayer_peer as WebSocketMultiplayerPeer).get_peer(id)
+		return wp != null and wp.get_ready_state() == WebSocketPeer.STATE_OPEN
+	return true
 
 
 func drop_peer(id: int, reason: String) -> void:
@@ -247,7 +275,7 @@ func _pump_world() -> void:
 		if not multiplayer.get_peers().has(id):
 			_world_out.erase(id)
 			continue
-		while int(job["next"]) < parts.size() and not backed_up(id, 0.5):
+		while int(job["next"]) < parts.size() and is_open(id) and not backed_up(id, 0.5):
 			var i := int(job["next"])
 			_s_world.rpc_id(id, int(job["serial"]), i, parts[i])
 			job["next"] = i + 1
@@ -342,9 +370,28 @@ func _c_aim(yaw: Variant, pitch: Variant) -> void:
 
 # ---------------------------------------------------------------- server -> client
 
+func release_held(c: Object) -> void:
+	## Client: the session for the latest welcome is up (its map applied):
+	## everything that arrived since the welcome - block changes, the
+	## server's corrections, the inventory - now goes to it, in order. Until
+	## then nothing is lost, and nothing reaches the previous round's session.
+	_holding = false
+	var held := _held
+	_held = []
+	for item: Array in held:
+		match String(item[0]):
+			"events": c.on_events(item[1])
+			"kick": c.on_kick(item[1])
+			"private": c.on_private(item[1])
+			"notice": c.on_notice(item[1])
+
+
 @rpc("authority", "call_remote", "reliable")
 func _s_welcome(info: Dictionary) -> void:
 	## The map follows in `parts` messages; joined fires once it's all here.
+	## From now on what the server sends belongs to this welcome: hold it.
+	_holding = true
+	_held.clear()
 	var parts := int(info.get("parts", 0))
 	var size := int(info.get("bytes", 0))
 	if parts <= 0 or size <= 0 or size > WORLD_MAX or parts != ceili(float(size) / WORLD_PART):
@@ -392,32 +439,42 @@ func _s_snap(data: PackedByteArray) -> void:
 	## Snapshots and events travel pre-encoded (the server encodes each once
 	## for all players). bytes_to_var never decodes objects.
 	var pkt: Variant = bytes_to_var(data)
-	if client != null and pkt is Dictionary:
+	if client != null and pkt is Dictionary and not _holding:   # (held: the welcome has a fresh one)
 		client.on_snap(pkt)
 
 
 @rpc("authority", "call_remote", "reliable")
 func _s_events(data: PackedByteArray) -> void:
 	var pkt: Variant = bytes_to_var(data)
-	if client != null and pkt is Dictionary:
+	if not (pkt is Dictionary):
+		return
+	if _holding:
+		_held.append(["events", pkt])
+	elif client != null:
 		client.on_events(pkt)
 
 
 @rpc("authority", "call_remote", "reliable")
 func _s_private(pkt: Dictionary) -> void:
-	if client != null:
+	if _holding:
+		_held.append(["private", pkt])
+	elif client != null:
 		client.on_private(pkt)
 
 
 @rpc("authority", "call_remote", "reliable")
 func _s_kick(pkt: Dictionary) -> void:
-	if client != null:
+	if _holding:
+		_held.append(["kick", pkt])
+	elif client != null:
 		client.on_kick(pkt)
 
 
 @rpc("authority", "call_remote", "reliable")
 func _s_notice(text: String) -> void:
-	if client != null:
+	if _holding:
+		_held.append(["notice", text])
+	elif client != null:
 		client.on_notice(text)
 
 

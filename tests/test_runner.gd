@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -5088,6 +5088,83 @@ func test_bulldozer_turns() -> void:
 	end(m)
 
 
+class HeldCatcher:
+	## Stands in for a NetClient: records what Net hands over.
+	var got: Array = []
+	func on_events(p: Variant) -> void: got.append(["events", p])
+	func on_kick(p: Variant) -> void: got.append(["kick", p])
+	func on_private(p: Variant) -> void: got.append(["private", p])
+	func on_notice(p: Variant) -> void: got.append(["notice", p])
+
+
+func test_held_until_ready() -> void:
+	## What the server sends after a welcome (block changes, corrections,
+	## inventory) is held until the new session is up, then handed over in
+	## order. Before, it was lost while the map downloaded, or went to the
+	## previous round's session: players' maps missed changes, and a lost
+	## correction made the server ignore their movement.
+	Net.close()
+	Net._s_welcome({"rat": 1, "ws": 41, "parts": 1, "bytes": 10})
+	Net._s_events(var_to_bytes({"b": PackedInt32Array([1, 2, 3, 4]), "n": 1}))
+	Net._s_kick({"k": 77})
+	Net._s_snap(var_to_bytes({"t": 1.0}))
+	Net._s_private({"scrap": 9})
+	Net._s_events(var_to_bytes({"n": 2}))
+	Net._s_notice("Too far")
+	check(Net._held.size() == 5, "everything after the welcome is held, except snapshots (the welcome has its own) (%d)" % Net._held.size())
+	var c := HeldCatcher.new()
+	Net.release_held(c)
+	var kinds: Array = []
+	for g: Array in c.got:
+		kinds.append(g[0])
+	check(kinds == ["events", "kick", "private", "events", "notice"], "handed to the new session in the order it came (%s)" % str(kinds))
+	check(int(c.got[1][1]["k"]) == 77 and int(c.got[3][1]["n"]) == 2, "with what it said")
+	Net._s_events(var_to_bytes({"n": 3}))
+	check(Net._held.is_empty() and c.got.size() == 5, "after that, nothing is held")
+	Net._s_welcome({"rat": 1, "ws": 42, "parts": 1, "bytes": 10})
+	Net._s_kick({"k": 78})
+	Net.close()
+	check(Net._held.is_empty() and not Net._holding, "leaving drops anything still held")
+
+
+func test_unstick_nearest() -> void:
+	## A block appearing inside a rat (someone built there) moves it to the
+	## nearest free spot, not up through whatever is above to open sky.
+	var m := new_match()
+	flat_arena(m, ARENA, 6)
+	# a one-block-high tunnel along X under 12 blocks of rock
+	for dx in range(-4, 5):
+		for dz in range(-2, 3):
+			for dy in range(0, 12):
+				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.STONE)
+	for dx in range(-4, 5):
+		m.world.set_block(ARENA + Vector3i(dx, 0, 0), Blocks.AIR)
+	var r := arena_rat(m, 0, "digger")
+	check(not r.blocked(), "the rat fits in the tunnel")
+	m.world.set_block(ARENA, Blocks.DIRT)   # built right where it stands
+	r.unstick()
+	check(not r.blocked() and absf(r.position.y - ARENA.y) < 0.01 and absf(r.position.x - (ARENA.x + 0.5)) <= 1.3,
+		"in a tunnel it steps aside along the tunnel (now at %s)" % str(r.position - Vector3(ARENA)))
+	# out in the open: up onto the new block
+	var o := ARENA + Vector3i(0, 12, 0)
+	for dx in range(-2, 3):
+		for dz in range(-2, 3):
+			for dy in range(0, 4):
+				m.world.set_block(o + Vector3i(dx, dy, dz), Blocks.AIR)
+	r.position = Vector3(o) + Vector3(0.5, 0, 0.5)
+	m.world.set_block(o, Blocks.DIRT)
+	r.unstick()
+	var moved := r.position.distance_to(Vector3(o) + Vector3(0.5, 0, 0.5))
+	check(not r.blocked() and moved <= 1.01, "in the open it steps just out of the block, aside or onto it (%.2f blocks)" % moved)
+	# boxed in completely: the old way out, straight up to the first free spot
+	r.position = Vector3(ARENA) + Vector3(2.5, 0, 0.5)
+	for dx in range(-4, 5):
+		m.world.set_block(ARENA + Vector3i(dx, 0, 0), Blocks.STONE)
+	r.unstick()
+	check(not r.blocked() and r.position.y >= ARENA.y + 12.0, "sealed in rock, it still gets out (up to y+%.0f)" % (r.position.y - ARENA.y))
+	end(m)
+
+
 func test_map_in_parts() -> void:
 	## Joining: the map follows the welcome in parts, is put back together,
 	## and parts from an older welcome (a new round started) are ignored.
@@ -5132,6 +5209,7 @@ func test_map_in_parts() -> void:
 	# addresses
 	check(Net.is_ws_url("wss://bw.example.org/play") and Net.is_ws_url(" WS://1.2.3.4:9000") and not Net.is_ws_url("1.2.3.4:24565"),
 		"ws:// and wss:// addresses are recognised")
+	Net.close()
 	check(Net.ws_url_for("bw.example.org", 24565) == "wss://bw.example.org:24565" and Net.ws_url_for("127.0.0.1", 9) == "ws://127.0.0.1:9"
 		and Net.ws_url_for("2001:db8::1", 9) == "wss://[2001:db8::1]:9", "a bare address becomes wss:// (ws:// to this machine) where only WebSocket exists")
 
