@@ -62,7 +62,7 @@ func register(cell: Vector3i, kind: int, rat: Rat) -> Machine:
 	mc.cell = cell
 	mc.team = rat.team
 	mc.owner = rat.id
-	mc.yaw = rat.yaw
+	mc.yaw = rat.yaw if kind != Blocks.DOZER else snappedf(rat.yaw, PI / 2.0)   # a bulldozer faces a grid side
 	machines[cell] = mc
 	return mc
 
@@ -172,8 +172,22 @@ func aim(rat: Rat, yaw: float, pitch: float) -> void:
 	var mc := _machine_of(rat)
 	if mc == null:
 		return
+	if mc.kind == Blocks.DOZER:
+		return   # the bulldozer is turned with turn(), not by looking around
 	mc.yaw = yaw
 	mc.pitch = clampf(pitch, -0.15, 1.2)
+
+
+func turn(rat: Rat, step: int) -> String:
+	## Bulldozer: a quarter turn left (-1) or right (+1). The pilot's A / D.
+	if m.remote != null:
+		return m.remote.act("turn_machine", [step])
+	var mc := _machine_of(rat)
+	if mc == null or mc.kind != Blocks.DOZER or step == 0:
+		return ""
+	mc.yaw = snappedf(mc.yaw, PI / 2.0) - signf(step) * PI / 2.0   # yaw grows to the left
+	m.fx.emit("dozer_turn", Vector3(mc.cell) + Vector3(0.5, 0.5, 0.5), null)
+	return ""
 
 
 static func ball_power(id: int) -> int:

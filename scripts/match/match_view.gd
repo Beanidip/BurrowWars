@@ -373,9 +373,9 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			# the flash bulges out of whatever the grenade stuck to (up off a
 			# floor, out of a wall); in mid-air it's centred on the grenade
 			var out := open_side(pos)
-			_sprite("impulse", pos + out * IMPULSE_LIFT, 0.95)
+			_sprite("impulse", pos + out * IMPULSE_LIFT, IMPULSE_FLASH)
 			_shockwave(pos, Config.IMPULSE_RADIUS, Color(0.5, 0.8, 1.0))
-			_burst(pos + out * 0.3, Color(0.55, 0.85, 1.0), 22, 9.0)      # the push, flying outward
+			_burst(pos + out * 0.2, Color(0.55, 0.85, 1.0), 12, 8.0)      # the push, flying outward
 		"crumb":
 			crumbs.add(pos)
 		"tele_place":
@@ -416,6 +416,8 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sprite("dust", pos - Vector3(0, 0.3, 0), 0.6)
 		"crane", "dozer":
 			_sound("siege_grind", pos, 0.9 if kind == "dozer" else 1.2, -2.0)
+		"dozer_turn":
+			_sound("siege_grind", pos, 0.75, -6.0)
 		"ability", "buy":
 			_sound("discovery_chime", pos, 1.0, -3.0)
 		"alarm":
@@ -425,7 +427,8 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 			_sprite("poof", pos, 0.7)
 
 
-const IMPULSE_LIFT := 1.0   # blocks the impulse flash sits out from the surface it burst on
+const IMPULSE_FLASH := 0.48   # size of the impulse grenade's pixel flash (1 = as drawn)
+const IMPULSE_LIFT := 0.5     # blocks the flash sits out from the surface it burst on
 
 
 func open_side(pos: Vector3) -> Vector3:

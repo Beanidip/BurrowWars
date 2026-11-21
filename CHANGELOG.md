@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased - Bulldozer turning, effects volume, balance chart, asset lists
+
+| Change | Files |
+|---|---|
+| **Bulldozer:** A / D (or the left stick) turn it a quarter at a time while you pilot it, and the view swings round behind the blade; it swings smoothly to the new heading. Looking around no longer turns it (before, the blade followed the camera, snapping at the diagonals, which was easy to miss). Works online | `match/siege.gd`, `actors/player_controller.gd`, `net/net_server.gd`, `match/contraption_view.gd`, `match/match_view.gd`, `match/class_defs.gd`, `ui/main_menu.gd` |
+| **Effects volume** at the top of the pause menu, next to Music, kept in step with Settings > Audio (renamed "Effects volume" there too). Moving either plays a short chime so you hear the level | `ui/hud.gd`, `ui/settings_panel.gd` |
+| Impulse Grenade: the pixel flash is half the size, with fewer particles | `match/match_view.gd` |
+| **Balance chart** generated from the code: every price, quantity, class stat, block toughness, timer, speed, radius and limit, what it does, what it means in play, and the file and line to change. `python3 tools/balance_sheet.py` rebuilds it (and a spreadsheet version) after any change | `tools/balance_sheet.py`, `docs/BALANCE.md`, `docs/balance.csv` |
+| **Asset lists** for the art and sound redo: every picture and sound, what it is, where and when it shows or plays, sizes and lengths, which are placeholders, events that borrow another event's sound, and sounds the game doesn't have yet | `docs/ART_TO_MAKE.md`, `docs/SOUND_LIST.md`, `docs/ASSET_LICENSES.md`, `docs/ART_SPEC.md` |
+
 ## Unreleased - Siege and workshop tuning
 
 | Change | Files |

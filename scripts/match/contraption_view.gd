@@ -162,7 +162,9 @@ func _process(delta: float) -> void:
 				cable.rotation = Vector3(-mc.theta, mc.yaw, 0)
 			Blocks.DOZER:
 				var f := SiegeSystem.facing(mc)
-				(p["turret"] as Node3D).rotation.y = atan2(-float(f.x), -float(f.z))
+				var body: Node3D = p["turret"]
+				# swing round to the new heading rather than snapping
+				body.rotation.y = lerp_angle(body.rotation.y, atan2(-float(f.x), -float(f.z)), minf(1.0, delta * 12.0))
 				(p["blade"] as Node3D).position.z = -0.5 - mc.recoil * 0.45
 	for uid: int in _machines.keys():
 		if not alive.has(uid):

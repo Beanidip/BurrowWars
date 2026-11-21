@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -2683,8 +2683,8 @@ func test_crane_and_dozer() -> void:
 	run(m, Config.DOZER_COOLDOWN + 0.05)
 	m.siege.fire(r)
 	check(m.world.get_cell(cells[0]) == Blocks.STONE and int(m.world.damage[cells[0]]) == Config.DOZER_HIT, "stone needs two rams")
-	m.siege.aim(r, 0.0, 0.0)
-	check(SiegeSystem.facing(mc) == Vector3i(0, 0, -1), "blade turns to face where the driver looks")
+	m.siege.turn(r, -1)
+	check(SiegeSystem.facing(mc) == Vector3i(0, 0, -1), "the driver turns the blade (a left turn: +X to -Z)")
 	end(m)
 
 
@@ -4234,7 +4234,7 @@ func test_display_and_audio_settings() -> void:
 		if n is Label:
 			texts.append((n as Label).text)
 		stack.append_array(n.get_children())
-	check(texts.has("Sound effects volume") and texts.has("Frame rate limit") and texts.has("Display"),
+	check(texts.has("Effects volume") and texts.has("Frame rate limit") and texts.has("Display"),
 		"the settings panel has the display and audio rows")
 	panel.queue_free()
 	for k: String in keep:
@@ -5023,6 +5023,69 @@ func test_workshop_categories() -> void:
 	for item: Dictionary in ClassDefs.SHOP:
 		if item["kind"] == "gear":
 			check(item["cat"] == "Gear", "%s (gear) is under Gear" % item["name"])
+
+
+func test_bulldozer_turns() -> void:
+	## A / D turn the bulldozer a quarter at a time; looking around doesn't.
+	var setup := siege_setup("dozer")
+	var m: Match = setup[0]
+	var r: Rat = setup[1]
+	var mc: SiegeSystem.Machine = setup[2]
+	check(SiegeSystem.facing(mc) == Vector3i(1, 0, 0), "placed facing the way its owner looked (+X)")
+	m.siege.aim(r, 0.0, 0.0)
+	check(SiegeSystem.facing(mc) == Vector3i(1, 0, 0), "looking around doesn't turn it")
+	m.siege.turn(r, 1)
+	check(SiegeSystem.facing(mc) == Vector3i(0, 0, 1), "a right turn: +X becomes +Z")
+	m.siege.turn(r, 1)
+	m.siege.turn(r, 1)
+	check(SiegeSystem.facing(mc) == Vector3i(0, 0, -1), "two more: facing -Z")
+	m.siege.turn(r, -1)
+	check(SiegeSystem.facing(mc) == Vector3i(-1, 0, 0), "a left turn: -Z becomes -X")
+	# rams the way it now faces
+	var old_ahead := ARENA + SiegeSystem.facing(mc)
+	m.siege.turn(r, -1)
+	var ahead := ARENA + SiegeSystem.facing(mc)
+	check(SiegeSystem.facing(mc) == Vector3i(0, 0, 1), "another left: +Z")
+	m.world.set_block(ahead, Blocks.DIRT)
+	m.world.set_block(old_ahead, Blocks.DIRT)
+	m.siege.fire(r)
+	check(m.world.get_cell(ahead) == Blocks.AIR or m.world.damage.has(ahead), "the blade hits what's in front after turning")
+	check(m.world.get_cell(old_ahead) == Blocks.DIRT and not m.world.damage.has(old_ahead), "and not where it used to face")
+	# the pilot's A / D, through the real controls
+	var ctl := PlayerController.new()
+	ctl.m = m
+	ctl.rat = r
+	add_child(ctl)
+	ctl.yaw = mc.yaw   # (taking the controls lines the view up behind the machine)
+	var before := SiegeSystem.facing(mc)
+	Input.action_press("move_right")
+	ctl._physics_process(DT)
+	Input.action_release("move_right")
+	ctl._physics_process(DT)
+	check(SiegeSystem.facing(mc) != before, "D at the controls turns it (%s -> %s)" % [str(before), str(SiegeSystem.facing(mc))])
+	var fwd := Vector3(-sin(ctl.yaw), 0, -cos(ctl.yaw))
+	check(Vector3(SiegeSystem.facing(mc)).dot(fwd) > 0.9, "and the view swings round behind the blade")
+	remove_child(ctl)
+	ctl.free()
+	# a player online asks the server
+	var ns := NetServer.new()
+	ns.m = m
+	ns.seats[12] = r
+	ns.ac.log_violations = false
+	before = SiegeSystem.facing(mc)
+	ns.on_act(12, "turn_machine", [-1])
+	check(SiegeSystem.facing(mc) != before, "online, the server turns it on request")
+	ns.on_act(12, "turn_machine", ["left"])
+	ns.free()
+	# other machines still aim with the view
+	end(m)
+	setup = siege_setup("cannon")
+	m = setup[0]
+	r = setup[1]
+	mc = setup[2]
+	m.siege.aim(r, 1.0, 0.3)
+	check(absf(mc.yaw - 1.0) < 0.001, "a cannon still turns with the view")
+	end(m)
 
 
 func test_map_in_parts() -> void:

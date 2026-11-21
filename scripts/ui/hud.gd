@@ -940,19 +940,26 @@ func _equip(g: String) -> void:
 
 func _fill_pause(v: VBoxContainer) -> void:
 	_dialog_header(v, "Paused" if not m.networked else "Menu (the online game keeps going)", Inputs.key_name("pause"))
-	var music_label := UiKit.label("Music volume  %d%%" % roundi(float(Config.get_value("music_volume")) * 100.0), 17, UiKit.BRASS)
-	var music := UiKit.slider(0.0, 1.0, 0.05, float(Config.get_value("music_volume")), func(value: float) -> void:
-		Config.set_value("music_volume", value)
-		Config.save()
-		Sfx.set_music_volume(value)
-		music_label.text = "Music volume  %d%%" % roundi(value * 100.0))
-	music.custom_minimum_size = Vector2(300, 0)
-	v.add_child(UiKit.row(music_label, music))
-	var sc := UiKit.scroll(390)
-	var body: VBoxContainer = sc[1]
-	v.add_child(sc[0])
+	# the two volumes people reach for most, at the top (the same settings as
+	# Audio below, which they keep in step)
 	var settings := SettingsPanel.new()
 	settings.changed.connect(ctl.apply_settings)
+	for row: Array in [["Music volume", "music_volume"], ["Effects volume", "sfx_volume"]]:
+		var key: String = row[1]
+		var title: String = row[0]
+		var label := UiKit.label("%s  %d%%" % [title, roundi(float(Config.get_value(key)) * 100.0)], 17, UiKit.BRASS)
+		var slider := UiKit.slider(0.0, 1.0, 0.05, float(Config.get_value(key)), func(value: float) -> void:
+			settings._store(key, value)
+			label.text = "%s  %d%%" % [title, roundi(value * 100.0)]
+			var twin: HSlider = settings.sliders.get(key)
+			if twin != null:
+				twin.set_value_no_signal(value))
+		slider.custom_minimum_size = Vector2(300, 0)
+		slider.set_meta("volume", key)
+		v.add_child(UiKit.row(label, slider))
+	var sc := UiKit.scroll(360)
+	var body: VBoxContainer = sc[1]
+	v.add_child(sc[0])
 	body.add_child(settings)
 	body.add_child(UiKit.label("How to play", 18, UiKit.BRASS))
 	var pad := UiKit.wrapped(Inputs.pad_help(), 14, UiKit.BRASS.lightened(0.3))
@@ -988,7 +995,7 @@ func _fill_pause(v: VBoxContainer) -> void:
 				quick_load(), Vector2(150, 40)))
 	if acts.get_child_count() > 0:
 		v.add_child(acts)
-		(sc[0] as Control).custom_minimum_size.y = 340   # room for the extra row
+		(sc[0] as Control).custom_minimum_size.y = 310   # room for the extra row
 	var h := HBoxContainer.new()
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 12)

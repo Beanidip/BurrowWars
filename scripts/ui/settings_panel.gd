@@ -7,6 +7,8 @@ signal changed
 var _waiting_action := ""
 var _waiting_button: Button
 var _notice: Label
+var sliders: Dictionary = {}     # Config key -> its HSlider (so other controls can keep them in step)
+var _preview_t := 0
 
 
 func _ready() -> void:
@@ -27,7 +29,7 @@ func _ready() -> void:
 	add_child(UiKit.label("Audio", 18, UiKit.BRASS))
 	_slider_row("Master volume", "master_volume", 0.0, 1.0, 0.01)
 	_slider_row("Music volume", "music_volume", 0.0, 1.0, 0.01)
-	_slider_row("Sound effects volume", "sfx_volume", 0.0, 1.0, 0.01)
+	_slider_row("Effects volume", "sfx_volume", 0.0, 1.0, 0.01)
 	add_child(UiKit.label("Mouse & camera", 18, UiKit.BRASS))
 	_slider_row("Mouse sensitivity", "mouse_sensitivity", 0.0005, 0.008, 0.0001)
 	_slider_row("Field of view", "fov", 60.0, 110.0, 1.0)
@@ -77,6 +79,7 @@ func _ready() -> void:
 
 func _slider_row(text: String, key: String, lo: float, hi: float, step: float) -> void:
 	var s := UiKit.slider(lo, hi, step, float(Config.get_value(key)), func(v: float) -> void: _store(key, v))
+	sliders[key] = s
 	add_child(UiKit.row(UiKit.label(text, 15), s))
 
 
@@ -96,9 +99,20 @@ func _store(key: String, value: Variant) -> void:
 	Config.apply_audio()
 	if key == "music_volume":
 		Sfx.set_music_volume(float(value))
+	if key == "sfx_volume" or key == "master_volume":
+		preview_sound()
 	if key in ["window_mode", "vsync", "max_fps", "render_scale"]:
 		Config.apply_display()
 	changed.emit()
+
+
+func preview_sound() -> void:
+	## A short chime while an effects slider moves, so you hear the new level
+	## (at most a few a second while dragging).
+	var now := Time.get_ticks_msec()
+	if now - _preview_t > 180:
+		_preview_t = now
+		Sfx.play("discovery_chime", -4.0, 1.2, 0.0)
 
 
 func _begin_rebind(action: String, button: Button) -> void:

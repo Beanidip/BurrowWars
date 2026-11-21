@@ -210,6 +210,23 @@ func _run() -> void:
 	check(fits((hud._dialog as Control).get_child(1) as Control), "pause menu fits 1280x800")
 	check(small_text(hud._dialog).is_empty(), "pause menu text is at least %d px %s" % [MIN_TEXT, str(small_text(hud._dialog))])
 	check(button(hud._dialog, "Close [B]") != null, "the close button names B")
+	# effects volume at the top of the pause menu, kept in step with Settings > Audio
+	var fx_slider: HSlider = null
+	for c in hud._dialog.find_children("*", "HSlider", true, false):
+		if c.get_meta("volume", "") == "sfx_volume":
+			fx_slider = c
+	check(fx_slider != null, "the pause menu has an effects volume slider")
+	if fx_slider != null:
+		var was := float(Config.get_value("sfx_volume"))
+		fx_slider.value = 0.25
+		var bus := AudioServer.get_bus_index("SFX")
+		check(absf(float(Config.get_value("sfx_volume")) - 0.25) < 0.01 and absf(db_to_linear(AudioServer.get_bus_volume_db(bus)) - 0.25) < 0.02,
+			"moving it turns the effects down (bus at %.2f)" % db_to_linear(AudioServer.get_bus_volume_db(bus)))
+		var twin: HSlider = null
+		for c in hud._dialog.find_children("*", "SettingsPanel", true, false):
+			twin = (c as SettingsPanel).sliders.get("sfx_volume")
+		check(twin != null and absf(twin.value - 0.25) < 0.01, "and the Effects volume in Settings below moves with it")
+		fx_slider.value = was
 	await shot("pad_02_pause")
 	await pad(JOY_BUTTON_B)
 	check(hud._dialog == null and not get_tree().paused and focus() == null, "B resumes and lets go of the focus")

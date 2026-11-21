@@ -3,6 +3,9 @@
 What the game expects from every art and sound file, so the redone assets drop in **without code
 changes**. Keep the file names and layouts below. The game finds assets by name.
 
+The full to-do lists are [`ART_TO_MAKE.md`](ART_TO_MAKE.md) (every picture, what it is, where it
+shows) and [`SOUND_LIST.md`](SOUND_LIST.md) (every sound, when it plays, what it should be like).
+
 General rules:
 - **Pixel art.** Everything is drawn with nearest-neighbour filtering. Draw at the sizes given; don't
   pre-scale.

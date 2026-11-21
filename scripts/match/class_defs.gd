@@ -81,7 +81,7 @@ const SHOP := [
 	{"id": "crane", "name": "Wrecking Crane", "kind": "gadget", "qty": 1, "cost": 30, "max": 2, "cat": "Siege",
 		"desc": "T to pilot it, mouse to turn, left mouse to pump the swing. The ball smashes through block after block; the faster it swings, the harder it hits."},
 	{"id": "dozer", "name": "Bulldozer", "kind": "gadget", "qty": 1, "cost": 28, "max": 2, "cat": "Siege",
-		"desc": "T to pilot it, left mouse to ram the blade: 3 wide, 2 high. Has no engine - feed it conveyors."},
+		"desc": "T to pilot it, A / D to turn it, left mouse to ram the blade: 3 wide, 2 high. Has no engine - feed it conveyors."},
 	{"id": "ice", "name": "Ice x4", "kind": "mat", "qty": 4, "cost": 3, "cat": "Construction",
 		"desc": "Slippery block. Slot 3, place with right mouse."},
 	{"id": "jetpack", "name": "Jetpack", "kind": "gear", "qty": 1, "cost": 14, "cat": "Gear",

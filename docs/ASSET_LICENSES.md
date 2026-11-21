@@ -6,8 +6,10 @@ content that players see or hear, so record that too. The in-game credits
 (`scripts/ui/credits.gd`, `TEAM` and `ASSETS`) must name every third-party source listed here.
 
 Status key:
-- **Legacy placeholder:** your assets from Burrow Wars v0.15.1. They are being redone and must
-  not ship as they are.
+- **Legacy placeholder:** your assets from Burrow Wars v0.15.1. You told me (2026-11-21) the
+  visual ones came from free-licence sources or AI generation; the exact sources aren't recorded.
+  They are being redone (see `ART_TO_MAKE.md` and `SOUND_LIST.md`) and shouldn't ship as they are
+  unless each source and licence is written down here.
 - **Project-made:** drawn or synthesised by this repository's own `tools/` scripts. Part of the game.
 - **Third-party:** someone else's work under the licence given.
 

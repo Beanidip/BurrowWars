@@ -358,6 +358,9 @@ func on_act(id: int, method: String, a: Array) -> void:
 				res = m.siege.try_operate(rat, a[0])
 		"release":
 			m.siege.release(rat)
+		"turn_machine":
+			if _ok(a, [TYPE_INT]):
+				res = m.siege.turn(rat, clampi(a[0], -1, 1))
 		"fire":
 			res = m.siege.fire(rat)
 	if res is String and res != "" and res != "wait":

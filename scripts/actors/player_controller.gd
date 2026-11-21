@@ -390,6 +390,13 @@ func _physics_process(_delta: float) -> void:
 		rat.jump_held = false
 		rat.down_held = false
 		m.siege.aim(rat, yaw, pitch)
+		var mc := machine()
+		if mc != null and mc.kind == Blocks.DOZER:
+			# A / D (or the stick) turn the bulldozer a quarter, and the view swings round with it
+			var step := (1 if Input.is_action_just_pressed("move_right") else 0) - (1 if Input.is_action_just_pressed("move_left") else 0)
+			if step != 0:
+				m.siege.turn(rat, step)
+				yaw -= float(step) * PI / 2.0
 		if firing:
 			m.siege.fire(rat)
 		return
@@ -541,8 +548,12 @@ func _update_tool_visuals() -> void:
 	var mc := machine()
 	if mc != null:
 		var names := {Blocks.CANNON: "Scrap Cannon", Blocks.CRANE: "Wrecking Crane", Blocks.DOZER: "Bulldozer"}
-		tool_text = "%s  -  left mouse: %s   [%s] leave%s" % [names[mc.kind],
-			{Blocks.CANNON: "fire", Blocks.CRANE: "pump the swing", Blocks.DOZER: "ram the blade"}[mc.kind],
+		var turn := ""
+		if mc.kind == Blocks.DOZER:
+			turn = "   [%s / %s] turn" % ["Left stick" if Inputs.using_pad else Inputs.key_name("move_left"), "" if Inputs.using_pad else Inputs.key_name("move_right")]
+			turn = turn.replace(" / ]", "]")
+		tool_text = "%s  -  %s: %s%s   [%s] leave%s" % [names[mc.kind], Inputs.key_name("dig"),
+			{Blocks.CANNON: "fire", Blocks.CRANE: "pump the swing", Blocks.DOZER: "ram the blade"}[mc.kind], turn,
 			Inputs.key_name("interact"), "   (reloading %.1fs)" % mc.cd if mc.cd > 0.3 else ""]
 		return
 	if ui_open:
