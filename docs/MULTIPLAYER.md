@@ -219,7 +219,9 @@ The report ends in **PASS** or lists the problems. What a healthy run looked lik
 - no errors, no lost connections, no failed joins, and no honest test player removed
 
 Memory that keeps climbing at the same rate, ticks below 60, or players removed by anti-cheat are
-the things to look into before strangers play.
+the things to look into before strangers play. Give it at least 30 minutes: the process total
+creeps up for the first quarter of an hour or so as it settles, so a shorter run only notes it and
+judges leaks by the game's own memory and object counts.
 
 ### Listing it in the game
 

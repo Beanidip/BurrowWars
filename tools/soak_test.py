@@ -151,8 +151,22 @@ def report(samples, exits, server_alive, minutes, players):
         problems.append("a test player reported problems (see its summary)")
     grow = slope_per_hour([(s[0], s[1]) for s in warm])
     obj_grow = slope_per_hour([(h[0], h[5]) for h in hwarm])
-    if grow > 30.0:
-        problems.append(f"server memory keeps growing ({grow:.0f} MB/hour after warm-up)")
+    gmem_grow = slope_per_hour([(h[0], h[4]) for h in hwarm])
+    # The process total (what the OS sees) climbs for a while as the allocator and worker threads
+    # settle, then levels off, so only its growth over the second half of a long run counts.
+    # Godot's own memory and object counts show a leak sooner, so those are judged on any run.
+    late = [s for s in samples if samples and s[0] >= samples[-1][0] / 2]
+    late_grow = slope_per_hour([(s[0], s[1]) for s in late])
+    notes = []
+    if gmem_grow > 10.0:
+        problems.append(f"the game's own memory keeps growing ({gmem_grow:.0f} MB/hour after warm-up)")
+    if hwarm and obj_grow > 600.0 and hwarm[-1][5] > hwarm[0][5] + 200:
+        problems.append(f"objects keep piling up ({obj_grow:.0f}/hour after warm-up)")
+    if minutes >= 30 and late_grow > 30.0:
+        problems.append(f"server memory still growing in the second half ({late_grow:.0f} MB/hour)")
+    elif late_grow > 30.0:
+        notes.append(f"process memory was still settling ({late_grow:+.0f} MB/hour in the second half); "
+                     "a run of 30 minutes or more shows whether it levels off")
     if hwarm and min(h[12] for h in hwarm) < 55.0:
         problems.append(f"the server fell behind (only {min(h[12] for h in hwarm):.0f} ticks a second at worst; 60 is on time)")
     # a node caught mid-cleanup can show as an orphan for a moment; only a lasting or growing count is a leak
@@ -162,15 +176,17 @@ def report(samples, exits, server_alive, minutes, players):
     lines = [f"# Soak test report", "",
              f"{minutes:g} minutes, a 16v16 WebSocket dedicated server (goal {os.environ.get('SOAK_GOAL', '3')}, 10 s lobby, 5 s between rounds), "
              f"{players} scripted players joining, playing, leaving and rejoining.", "",
-             f"**Result: {'PASS' if not problems else 'PROBLEMS'}**" + ("" if not problems else ": " + "; ".join(problems)), "",
+             f"**Result: {'PASS' if not problems else 'PROBLEMS'}**" + ("" if not problems else ": " + "; ".join(problems)), ""] \
+        + [f"Note: {n}" for n in notes] + ([""] if notes else []) + [
+
              "## Server", "",
              f"- Alive to the end: {'yes' if server_alive else 'NO'}",
              f"- Rounds started: {rounds} ({wins} won, the rest still running or cut short by the end)",
              f"- Players seated: {seated}, players left: {left}",
              f"- Memory (process): start {rss[0]:.0f} MB, peak {max(rss):.0f} MB, end {rss[-1]:.0f} MB; "
-             f"growth after the first 5 minutes {grow:+.1f} MB/hour" if rss else "- Memory: no samples",
+             f"growth after the first 5 minutes {grow:+.1f} MB/hour, in the second half {late_grow:+.1f} MB/hour" if rss else "- Memory: no samples",
              f"- Godot memory / objects / nodes (health lines): first {health[0][4]:.1f} MB / {int(health[0][5])} / {int(health[0][6])}, "
-             f"last {health[-1][4]:.1f} MB / {int(health[-1][5])} / {int(health[-1][6])}; objects {obj_grow:+.0f}/hour after warm-up; "
+             f"last {health[-1][4]:.1f} MB / {int(health[-1][5])} / {int(health[-1][6])}; after warm-up {gmem_grow:+.1f} MB/hour and objects {obj_grow:+.0f}/hour; "
              f"orphan nodes max {int(max(h[7] for h in health))}" if health else "- No health lines",
              f"- CPU: average {sum(cpu) / len(cpu):.0f}% of one core, peak {max(cpu):.0f}% (30 s intervals)" if cpu else "- CPU: no samples",
              f"- Time per tick (60 a second, so 16.7 ms is the budget): match {sum(h[8] for h in health) / len(health):.2f} ms on average (worst {max(h[9] for h in health):.1f} ms), "
