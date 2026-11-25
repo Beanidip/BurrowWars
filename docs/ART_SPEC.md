@@ -141,7 +141,8 @@ name, so once you replace a sound, remove its line from that script.
 
 ## Music: `assets/music/`
 
-- Today there's one looping track, `clockwork_colony.wav`, played from the menu onward.
+- Title theme `sneak_rat.ogg` (looping), and an in-game playlist (`mr_bones.mp3`, `ratcano_run.ogg`,
+  `rat_grass_valley.mp3`) that plays in turn: see `docs/SOUND_LIST.md` section 4.
 - For the redo, prefer **Ogg Vorbis** (`.ogg`) for music: much smaller than WAV, and it loops cleanly.
 - If you add separate tracks (menu, match, victory), tell me the file names and I'll wire them up.
 - The same tracks can go into the Steam soundtrack add-on.

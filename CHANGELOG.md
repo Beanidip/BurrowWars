@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Music
+
+| Change | Files |
+|---|---|
+| New music: **Sneak Rat** is the title theme (looping in the menus); in the lobby and matches **Mr Bones**, **Ratcano Run** and **Rat Grass Valley** play in turn, round and round, carrying on between matches. The WAVs are converted to Ogg Vorbis (Ratcano Run 8.2 MB -> 1.1 MB). The old placeholder track is gone | `assets/music/`, `core/sfx.gd`, `core/main.gd` |
+
 ## Unreleased - Lava Rise flows again
 
 | Change | Files |

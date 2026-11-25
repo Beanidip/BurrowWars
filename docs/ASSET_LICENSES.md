@@ -26,7 +26,7 @@ Status key:
 | `assets/fx/*.png` (all effect sheets: explosions, block breaks, hit sparks, dust, splashes, jetpack, teleport, impulse...) | Third-party | [pixelfx](https://github.com/patch-gg/pixelfx) by Patch and Hugo Duprez, rendered by `tools/import_fx.py`, some recoloured | MIT (`assets/fx/LICENSE-pixelfx.txt`, shown in Credits) | Per pixelfx's README: procedurally drawn effects; check before launch | **Yes** (kept) |
 | `assets/sfx/splash.wav`, `sizzle.wav`, `squeak.wav`, `pop.wav`, `toot.wav`, `alarm.wav`, `windup.wav`, `teleport.wav`, `impulse.wav` | Project-made | `tools/make_sfx.py` (synthesised) | Part of the game | No | Placeholder until the redo |
 | `assets/sfx/*.wav` (all others: mining, breaking, bonk, place, fanfares, chime, munch, jetpack, siege, TNT) | Legacy placeholder | v0.15.1 | Unknown | Unknown | **No: being redone** |
-| `assets/music/clockwork_colony.wav` | Legacy placeholder | v0.15.1 | Unknown | Unknown | **No: being redone** |
+| `assets/music/sneak_rat.ogg`, `mr_bones.mp3`, `ratcano_run.ogg`, `rat_grass_valley.mp3` | Developer's own | Made for Burrow Wars by the developer (the WAVs converted to Ogg Vorbis for size) | Owned by the developer | Developer to confirm how they were made (any tools or samples with their own terms) | **Yes** |
 | `assets/shaders/fx_hue.gdshader` | Project-made | This repository | Part of the game | No | Yes |
 | Default UI font | Third-party | Godot's built-in default font (bundled with the engine) | Covered by Godot's third-party notices (shown in Credits) | No | Yes |
 | Godot Engine and its third-party components | Third-party | godotengine.org | MIT plus the component licences (shown in Credits) | No | Yes |

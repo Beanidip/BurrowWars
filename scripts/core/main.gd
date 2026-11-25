@@ -24,7 +24,6 @@ func _ready() -> void:
 		dedicated.options = args
 		add_child(dedicated)
 		return
-	Sfx.play_music("res://assets/music/clockwork_colony.wav")
 	show_menu()
 
 
@@ -43,6 +42,7 @@ func show_menu(message := "") -> void:
 	_clear()
 	if Net.is_online():
 		Net.close()
+	Sfx.title_theme()
 	menu = MainMenu.new()
 	menu.start_requested.connect(start_match)
 	add_child(menu)
@@ -70,6 +70,7 @@ func _launch(settings: Dictionary) -> void:
 	## Put up the loading screen, generate the map on a worker thread (so the
 	## cheese keeps spinning), then build the session behind the screen.
 	_clear()
+	Sfx.game_music()   # (from the loading screen on)
 	var me := _launches
 	var cover := _show_cover()
 	await get_tree().process_frame
@@ -127,6 +128,7 @@ func _on_joined(info: Dictionary) -> void:
 	var s: Dictionary = (info.get("settings", {}) as Dictionary).duplicate()
 	s["net"] = "client"
 	_clear()
+	Sfx.game_music()
 	session = GameSession.new()
 	session.settings = s
 	session.net_info = info

@@ -15,6 +15,7 @@ const TEAM := [
 const ASSETS := [
 	["Effect animations", "pixelfx by Patch and Hugo Duprez (some recoloured)", "MIT, full text below"],
 	["Placeholder sounds and app icon", "made by this project's tools/ scripts", "part of the game"],
+	["Music (Sneak Rat, Mr Bones, Ratcano Run, Rat Grass Valley)", "made for Burrow Wars by the Burrow Wars team", "part of the game"],
 ]
 
 const PIXELFX_LICENSE := "res://assets/fx/LICENSE-pixelfx.txt"

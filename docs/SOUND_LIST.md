@@ -115,7 +115,14 @@ own; send any of these (same format) and I'll switch them over.
 
 | File | Plays when | Now | Status |
 |---|---|---:|---|
-| `clockwork_colony.wav` | Everywhere: menus, lobby and matches, looping | 15.5 s loop | Old |
+| `sneak_rat.ogg` | Title theme: the main menu and its pages, looping | 16 s loop | Yours (new) |
+| `mr_bones.mp3` | In-game playlist, track 1: lobby, matches and results | ~1 min | Yours (new) |
+| `ratcano_run.ogg` | In-game playlist, track 2 | 46 s | Yours (new) |
+| `rat_grass_valley.mp3` | In-game playlist, track 3 | ~44 s | Yours (new) |
+
+In a match the three play in turn, round and round, and carry on where they were from one match
+to the next. The lists are `TITLE_THEME` and `GAME_PLAYLIST` in `scripts/core/sfx.gd`: add a
+file to `assets/music/` and its path to the list.
 
 What a full set could be (send them as `.ogg` and tell me which is which; I'll switch tracks by
 situation):
