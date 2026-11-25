@@ -130,6 +130,7 @@ func _lava_step(_dt: float) -> void:
 		_lava_told = 1
 		m.toast.emit("LAVA RISE: the lava is coming up from below - it climbs %d blocks a minute!" % Config.LAVA_RISE_STEP, -1)
 	if lava_floor < 0 and m.time >= Config.LAVA_RISE_START:
+		m.lava.cap = maxi(m.lava.cap, Config.LAVA_RISE_FLOW_CAP)   # breaches pour in all match long
 		# "the bottom of the map": the lowest level with any open air (the
 		# deepest caves); the solid rock under them stays as it is
 		lava_floor = 1
@@ -150,6 +151,7 @@ func _lava_step(_dt: float) -> void:
 		var c: Vector3i = _lava_queue.pop_back()
 		if m.world.get_cell(c) == Blocks.AIR:
 			m.world.set_block(c, Blocks.LAVA)
+			m.lava.active.erase(c)   # (the rising layer fills itself: no spill from it, so it doesn't use up the flow budget)
 			n += 1
 
 

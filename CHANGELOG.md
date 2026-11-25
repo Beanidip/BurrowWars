@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - Lava Rise flows again
+
+| Change | Files |
+|---|---|
+| Fixed: with Lava Rise on, lava stopped flowing into anything opened next to it after the first couple of minutes. Each block the rising layer placed also spilled sideways and used up lava's per-match flow budget (1200 blocks) within the first few layers. The rising layer no longer spills, and Lava Rise raises the budget to 20000 | `match/extras.gd`, `core/config.gd` |
+
 ## Unreleased - Modifiers
 
 | Change | Files |

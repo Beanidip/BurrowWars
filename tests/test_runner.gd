@@ -5880,6 +5880,7 @@ func test_lava_freeze_fungus() -> void:
 	for i in int(2.0 / DT):
 		m.lava.step(DT)
 	check(m.world.get_cell(rock + Vector3i(1, 0, 0)) == Blocks.LAVA, "dig into the lava and it flows in, as lava always does")
+	check(m.lava.flowed < 50, "the rising layers don't use up the lava's flow budget (%d flowed)" % m.lava.flowed)
 	end(m)
 	# --- Flash Freeze ---
 	var f := new_match({"goal": 50, "mutators": ["flash_freeze"]})

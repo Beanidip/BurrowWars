@@ -71,6 +71,7 @@ const METEOR_SCRAP := 2            # scrap blocks the meteorite leaves at the bo
 const LAVA_RISE_START := 60.0      # seconds in: lava appears in the open air at the bottom of the map
 const LAVA_RISE_STEP := 5          # blocks it climbs each minute after that (a layer at a time)
 const LAVA_RISE_MAX := 30          # the highest layer: just under the base platforms (MapGenerator.GROUND - 2)
+const LAVA_RISE_FLOW_CAP := 20000  # lava's flow budget with Lava Rise on (normally LiquidFlow.LAVA_CAP, 1200)
 ## Flash Freeze (a match option)
 const FREEZE_AT := 45.0            # seconds in: every water block turns to ice
 const FREEZE_WARN := 5.0           # seconds of warning before
