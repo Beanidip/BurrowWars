@@ -169,6 +169,7 @@ func _results_flow(race: GameSession) -> void:
 	check(r2.hud.results != null, "won again")
 	if r2.hud.results == null:
 		return
+	await get_tree().create_timer(2.0).timeout     # (a look at the results, as a real host would)
 	r2.hud.results.first_button().pressed.emit()   # Next game (new map)
 	var r3_ok := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session.get_instance_id() != r2_id \
 			and main.session.loaded and not main.session.m.lobby and not main.session.m.over and (main.session.net as NetServer).player_count() > 0, 30.0)
