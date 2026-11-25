@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased - Extras: Meteor Shower
+
+| Change | Files |
+|---|---|
+| **Extras**: a drop-down checklist of match options on the setup page (bot and hosted games), remembered between games; `--mutators` on dedicated servers; shown in the server list | `match/mutators.gd`, `ui/main_menu.gd`, `core/config.gd`, `net/dedicated_server.gd`, `net/server_list.gd` |
+| **Meteor Shower**, the first option: meteors fall at random (first at 30 s, then every 20-45 s, never on a base). A red ring and a marker warn for 3 s, then a crater (stronger than TNT), everyone caught is bonked (a cheese dropped; in a Scrap Race, half their unbanked scrap), and 2 scrap blocks are left in the crater. Bots run out of the ring. Network protocol 14 | `match/meteors.gd`, `match/match.gd`, `match/contraption_view.gd`, `match/match_view.gd`, `actors/bot_brain.gd`, `ui/hud.gd`, `net/` |
+
 ## Unreleased - Scrap Race
 
 | Change | Files |

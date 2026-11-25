@@ -44,6 +44,7 @@ var _class := "digger"
 var _goal := 8
 var _mode := "race"                 # the setup page: "race" (Cheese Race) or "scrap" (Scrap Race)
 var _scrap_goal := Config.SCRAP_GOAL
+var _mutators: Array[String] = []   # the setup page's Extras (Mutators.LIST)
 var _team_size := 2
 var _skill := 1
 var _seed_edit: LineEdit
@@ -82,6 +83,7 @@ func _ready() -> void:
 	_goal = int(Config.get_value("goal"))
 	_mode = "scrap" if String(Config.get_value("last_mode")) == "scrap" else "race"
 	_scrap_goal = int(Config.get_value("scrap_goal"))
+	_mutators = Mutators.clean(Config.get_value("mutators"))
 	_team_size = int(Config.get_value("team_size"))
 	_skill = clampi(int(Config.get_value("bot_skill")), 0, 2)
 	var bg := ColorRect.new()
@@ -221,6 +223,7 @@ func _setup_page() -> void:
 	var mode_blurb := UiKit.label("Bank the most golden cheese." if _mode == "race" else "Bank scrap; cheese makes yours worth more.", 15, UiKit.PAPER.darkened(0.1))
 	modes.add_child(mode_blurb)
 	_page.add_child(UiKit.row(UiKit.label("Mode"), modes))
+	_page.add_child(UiKit.row(UiKit.label("Extras"), _extras_picker()))
 	# team
 	var teams := HBoxContainer.new()
 	teams.add_theme_constant_override("separation", 8)
@@ -329,6 +332,45 @@ func _goal_text() -> String:
 	return "Cheese goal: %d  (map holds %d+ cheese)" % [_goal, MapGenerator.min_cheese(_goal)]
 
 
+func _extras_picker() -> Control:
+	## A drop-down checklist of match options (Mutators): tick any number.
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	var pick := MenuButton.new()
+	pick.flat = false
+	pick.custom_minimum_size = Vector2(260, 38)
+	pick.focus_mode = Control.FOCUS_ALL
+	var popup := pick.get_popup()
+	popup.hide_on_checkable_item_selection = false   # (tick several in one go)
+	for i in Mutators.LIST.size():
+		var id: String = Mutators.LIST[i]
+		popup.add_check_item(String(Mutators.NAMES[id]), i)
+		popup.set_item_checked(i, _mutators.has(id))
+		popup.set_item_tooltip(i, String(Mutators.BLURBS[id]))
+	var about := UiKit.wrapped("", 14, UiKit.PAPER.darkened(0.15))
+	about.custom_minimum_size = Vector2(440, 0)
+	var refresh := func() -> void:
+		var names := Mutators.describe(_mutators)
+		pick.text = "%s  v" % (names if names != "" else "None")
+		var lines: Array[String] = []
+		for id: String in _mutators:
+			lines.append(String(Mutators.BLURBS[id]))
+		about.text = " ".join(lines) if not lines.is_empty() else "Twists for the match: open the list and tick any."
+	popup.id_pressed.connect(func(i: int) -> void:
+		var id: String = Mutators.LIST[i]
+		if _mutators.has(id):
+			_mutators.erase(id)
+		else:
+			_mutators.append(id)
+		_mutators = Mutators.clean(_mutators)
+		popup.set_item_checked(i, _mutators.has(id))
+		refresh.call())
+	refresh.call()
+	box.add_child(pick)
+	box.add_child(about)
+	return box
+
+
 func _focus_mode() -> void:
 	## After switching mode the page is rebuilt: keep the focus on the mode buttons.
 	for b in _page.find_children("*", "Button", true, false):
@@ -374,10 +416,11 @@ func _start_race() -> void:
 	Config.set_value("goal", _goal)
 	Config.set_value("scrap_goal", _scrap_goal)
 	Config.set_value("last_mode", _mode)
+	Config.set_value("mutators", _mutators)
 	Config.set_value("team_size", _team_size)
 	Config.set_value("bot_skill", _skill)
 	Config.save()
-	var s := {"mode": _mode, "seed": _seed(), "goal": _scrap_goal if _mode == "scrap" else _goal, "team": _team, "class": _class, "team_size": _team_size,
+	var s := {"mode": _mode, "mutators": _mutators.duplicate(), "seed": _seed(), "goal": _scrap_goal if _mode == "scrap" else _goal, "team": _team, "class": _class, "team_size": _team_size,
 		"bot_rest": [7.0, 3.0, 0.0][_skill]}
 	if _selected_map() != "":
 		s["map_file"] = _selected_map()

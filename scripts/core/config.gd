@@ -57,7 +57,16 @@ const SCRAP_GOAL := 300            # default goal (the setup page offers 50-3000
 const SCRAP_CHEESE_REF := 8        # banked cheese that adds GROWTH_BONUS to a team's scrap value (8 cheese: x2.5)
 const SCRAP_BONK_SHARE := 0.5      # a bonk knocks loose this share of the scrap you haven't banked yet
 const SCRAP_DROP_MIN := 4          # ...but at least this much (or all of it, if less)
-const BOT_SCRAP_HAUL := 30         # a bot heads home to bank once it carries this much
+const BOT_SCRAP_HAUL := 30
+## Meteor Shower (a match option): timing, warning and the blast.
+const METEOR_FIRST := 30.0         # seconds into the match before the first one
+const METEOR_GAP_MIN := 20.0       # seconds between meteors, at random in this range
+const METEOR_GAP_MAX := 45.0
+const METEOR_WARN := 3.0           # seconds the red ring shows before it strikes
+const METEOR_HEIGHT := 45.0        # how high above the target it appears
+const METEOR_RADIUS := 3.5         # crater radius in blocks (and the bonk zone, plus a little)
+const METEOR_POWER := 14.0         # dig hits at the centre of the crater (TNT is 10)
+const METEOR_SCRAP := 2            # scrap blocks the meteorite leaves at the bottom         # a bot heads home to bank once it carries this much
 const GROWTH_BONUS := 1.5
 const STACK_MAX := 10
 const CHISEL_RATE := 9.0          # microvoxel edits per second
@@ -104,7 +113,8 @@ const DEFAULTS := {
 	"camera_distance": 4.0,
 	"goal": 8,
 	"scrap_goal": 300,               # Scrap Race (Config.SCRAP_GOAL)
-	"last_mode": "race",             # the setup page's mode: race | scrap
+	"last_mode": "race",
+	"mutators": [],                  # the setup page's Extras (Mutators.LIST)             # the setup page's mode: race | scrap
 	"team_size": 2,
 	"bot_skill": 1,
 	"last_class": "digger",

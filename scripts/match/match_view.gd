@@ -355,6 +355,15 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"pickup_scrap":
 			_sound("discovery_chime", pos, 1.4, -4.0)
 			_sprite("collect", pos, 0.45)
+		"meteor_warn":
+			_sound("siege_grind", pos, 2.2, 4.0, 0.25)   # a rising whistle, heard from far off
+			_float_text(pos + Vector3(0, 1.5, 0), "METEOR!", Color(1.0, 0.35, 0.2), 1.2)
+		"meteor":
+			_sound("tnt_pop", pos, 0.7, 9.0, 0.3)
+			_sound("siege_impact", pos, 0.6, 8.0, 0.3)
+			_sprite("explosion", pos + Vector3(0, 1.0, 0), 1.6)
+			_burst(pos, Color(0.95, 0.45, 0.12), 30, 10.0)
+			_burst(pos, Color(0.3, 0.24, 0.2), 24, 7.0)
 		"deposit_scrap":
 			_sound("discovery_chime", pos, 0.9, 0.0)
 			_burst(pos + Vector3(0, 1.0, 0), Color(0.93, 0.5, 0.16), 14, 6.0)

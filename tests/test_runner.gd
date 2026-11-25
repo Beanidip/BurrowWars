@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "scrap_race", "bots_finish_a_scrap_race", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "scrap_race", "bots_finish_a_scrap_race", "meteor_shower", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -5717,4 +5717,100 @@ func test_bots_finish_a_scrap_race() -> void:
 	check(m.over, "a bots-only Scrap Race to %d finishes within 15 simulated minutes" % Config.SCRAP_GOAL)
 	for r in m.rats:
 		check(not r.blocked(), "bot %d is not embedded in terrain" % r.id)
+	end(m)
+
+
+func test_meteor_shower() -> void:
+	## The Meteor Shower match option: warned, then a crater, everyone in it
+	## bonked, scrap left behind; only when it's switched on.
+	check(Mutators.clean(["meteors", "nonsense", "meteors"]) == ["meteors"] and Mutators.clean(PackedStringArray(["meteors"])) == ["meteors"]
+		and Mutators.clean(null).is_empty(), "only known options, once each")
+	var plain := new_match({"goal": 50})
+	plain.spawn_rat(0, "digger", true)
+	for i in int(60.0 / DT):
+		plain.step(DT)
+	check(plain.meteors.strikes == 0 and plain.meteors.list.is_empty(), "no meteors unless the option is on")
+	end(plain)
+	var m := new_match({"goal": 50, "mutators": ["meteors"]})
+	check(m.has_mutator("meteors") and m.meteors.enabled(), "switched on from the settings")
+	flat_arena(m, ARENA, 7)
+	# a solid floor 3 deep to dig a crater in
+	for dx in range(-6, 7):
+		for dz in range(-6, 7):
+			for dy in range(-4, -1):
+				m.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.DIRT)
+	var victim := arena_rat(m, 1, "scout", Vector3(1.0, 0, 0))
+	victim.carried = 1
+	var far := arena_rat(m, 0, "digger", Vector3(6.0, 0, 6.0))
+	var target := Vector3(ARENA) + Vector3(0.5, 0.0, 0.5)
+	m.meteors.next_in = 999.0
+	var mt := m.meteors.launch(target)
+	check(mt != null and m.meteors.list.size() == 1, "a meteor on its way")
+	var warned := false
+	for mk in m.markers:
+		warned = warned or String(mk["text"]) == "METEOR!"
+	check(warned and mt.pos().y > target.y + 30.0, "the spot is marked while it is still high up (%.0f blocks)" % (mt.pos().y - target.y))
+	var t := 0.0
+	while not m.meteors.list.is_empty() and t < 10.0:
+		m.step(DT)
+		t += DT
+	check(m.meteors.strikes == 1 and absf(t - Config.METEOR_WARN) < 0.2, "it strikes after the warning (%.1f s)" % t)
+	var holes := 0
+	for dx in range(-2, 3):
+		for dz in range(-2, 3):
+			if m.world.get_cell(ARENA + Vector3i(dx, -1, dz)) == Blocks.AIR:
+				holes += 1
+	check(holes >= 12, "a crater where it hit (%d of the 25 floor blocks under it gone)" % holes)
+	check(victim.knock > 0.0 and victim.carried == 0 and int(victim.stats.get("bonked", 0)) == 1, "the rat under it is bonked: knocked flying, its cheese dropped")
+	check(far.knock == 0.0, "a rat outside the zone is fine")
+	var scrap := 0
+	for dx in range(-1, 3):
+		for dy in range(-5, 1):
+			for dz in range(-1, 2):
+				scrap += 1 if m.world.get_cell(ARENA + Vector3i(dx, dy, dz)) == Blocks.SCRAP else 0
+	check(scrap == Config.METEOR_SCRAP, "the meteorite leaves %d scrap in the crater (%d)" % [Config.METEOR_SCRAP, scrap])
+	# on its own: first after METEOR_FIRST, then every so often, never on a base
+	var m2 := new_match({"goal": 50, "mutators": ["meteors"]})
+	var launched: Array[Vector3] = []
+	m2.fx.connect(func(kind: String, pos: Vector3, _d: Variant) -> void:
+		if kind == "meteor_warn":
+			launched.append(pos))
+	var first := -1.0
+	while m2.time < Config.METEOR_FIRST + Config.METEOR_GAP_MAX * 2.0 + Config.METEOR_WARN:
+		m2.step(DT)
+		if first < 0.0 and not launched.is_empty():
+			first = m2.time
+	check(absf(first - Config.METEOR_FIRST) < 0.1 and launched.size() >= 3, "the first after %.0f s, then more (%d in %.0f s)" % [first, launched.size(), m2.time])
+	var clear := true
+	for p in launched:
+		for team in 2:
+			clear = clear and not MapGenerator.base_zone(team).grow(Config.METEOR_RADIUS + 1.0).has_point(Vector3(p.x, MapGenerator.GROUND + 1.0, p.z))
+	check(clear, "never on a base")
+	# bots run out of the ring
+	var bot := m2.spawn_rat(0, "digger", true)
+	var brain: BotBrain = m2.bots[-1]
+	bot.position = MapGenerator.spawn_point(0) + Vector3(20, 0, 20)
+	bot.position.y = m2.meteors.surface(floori(bot.position.x), floori(bot.position.z))
+	var ring := m2.meteors.launch(bot.position + Vector3(1.0, 0, 0))
+	brain.think(DT)
+	check(ring != null and bot.wish.x < -0.5, "a bot in the ring runs out of it (%s)" % str(bot.wish))
+	# online: the meteors go in the snapshot, and keep falling between them
+	var ns := NetServer.new()
+	ns.m = m2
+	var snap := ns._snapshot(true)
+	ns.free()
+	var copy := new_match({"goal": 50, "mutators": ["meteors"]})
+	copy.replica = true
+	copy.meteors.apply(snap.get("mt"))
+	check(copy.meteors.list.size() == m2.meteors.list.size() and copy.meteors.list.size() > 0, "a player's game gets the falling meteors")
+	var y0 := copy.meteors.list[0].pos().y
+	copy.step(0.5)
+	check(copy.meteors.list[0].pos().y < y0, "and they keep falling between snapshots")
+	end(copy)
+	check(ServerList.describe({"players": 1, "max_players": 31, "mode": "race", "score": [0, 0], "goal": 10, "mutators": ["meteors"]})
+		== "1/31 players  -  Cheese Race 0-0 (to 10)  +  Meteor Shower", "the server list shows the options")
+	var free := new_match({"mode": "free", "mutators": ["meteors"]})
+	check(not free.meteors.enabled(), "Free Build has no meteors")
+	end(free)
+	end(m2)
 	end(m)

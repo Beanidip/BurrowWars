@@ -101,6 +101,8 @@ func _ready() -> void:
 		_push_toast("SCRAP RACE: mine orange scrap and carry it home to bank it. First to %d scrap wins! Cheese you bank makes your team's scrap worth more." % m.goal, UiKit.BRASS)
 	else:
 		_push_toast("Dig for golden cheese and carry it back to your base. First to %d wins!" % m.goal, UiKit.BRASS)
+	if m.has_mutator("meteors") and not m.free_mode:
+		_push_toast("METEOR SHOWER: when a red ring appears, get out of it! Each meteor leaves scrap in its crater.", Color(1.0, 0.55, 0.3))
 	if m.infinite:
 		_push_toast("CHEAT CODE: infinite scrap, materials and gadgets for everyone this match!", Color(1.0, 0.85, 0.3))
 

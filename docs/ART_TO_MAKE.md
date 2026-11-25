@@ -154,7 +154,8 @@ a model and I'd swap it in, so they're more work than the files above.
 |---|---|---|
 | Siege machines (Cannon, Crane, Bulldozer) | Boxes in wood, brass, hazard yellow and team colour; a sphere for the wrecking ball | `scripts/match/contraption_view.gd` |
 | Gadgets in the world (ladders, springs, traps, conveyors, teleporter pads, gates...) | Shaped blocks and coloured details | `scripts/world/chunk_mesher.gd` |
-| Loose cheese and dropped-stash pickups | A cheese wedge and a sack | `scripts/match/match_view.gd` (`_make_pickup`) |
+| Loose cheese, dropped-stash and knocked-loose scrap pickups | A cheese wedge, a sack, an orange heap | `scripts/match/match_view.gd` (`_make_pickup`) |
+| Meteors (Meteor Shower) and their warning ring | A glowing rock of boxes with a fiery tail; a red ring on the ground | `scripts/match/contraption_view.gd` (`_sync_meteors`) |
 | Cheese crumbs | Little yellow clusters | `scripts/match/crumb_trail.gd` |
 | Dynamite and impulse grenades in flight, cannonballs | Small boxes and spheres | `scripts/match/contraption_view.gd` |
 | Impulse Grenade bubble, crack overlay on damaged blocks, aim previews | See-through shapes | `scripts/match/match_view.gd`, `contraption_view.gd` |

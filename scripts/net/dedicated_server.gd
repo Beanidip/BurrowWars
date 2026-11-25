@@ -7,6 +7,7 @@ extends Node
 ##   godot --headless --path . -- --server [--port 24565] [--name "My Server"]
 ##         [--goal 10] [--team-size 4] [--skill 1] [--free] [--round-break 15]
 ##         [--mode scrap]                (Scrap Race: --goal is then the scrap goal; default 300)
+##         [--mutators meteors]          (match options, comma-separated: see Mutators.LIST)
 ##         [--lobby 30]                  (seconds in the playground before each round; 0 = none)
 ##         [--map path/to/saved.bwmap]   (every round then starts on that map)
 ##         [--transport ws]              (WebSocket on TCP instead of ENet on UDP:
@@ -49,7 +50,7 @@ static func parse_args() -> Dictionary:
 			var key := a.substr(2)
 			if key in ["server", "free", "no-status"]:
 				out[key] = true
-			elif key in ["mode", "port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map",
+			elif key in ["mode", "mutators", "port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map",
 					"transport", "tls-cert", "tls-key", "status-port", "log-every"] and i + 1 < args.size():
 				out[key] = args[i + 1]
 				i += 1
@@ -104,6 +105,7 @@ func status() -> Dictionary:
 		st["team_size"] = int(m.settings.get("team_size", 0))
 		st["goal"] = int(m.settings.get("goal", 0))
 		st["score"] = [m.scores[0], m.scores[1]]
+		st["mutators"] = m.mutators
 		st["time"] = int(m.time)
 	return st
 
@@ -174,6 +176,7 @@ func _settings() -> Dictionary:
 	_next_seed = 0
 	return {
 		"mode": _mode(),
+		"mutators": Mutators.clean(String(options.get("mutators", "")).split(",", false)),
 		"seed": seed_value if seed_value > 0 else randi_range(1, 999999),
 		"goal": _goal(),
 		"map_file": String(options.get("map", "")),

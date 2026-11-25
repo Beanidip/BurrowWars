@@ -79,6 +79,9 @@ own; send any of these (same format) and I'll switch them over.
 
 | Event | Borrows now | Suggested new file | What it should be |
 |---|---|---|---|
+| A meteor appearing (Meteor Shower) | `siege_grind` pitched up | `meteor_whistle.wav` | A falling whistle over about 3 s, heard from far away |
+| A meteor striking | `tnt_pop` + `siege_impact`, pitched down | `meteor_impact.wav` | Deep, heavy boom with rumble and debris |
+| Banking scrap / grabbing loose scrap (Scrap Race) | `discovery_chime` | `scrap_bank.wav` | A rattle of metal bits poured into a bin |
 | Landing on a Spring / being launched | `block_place` | `spring.wav` | "Boing" |
 | Throwing dynamite or a grenade | `block_place` | `throw.wav` | Quick whoosh |
 | Respawning at base | `block_place` | `respawn.wav` | Little "pop in" / poof |

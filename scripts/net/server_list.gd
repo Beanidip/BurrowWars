@@ -85,6 +85,8 @@ static func describe(st: Dictionary) -> String:
 	var mode := String(MODES.get(String(st.get("mode", "")), ""))
 	if (st.get("mode") == "race" or st.get("mode") == "scrap") and st.get("score") is Array and (st["score"] as Array).size() == 2:
 		mode += " %d-%d (to %d)" % [int(st["score"][0]), int(st["score"][1]), int(st.get("goal", 0))]
+	if st.get("mutators") is Array and not (st["mutators"] as Array).is_empty():
+		mode += "  +  " + Mutators.describe(st["mutators"])
 	return players + ("  -  " + mode if mode != "" else "")
 
 

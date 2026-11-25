@@ -45,6 +45,7 @@ var infinite := false               # nobody runs out of anything: scrap, materi
 var perf := [0, 0, 0]               # step() timing for server health lines: [usec total, usec worst, steps]
 var infinite_next := false          # (lobby) the host entered the code: the match it starts is infinite
 var lobby := false                  # the playground everyone waits in before a hosted match
+var mutators: Array[String] = []    # match options switched on (Mutators.LIST)
 var scrap_race := false             # Scrap Race: the score is banked scrap; cheese only raises a team's scrap value
 var lobby_props: Dictionary = {}    # Vector3i -> true: playground fixtures nobody can break
 var lobby_left := -1.0              # seconds until a server's lobby ends; -1 = when the host says
@@ -96,6 +97,7 @@ var networked := false          # true on a server or a client (never pauses)
 var dynamite: DynamiteSystem
 var windup: WindupSystem
 var siege: SiegeSystem
+var meteors: MeteorSystem
 
 var _next_uid := 1
 var _rng := RandomNumberGenerator.new()
@@ -108,6 +110,7 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 	lobby = settings.get("mode", "race") == "lobby"
 	free_mode = settings.get("mode", "race") == "free" or lobby   # everything is free in the lobby too
 	scrap_race = settings.get("mode", "race") == "scrap"
+	mutators = Mutators.clean(settings.get("mutators", []))
 	infinite = bool(settings.get("infinite", false)) and not lobby
 	infinite_next = lobby and bool(settings.get("infinite", false))
 	goal = int(settings.get("goal", 8))
@@ -120,6 +123,7 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 	dynamite = DynamiteSystem.new(self)
 	windup = WindupSystem.new(self)
 	siege = SiegeSystem.new(self)
+	meteors = MeteorSystem.new(self)
 	lava = LiquidFlow.lava(self)
 	water = LiquidFlow.water(self)
 	if not replica:   # a replica only mirrors the server's terrain changes
@@ -290,6 +294,45 @@ func multiplier(team := -1) -> float:
 	return 1.0 + float(scores[0] + scores[1]) / float(maxi(goal, 1)) * growth
 
 
+func has_mutator(id: String) -> bool:
+	return mutators.has(id)
+
+
+func meteor_strike(at: Vector3) -> void:
+	## A meteor lands at `at` (on top of the ground there): a crater through
+	## the blast rule, everyone in reach bonked, and a meteorite of scrap.
+	var origin := at - Vector3(0, 0.4, 0)   # (in the top block it lands on: a crater, not a scorch)
+	fx.emit("meteor", origin, Config.METEOR_RADIUS)
+	var caught: Array[Rat] = []
+	for r in rats:
+		if r.center().distance_to(origin) < Config.METEOR_RADIUS + 1.6:
+			caught.append(r)
+	blast(origin, Config.METEOR_RADIUS, Config.METEOR_POWER)   # (knocks rats flying, drops a cheese)
+	for r in caught:
+		r.vel *= 1.3   # a meteor hits harder than TNT
+		tally(r, "bonked")
+		fx.emit("bonk", r.position, null)
+		if scrap_race and r.scrap_held > 0:
+			drop_scrap(r, mini(r.scrap_held, maxi(Config.SCRAP_DROP_MIN, ceili(r.scrap_held * Config.SCRAP_BONK_SHARE))), 1.0)
+	# the meteorite: scrap at the bottom of the crater
+	var c := Vector3i(floori(at.x), floori(at.y), floori(at.z))
+	var placed := 0
+	for dy in range(-ceili(Config.METEOR_RADIUS), 1):
+		var cell := c + Vector3i(0, dy, 0)
+		if placed < Config.METEOR_SCRAP and VoxelWorld.in_bounds(cell) and world.get_cell(cell) == Blocks.AIR \
+				and Blocks.SOLID[world.get_cell(cell + Vector3i(0, -1, 0))] != 0:
+			world.set_block(cell, Blocks.SCRAP)
+			placed += 1
+			if placed < Config.METEOR_SCRAP:
+				var side := cell + Vector3i(1, 0, 0)
+				if world.get_cell(side) == Blocks.AIR and Blocks.SOLID[world.get_cell(side + Vector3i(0, -1, 0))] != 0:
+					world.set_block(side, Blocks.SCRAP)
+					placed += 1
+	for r in caught:
+		if r.blocked():
+			r.unstick()   # (never inside the meteorite)
+
+
 func cheese_in_vault(team: int) -> int:
 	## Banked cheese a raid could take: the score in a Cheese Race, the vault
 	## in a Scrap Race.
@@ -331,6 +374,8 @@ func _tick(dt: float) -> void:
 			r.scrap_held = maxi(0, r.scrap)   # spent before it was banked: that part never counts
 	if over and not replica:
 		_bots_emote(dt)
+	if replica:
+		meteors.glide(dt)   # (the server's meteors keep falling between snapshots)
 	if replica:
 		# Only our own rat is simulated here; the server sends the rest.
 		for r in rats:
@@ -395,6 +440,7 @@ func _tick(dt: float) -> void:
 	_step_tnt(dt)
 	dynamite.step(dt)
 	windup.step(dt)
+	meteors.step(dt)
 	_drop_crumbs()
 	siege.step(dt)
 	lava.step(dt)

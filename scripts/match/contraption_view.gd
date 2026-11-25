@@ -16,6 +16,7 @@ var _mat: StandardMaterial3D
 var _machines: Dictionary = {}   # uid -> {root, turret, barrel, cable, ball, blade}
 var _sticks: Dictionary = {}     # uid -> Node3D
 var _shots: Dictionary = {}      # uid -> MeshInstance3D
+var _meteors: Dictionary = {}    # uid -> [rock Node3D, warning ring MeshInstance3D]
 var _dots: Array[MeshInstance3D] = []
 var _blade_cells: Array[MeshInstance3D] = []
 var _t := 0.0
@@ -174,7 +175,53 @@ func _process(delta: float) -> void:
 			_machines.erase(uid)
 	_sync_shots()
 	_sync_sticks(delta)
+	_sync_meteors(delta)
 	_previews()
+
+
+func _sync_meteors(delta: float) -> void:
+	## Each falling meteor: a glowing rock with a fiery tail, and a red ring
+	## pulsing on the ground where it will land, tightening as it nears.
+	var alive := {}
+	for mt in m.meteors.list:
+		alive[mt.uid] = true
+		var pair: Array = _meteors.get(mt.uid, [])
+		if pair.is_empty():
+			var rock := _part([
+				[Vector3(-0.7, -0.7, -0.7), Vector3(0.7, 0.7, 0.7), Color(0.35, 0.22, 0.16)],
+				[Vector3(-0.55, -0.85, -0.55), Vector3(0.55, 0.85, 0.55), Color(0.95, 0.45, 0.12)],
+				[Vector3(-0.85, -0.5, -0.5), Vector3(0.85, 0.5, 0.5), Color(1.0, 0.75, 0.25)]])
+			var tail := _part([[Vector3(-0.35, 0.8, -0.35), Vector3(0.35, 4.5, 0.35), Color(1.0, 0.55, 0.15)],
+				[Vector3(-0.2, 4.5, -0.2), Vector3(0.2, 7.0, 0.2), Color(1.0, 0.8, 0.35)]])
+			add_child(rock)
+			add_child(tail)
+			var ring := MeshInstance3D.new()
+			var torus := TorusMesh.new()
+			torus.inner_radius = Config.METEOR_RADIUS - 0.35
+			torus.outer_radius = Config.METEOR_RADIUS
+			torus.rings = 32
+			ring.mesh = torus
+			ring.material_override = PlayerController._clear_mat(Color(1.0, 0.15, 0.1, 0.75))
+			add_child(ring)
+			pair = [rock, ring, tail]
+			_meteors[mt.uid] = pair
+		var rock: Node3D = pair[0]
+		var ring: MeshInstance3D = pair[1]
+		var p := mt.pos()
+		var fall := (mt.target - mt.start).normalized()
+		rock.position = p
+		rock.rotation += Vector3(3.0, 2.0, 1.0) * delta
+		var tail: Node3D = pair[2]
+		tail.position = p
+		tail.quaternion = Quaternion(Vector3.UP, -fall)   # (streaming out behind it)
+		ring.position = mt.target + Vector3(0, 0.08, 0)
+		var k := 1.0 - mt.left() / maxf(mt.time, 0.01)
+		ring.scale = Vector3.ONE * lerpf(1.35, 1.0, k) * (1.0 + 0.06 * sin(_t * 18.0))
+	for uid: int in _meteors.keys():
+		if not alive.has(uid):
+			for node: Node in _meteors[uid]:
+				node.queue_free()
+			_meteors.erase(uid)
 
 
 func _sync_shots() -> void:

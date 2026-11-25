@@ -520,6 +520,8 @@ func _snapshot(with_names := false) -> Dictionary:
 		sticks.append([s.uid, s.pos, s.vel, s.fuse, s.resting, s.impulse, s.stuck])
 	var snap := {"t": m.time, "sc": [m.scores[0], m.scores[1]], "va": [m.vault[0], m.vault[1]], "o": m.over, "w": m.winner, "r": NetCodec.encode_rats(m.rats), "p": picks,
 		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "wd": m.windup.snapshot(), "tp": m.tele_pads(), "lt": m.lobby_left}
+	if not m.meteors.list.is_empty():
+		snap["mt"] = m.meteors.snapshot()
 	if send_names:
 		snap["ro"] = roster()
 		var hats := {}

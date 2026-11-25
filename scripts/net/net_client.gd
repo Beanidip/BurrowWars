@@ -161,6 +161,7 @@ func on_snap(s: Dictionary) -> void:
 	_apply_shots(s.get("sh", []))
 	_apply_sticks(s.get("st", []))
 	m.windup.apply(s.get("wd", []))
+	m.meteors.apply(s.get("mt", []))
 	var pads: Variant = s.get("tp", [])
 	m.tele_net = pads if pads is Array else []
 	_apply_emotes(s.get("em", []))

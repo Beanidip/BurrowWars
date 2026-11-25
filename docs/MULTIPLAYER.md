@@ -74,6 +74,7 @@ On Windows: `BurrowWars.exe --headless -- --server`.
 | `--port N` | 24565 | UDP port. Run several servers on one machine with different ports. |
 | `--name "..."` | Burrow Wars server | Shown to players (16 characters max). |
 | `--mode scrap` | race | Scrap Race instead of a Cheese Race: teams race to bank scrap. |
+| `--mutators meteors` | none | Match options (Extras), comma-separated. `meteors`: Meteor Shower. |
 | `--goal N` | 10 | Cheese to win a round (1-250). The map always holds at least 2.5x the goal. With `--mode scrap`, the scrap goal (default 300). |
 | `--team-size N` | 4 | Seats per team, bots included (1-16). |
 | `--skill 0/1/2` | 1 | Bot skill: relaxed, normal, fierce. |

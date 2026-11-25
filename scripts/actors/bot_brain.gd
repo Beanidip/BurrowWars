@@ -46,6 +46,8 @@ func think(dt: float) -> void:
 	rat.down_held = false
 	if rat.stun > 0.0 or rat.knock > 0.0:
 		return
+	if _dodge_meteor():
+		return
 	rat.mats["dirt"] = maxi(int(rat.mats["dirt"]), 12)  # bots always have stair dirt
 	_try_bonk()
 	_count_scrap()
@@ -138,6 +140,19 @@ func _retarget() -> void:
 		target = cheese
 	else:
 		target = Vector3(VoxelWorld.SX * 0.5, 20.0, VoxelWorld.SZ * 0.5)
+
+
+func _dodge_meteor() -> bool:
+	## A meteor ring under or near us: run out of it (bots see the warning too).
+	for mt in m.meteors.list:
+		var away := rat.position - mt.target
+		away.y = 0.0
+		if away.length() < Config.METEOR_RADIUS + 2.5 and absf(rat.position.y - mt.target.y) < Config.METEOR_RADIUS + 2.0:
+			rat.wish = away.normalized() if away.length() > 0.1 else Vector3(1, 0, 0)
+			if rat.on_floor and rng.randf() < 0.05:
+				rat.jump_pressed = true
+			return true
+	return false
 
 
 func _pick_carrier() -> Variant:

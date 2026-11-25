@@ -70,6 +70,22 @@ The same map, teams and tools, a different race: the first team to **bank** the 
 
 Dedicated servers run it with `--mode scrap` (`--goal` is then the scrap goal).
 
+## Extras (match options)
+
+The setup page's **Extras** drop-down is a checklist of twists for a Cheese Race or a Scrap
+Race (bot games and hosted games; dedicated servers use `--mutators meteors`). Tick any number;
+the choice is remembered. Free Build and the playground ignore them.
+
+- **Meteor Shower:** the first meteor falls 30 s in, then one every 20-45 s at a random spot
+  at least 4 blocks clear of both bases. A red ring and a "METEOR!" marker show where for 3 s
+  while it falls (with a whistle), then it strikes: a crater of radius 3.5 through the normal
+  blast rule at power 14 (TNT is 10; obsidian still only chips), and every rat in reach is
+  bonked: knocked flying, a cheese dropped (and in a Scrap Race half its unbanked scrap). It
+  leaves 2 scrap blocks at the bottom of the crater, so it's worth running to afterwards. Bots
+  run out of the ring. Numbers: `Config.METEOR_*`.
+
+To add another: a new id in `scripts/match/mutators.gd`, then `m.has_mutator(id)` where it acts.
+
 ## Core numbers
 
 | Rule | Value |
