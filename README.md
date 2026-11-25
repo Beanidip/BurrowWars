@@ -1,33 +1,58 @@
 # Burrow Wars
 
 Rival rat civilizations dig, build and bonk their way to golden cheese.
-A from-scratch rebuild of Burrow Wars, scoped like a 48-hour game-jam entry:
-one complete, playable loop first, everything else on the cut list.
+
+A team-based multiplayer voxel digging game: two teams of rats tunnel through a destructible
+block world, haul cheese home, raid each other's vaults and build siege machines. Slapstick,
+not violent: rats get bonked, drop what they carry and scramble.
 
 **Engine:** Godot 4.7.2 (GDScript, Compatibility renderer). No plugins, no dependencies.
+**Platforms:** Windows, Linux, macOS and the web browser (itch.io), keyboard and mouse or a full
+controller (Steam Deck at 1280x800).
 
 ## Play
 
 1. Open `project.godot` in Godot 4.7.2 (first open imports the art and audio).
-2. Press **F5**. Pick **Cheese Race**, choose a team, class, goal and bot skill, then **Start digging!**
+2. Press **F5**. Pick **Cheese Race / Scrap Race (Bots)**, choose the mode, team, class, goal,
+   bot skill and any Extras or Modifiers, then **Start digging!**
 
-From a terminal: `godot --path .`
+From a terminal: `godot --path .`. New players: **Learn to Play** is a five-minute guided match.
 
-**Online:** main menu > **Play Online** to join a server or host a game for friends
-(UDP port 24565). Run an always-on public server with `--headless -- --server`.
+**Online:** main menu > **Play Online**: the public server list, join by address, or **Host a Race**
+for friends (UDP port 24565, with an optional playground lobby). Players on desktop and in the
+browser play together. Run an always-on server with `--headless -- --server` (8v8 hosted,
+up to 16v16 dedicated, WebSocket for browsers, anti-cheat built in).
 See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
+
+**Browser:** `tools/web_build.sh` builds the itch.io version; see [docs/ITCH.md](docs/ITCH.md).
 
 ## The game in one minute
 
-- Dig (hold left mouse) to find **golden cheese**. Each block is one cheese.
-- Carry it home. You crawl while carrying, so dash, build highways, or bring an escort.
+- **Cheese Race:** dig (hold left mouse) to find **golden cheese** and carry it home. You crawl
+  while carrying, so dash, build highways, or bring an escort. First team to the goal wins.
+- **Scrap Race:** mine orange **scrap** and carry it home to bank it; first to the scrap goal
+  wins. Bonks knock unbanked scrap loose, and cheese you bank makes your team's scrap worth more.
 - **Bonk** enemy rats (left-click them): nobody is hurt, but they drop a cheese.
-- Mine orange **scrap**, spend it at the **workshop** (B, at your base) on ladders,
-  springs, highways, conveyors, mouse traps, TNT and team gates.
-- Every cheese banked by either team raises the value of newly mined scrap.
-- **Raid** the enemy base: stand in it for 3 seconds to steal a banked cheese. A defender at home locks the vault.
-- Build siege machines (cannon, crane, bulldozer), move them on conveyors, throw bouncing Mobile TNT.
-- First team to the cheese goal wins. **Free Build** is a creative sandbox with flight.
+- Spend scrap at the **workshop** (B, at your base) on ladders, springs, highways, conveyors,
+  teleporters, traps, decoys, TNT, gear (jetpack, shield, bubble shoes) and team gates.
+- **Raid** the enemy base: stand in it for 3 seconds to steal a banked cheese. A defender at
+  home locks the vault.
+- Build siege machines (cannon, crane with a wrecking ball, bulldozer), move them on conveyors,
+  throw Mobile TNT and Impulse Grenades.
+- **Extras** (events during a match): Meteor Shower, Lava Rise, Flash Freeze, Fungal Outbreak.
+- **Modifiers** (rule changes): Super Springs, Low Gravity, TNT Madness, Class Roulette,
+  Scrap Rush, Fragile World, Cheese Rain.
+- After each match, a **results screen** tallies everyone's stats (cheese banked, mined and
+  stolen, bonks, blocks, TNT, traps, scrap) with an MVP; emote with the movement keys while the
+  host picks the next game or the lobby.
+- **Customize Rat:** pick a hat; everyone sees it online.
+- **Free Build** is a creative sandbox with flight, a chisel for microvoxels, a copy/paste
+  pantograph, painted blocks and map saving.
+
+## Controls
+
+Every key can be rebound (Esc > Settings & Controls). A controller works everywhere, menus
+included; its layout is under How to Play. On the results screen, W A S D and Space emote.
 
 | Input | Action | Input | Action |
 |---|---|---|---|
@@ -58,10 +83,14 @@ See `docs/TEST_RESULTS.md` for what was actually executed and what was not.
 
 ## Where things are
 
-- `docs/JAM_SCOPE.md` - the scope lock, schedule and cut list
-- `docs/GAME_DESIGN.md` - rules as implemented
+- `docs/GAME_DESIGN.md` - rules as implemented: modes, Extras, Modifiers, hats, results screen
+- `docs/BALANCE.md` / `docs/balance.csv` - every tunable number, what it does and where it lives
 - `docs/ARCHITECTURE.md` - systems and why they are shaped this way
-- `docs/MULTIPLAYER.md` - playing online, hosting, dedicated/public servers, netcode
+- `docs/MULTIPLAYER.md` - playing online, hosting, dedicated/public servers, the soak test, netcode
+- `docs/RELEASE_PLAN.md`, `docs/ITCH.md` - the release plan and the browser build for itch.io
+- `docs/ART_TO_MAKE.md`, `docs/SOUND_LIST.md` - every picture and sound in the game, to redo
+- `docs/ASSET_LICENSES.md`, `docs/ART_SPEC.md` - where each asset came from; sizes and formats
+- `docs/JAM_SCOPE.md` - the original jam scope (history)
 - `docs/KNOWN_ISSUES.md`, `docs/NEXT_SESSION.md` - honest status and the next steps
 
 ## Art
@@ -76,6 +105,7 @@ All of the game's 2D art is a handful of PNGs you can paint over (Aseprite, Libr
 | `assets/ui/panel_frame.png` | The menu panel (wood and the blue/red frame), a 9-slice: the outer 22 px on each side are frame and corners, the middle stretches. |
 | `assets/ui/burrow_*.png` | The masthead and the original UI icons. |
 | `assets/blocks/<name>.png` | Block textures (32x32, tiling). Scrap has one; drop in `dirt.png`, `stone.png`... and list them in `scripts/world/block_textures.gd` to texture other blocks. Each face picks a random quarter-turn or mirror so runs of a block don't look stamped. `tools/make_block_textures.py` redraws scrap. |
+| `assets/hats/<id>.png` | The hats (Customize Rat), drawn facing you, up to 24x22; magenta takes the team colour. `tools/make_hats.py` draws the placeholders (`preview` shows every hat on every class). |
 | `assets/fx/<name>.png` | Effect animations (explosion, block breaks per material, hit sparks, dust for dash/jump/landing, water and lava splashes, jetpack flame, pickup, respawn poof, deposit firework): a grid of frames each. Frame size, count, speed and the anchor point are in `scripts/match/fx_sheets.gd`; keep those in step if you redraw one at a different size. |
 
 Tools: `tools/rat_sheets.py` (`preview` shows your rats in both team colours, `pack`/`unpack`
@@ -91,8 +121,10 @@ Other blocks, gadgets and siege machines are still drawn in code from flat colou
 
 The full list of every asset, its source and licence is in [docs/ASSET_LICENSES.md](docs/ASSET_LICENSES.md); the sizes and layouts new art and sound must follow are in [docs/ART_SPEC.md](docs/ART_SPEC.md). The game's own Credits & Licences page (main menu) shows the notices it ships with.
 
-Rat sprites, UI icons, sound effects and music are the project owner's own assets,
-carried over from Burrow Wars v0.15.1. All code in this repository is new.
+Music (Sneak Rat, Mr Bones, Ratcano Run, Rat Grass Valley) is made for Burrow Wars by the team.
+Rat sprites, UI icons and most sound effects are placeholders carried over from Burrow Wars
+v0.15.1 and are being redone (see docs/ART_TO_MAKE.md and docs/SOUND_LIST.md). All code in
+this repository is new.
 
 Effect animations in `assets/fx/` are rendered from [pixelfx](https://github.com/patch-gg/pixelfx)
 by Patch and Hugo Duprez, MIT License (see `assets/fx/LICENSE-pixelfx.txt`); some recoloured. The `splash`, `sizzle`, `squeak`, `pop` and `toot` sounds are
