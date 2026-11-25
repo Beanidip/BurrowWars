@@ -189,7 +189,6 @@ func _on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 		decoys[cell] = Blocks.trap_team(new_id)
 	else:
 		decoys.erase(cell)
-	extras.on_block_changed(cell, _old, new_id)
 	if scrap_race:
 		if new_id == Blocks.SCRAP:
 			scrap_cells[cell] = true

@@ -6,8 +6,10 @@ class_name ExtrasSystem
 ##  - Lava Rise: from LAVA_RISE_START, lava fills the open air at the bottom
 ##    of the map and climbs LAVA_RISE_STEP blocks a minute, a layer at a time
 ##    and a few cells a tick (so it creeps), up to LAVA_RISE_MAX: the layer
-##    just under the base platforms. Anything dug or blasted open below the
-##    line fills in again.
+##    just under the base platforms. Each layer only fills the air that's open
+##    when it rises; after that the lava just flows the way lava always does
+##    (LiquidFlow), so rats can still tunnel through the rock underneath to
+##    reach cheese and scrap - carefully.
 ##  - Flash Freeze: at FREEZE_AT (warned FREEZE_WARN before), every water
 ##    block on the map turns to ice.
 ##  - Fungal Outbreak: from FUNGUS_FIRST, every FUNGUS_GAP_* seconds a giant
@@ -22,7 +24,6 @@ var lava_level := 0                # highest y the lava has filled (0: not yet)
 var lava_floor := -1               # the lowest level with open air: where it starts (found when it does)
 var _lava_queue: Array[Vector3i] = []
 var _lava_rate := 1                # cells a tick for the layer being filled
-var _refill: Dictionary = {}       # Vector3i -> seconds: opened below the line, lava pours back in
 var _lava_told := 0                # rises announced
 
 # flash freeze
@@ -54,13 +55,6 @@ func step(dt: float) -> void:
 		_fungus_step(dt)
 
 
-func on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
-	## Lava Rise: a hole opened below the lava line fills back in.
-	if lava_level > 0 and new_id == Blocks.AIR and cell.y <= lava_level and cell.y >= 1 \
-			and not MapGenerator.in_any_base(cell, 1.0):
-		_refill[cell] = Config.LAVA_REFILL
-
-
 # ---------------------------------------------------------------- lava rise
 
 func lava_target(t: float) -> int:
@@ -71,7 +65,7 @@ func lava_target(t: float) -> int:
 	return mini(Config.LAVA_RISE_MAX, maxi(lava_floor, 1) + int((t - Config.LAVA_RISE_START) / per_layer))
 
 
-func _lava_step(dt: float) -> void:
+func _lava_step(_dt: float) -> void:
 	if not m.over and m.time >= Config.LAVA_RISE_START - 5.0 and _lava_told == 0:
 		_lava_told = 1
 		m.toast.emit("LAVA RISE: the lava is coming up from below - it climbs %d blocks a minute!" % Config.LAVA_RISE_STEP, -1)
@@ -97,12 +91,6 @@ func _lava_step(dt: float) -> void:
 		if m.world.get_cell(c) == Blocks.AIR:
 			m.world.set_block(c, Blocks.LAVA)
 			n += 1
-	for c: Vector3i in _refill.keys():
-		_refill[c] = float(_refill[c]) - dt
-		if float(_refill[c]) <= 0.0:
-			_refill.erase(c)
-			if m.world.get_cell(c) == Blocks.AIR and not _occupied(c):
-				m.world.set_block(c, Blocks.LAVA)
 
 
 func _air_at(y: int) -> Array[Vector3i]:

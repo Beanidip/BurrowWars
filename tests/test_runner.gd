@@ -5854,16 +5854,32 @@ func test_lava_freeze_fungus() -> void:
 			air1 += 1 if m.world.get_cell(c) == Blocks.AIR and not MapGenerator.in_any_base(c, 1.0) else 0
 	check(x.lava_level == fl and air0 > 500 and air1 == 0, "over 12 s the bottom layer fills with lava (%d open cells -> %d)" % [air0, air1])
 	check(count_blocks(m, Blocks.LAVA, fl + 1) == count_blocks(new_match_cached(), Blocks.LAVA, fl + 1), "the next layer hasn't started yet")
-	# a hole opened under the line fills back in
-	var hole := Vector3i(-1, -1, -1)
-	for xx in VoxelWorld.SX:
-		for zz in VoxelWorld.SZ:
-			if hole.x < 0 and m.world.get_cell(Vector3i(xx, fl, zz)) == Blocks.LAVA and not MapGenerator.in_any_base(Vector3i(xx, fl, zz), 1.0):
-				hole = Vector3i(xx, fl, zz)
-	m.world.set_block(hole, Blocks.AIR)
-	for i in int((Config.LAVA_REFILL + 0.2) / DT):
+	# rock under the lava line can still be tunnelled: nothing refills it
+	var rock := Vector3i(-1, -1, -1)
+	for xx in range(8, VoxelWorld.SX - 8):
+		for zz in range(8, VoxelWorld.SZ - 8):
+			var c := Vector3i(xx, fl, zz)
+			if rock.x >= 0 or m.world.get_cell(c) != Blocks.STONE:
+				continue
+			var near_lava := false
+			for n: Vector3i in LiquidFlow.AROUND:
+				near_lava = near_lava or m.world.get_cell(c + n) == Blocks.LAVA
+			if not near_lava:
+				rock = c
+	m.world.set_block(rock, Blocks.AIR)
+	for i in int(2.0 / DT):
 		x.step(DT)
-	check(m.world.get_cell(hole) == Blocks.LAVA, "a hole dug below the line fills back in")
+		m.lava.step(DT)
+	check(rock.x >= 0 and m.world.get_cell(rock) == Blocks.AIR, "a tunnel dug through the rock under the lava stays open")
+	# but break into the lava and it pours in, as lava always does
+	m.world.set_block(rock + Vector3i(1, 0, 0), Blocks.STONE)    # a wall...
+	m.world.set_block(rock + Vector3i(2, 0, 0), Blocks.LAVA)     # ...with lava behind it
+	for i in int(1.0 / DT):
+		m.lava.step(DT)
+	m.world.set_block(rock + Vector3i(1, 0, 0), Blocks.AIR)      # dig through
+	for i in int(2.0 / DT):
+		m.lava.step(DT)
+	check(m.world.get_cell(rock + Vector3i(1, 0, 0)) == Blocks.LAVA, "dig into the lava and it flows in, as lava always does")
 	end(m)
 	# --- Flash Freeze ---
 	var f := new_match({"goal": 50, "mutators": ["flash_freeze"]})

@@ -4,7 +4,7 @@
 
 | Change | Files |
 |---|---|
-| **Lava Rise**: from 1 minute in, lava fills the open air at the bottom of the map and climbs 5 blocks a minute (a layer every 12 s, creeping in), stopping just under the bases. Holes dug below the line fill back in; bots stop chasing cheese and scrap under it | `match/extras.gd`, `match/match.gd`, `actors/bot_brain.gd` |
+| **Lava Rise**: from 1 minute in, lava fills the open air at the bottom of the map and climbs 5 blocks a minute (a layer every 12 s, creeping in), stopping just under the bases. It fills only the air open as each layer rises, then flows as lava always does, so rats can tunnel through the rock beneath it for cheese and scrap (carefully); bots won't | `match/extras.gd`, `match/match.gd`, `actors/bot_brain.gd` |
 | **Flash Freeze**: at 45 s (warned 5 s before) every water block turns to ice | `match/extras.gd` |
 | **Fungal Outbreak**: giant mushrooms sprout across the battlefield (first at 30 s, then every 20-35 s, up to 30), growing over 4 s: new platforms and obstacles | `match/extras.gd` |
 | All three are in the Extras checklist and `--mutators`; tuning in `Config` | `match/mutators.gd`, `core/config.gd`, `ui/hud.gd`, `match/match_view.gd` |
