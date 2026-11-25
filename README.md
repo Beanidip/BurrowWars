@@ -129,3 +129,11 @@ this repository is new.
 Effect animations in `assets/fx/` are rendered from [pixelfx](https://github.com/patch-gg/pixelfx)
 by Patch and Hugo Duprez, MIT License (see `assets/fx/LICENSE-pixelfx.txt`); some recoloured. The `splash`, `sizzle`, `squeak`, `pop` and `toot` sounds are
 synthesised placeholders made by `tools/make_sfx.py`.
+
+## License
+
+Copyright (c) 2026 Beanidip. **All rights reserved.** Burrow Wars, its code, art, sound and
+music are proprietary: no part of it may be copied, modified, redistributed or reused without
+written permission. Released builds may be downloaded and played for personal use. See
+[LICENSE](LICENSE). Third-party components (Godot Engine, pixelfx) keep their own licences,
+listed in the game's Credits & Licences screen and in docs/ASSET_LICENSES.md.

@@ -9,6 +9,7 @@ class_name Credits
 const TEAM := [
 	"Burrow Wars",
 	"Made by the Burrow Wars team",
+	"Copyright (c) 2026 Beanidip. All rights reserved.",
 ]
 
 ## [what, who / where, licence]

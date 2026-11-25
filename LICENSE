@@ -1,0 +1,28 @@
+Burrow Wars
+Copyright (c) 2026 Beanidip. All rights reserved.
+
+This repository and everything in it - the source code, art, animation,
+sound effects, music, maps, text and documentation, and the game built from
+them - is the proprietary work of the copyright holder.
+
+No licence is granted. You may not copy, modify, merge, publish, distribute,
+sublicense, sell, rehost, or make derivative works from any part of it, in
+whole or in part, without prior written permission from the copyright holder.
+
+Being able to see this repository does not give you any right to use its
+contents, beyond what GitHub's Terms of Service require for viewing it on
+GitHub.
+
+Released builds of the game may be downloaded from the official release pages
+and played for personal use. They may not be redistributed, re-uploaded or
+sold without permission.
+
+Third-party components are not covered by this notice and keep their own
+licences, reproduced in the game's Credits & Licences screen:
+  - Godot Engine and its bundled components (MIT and others) - godotengine.org
+  - pixelfx effect animations by Patch and Hugo Duprez (MIT) -
+    assets/fx/LICENSE-pixelfx.txt
+See docs/ASSET_LICENSES.md for where every asset comes from.
+
+For permission requests, contact the copyright holder through
+https://github.com/Beanidip.
