@@ -222,6 +222,7 @@ func _process(delta: float) -> void:
 			return
 	if _restart_in >= 0.0:
 		_restart_in -= delta
+		net.next_in = maxf(0.0, _restart_in)
 		if _restart_in <= 0.0:
 			_next()
 	_status_t += delta

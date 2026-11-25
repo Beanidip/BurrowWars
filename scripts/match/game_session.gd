@@ -4,7 +4,7 @@ extends Node
 ## PlayerController (input/camera) + Hud (interface) + environment.
 
 signal exit_requested
-signal rematch_requested
+signal rematch_requested(to_lobby: bool)
 signal start_requested          # the host ends the lobby: start the match
 
 var settings: Dictionary = {}
@@ -117,7 +117,7 @@ func _ready() -> void:
 	if net is NetClient:
 		(net as NetClient).notice.connect(func(text: String) -> void: ctl.notice.emit(text))
 	hud.exit_requested.connect(func() -> void: exit_requested.emit())
-	hud.rematch_requested.connect(func() -> void: rematch_requested.emit())
+	hud.rematch_requested.connect(func(to_lobby: bool) -> void: rematch_requested.emit(to_lobby))
 	hud.start_requested.connect(func() -> void: start_requested.emit())
 	m.won.connect(_celebrate)
 	if bool(settings.get("tutorial", false)) and not online_client:

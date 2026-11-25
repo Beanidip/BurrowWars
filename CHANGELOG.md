@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased - Results screen with stats and emotes
+
+| Change | Files |
+|---|---|
+| **Results screen**: when a match ends, the winners are announced and every rat stands in a line-up (winners first) over its tallies: cheese banked, mined and stolen, bonks landed, times bonked, blocks broken, TNT set off, traps placed, scrap earned. The best at each is picked out in gold, the winners' standout gets an MVP badge. Small teams side by side; a 16v16 scrolls, starting at your own card | `ui/results_screen.gd`, `ui/hud.gd`, `match/match.gd`, `match/dynamite.gd`, `actors/rat.gd` |
+| **Emotes** on the results screen: W cheer, A dance, D taunt, S flop, Space flip (a controller: the left stick, Y flips). Everyone sees everyone's online; bots join in | `ui/results_screen.gd`, `match/match.gd`, `net/net_server.gd`, `net/net_client.gd` |
+| **What next**: offline, Play again / Main menu / Quit game. The host of an online game chooses Next game (new map, straight in), Back to the lobby, or Main menu (ends it for everyone); friends stay connected through the first two and see "Waiting for the host". A dedicated server's players see a countdown to the next round and can leave | `ui/results_screen.gd`, `core/main.gd`, `match/game_session.gd`, `net/dedicated_server.gd` |
+| The server sends everyone's tallies with the win (and now and then after, for anyone who joins during the results); network protocol 11 | `net/net.gd`, `net/net_server.gd`, `net/net_client.gd` |
+
 ## Unreleased - Server soak test and the bugs it found
 
 | Change | Files |

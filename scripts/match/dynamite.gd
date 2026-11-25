@@ -114,6 +114,7 @@ func step(dt: float) -> void:
 		if s.impulse:
 			m.impulse_blast(s.pos)
 		else:
+			m.tally(m.rat_by_id(s.owner), "tnt")
 			m.blast(s.pos, Config.DYNAMITE_RADIUS, Config.DYNAMITE_POWER)
 
 

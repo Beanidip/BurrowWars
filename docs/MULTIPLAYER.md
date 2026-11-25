@@ -28,8 +28,12 @@ match.
   hot tub, a tower of blocks to knock down and a diving tower over the lake. Everyone wears a
   jetpack, everything is free, and bonks and cannonballs hit teammates too (twice as hard).
   The match starts only when the host presses **Enter** (rebindable: "Lobby: start the match").
-  After a match, **Back to the lobby** takes everyone back to the playground. Untick Lobby to
-  start the match as soon as you open the server, as before.
+  Untick Lobby to start the match as soon as you open the server, as before.
+- **After a match** the results screen shows everyone's tallies, and you (the host) choose:
+  **Next game** (a new map, straight in), **Back to the lobby** (everyone to the playground
+  first), or **Main menu**, which ends the game for everyone. Your friends see "Waiting for the
+  host" and stay connected for either of the first two. Everyone can emote meanwhile (W A S D,
+  Space).
   - **Cheat code (host only):** in the playground, the host types **Up Up Down Down Left Right
     Left Right B A**: the arrow keys and B, A, or a controller's D-pad and B, A. The match it
     starts gives **everyone** (bots too) infinite scrap, materials and gadgets: everything in the
@@ -41,8 +45,7 @@ match.
 - Over the internet: forward **UDP 24565** on your router to your PC, allow Burrow Wars through
   Windows Firewall when asked, and give friends your public IP address. There is no NAT
   punch-through or relay yet, so without port forwarding only LAN play works.
-- Pausing (Esc) does not stop an online game. Rematch starts a new map and brings everyone
-  along. Quitting to the menu ends the game for everyone.
+- Pausing (Esc) does not stop an online game. Quitting to the menu ends the game for everyone.
 
 Players must run the same version. A different version is refused with a message saying which
 version the server runs.

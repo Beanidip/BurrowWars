@@ -142,9 +142,13 @@ func _on_net_problem(reason: String) -> void:
 	show_menu(reason)
 
 
-func _rematch() -> void:
+func _rematch(to_lobby := false) -> void:
+	## The results screen: the next game on a new map, or (an online host)
+	## everyone back to the playground first. Players stay connected either way.
 	var s := _last_settings.duplicate()
 	s["seed"] = randi_range(1, 999999)
+	if String(s.get("net", "")) == "host":
+		s["lobby"] = to_lobby
 	start_match(s)
 
 

@@ -108,10 +108,74 @@ func _run_lobby() -> void:
 			var springs := int(race.player.gadgets.get("spring", 0))
 			check(race.m.try_buy(race.player, "spring") == "" and race.player.scrap == scrap and int(race.player.gadgets["spring"]) > springs,
 				"the host's workshop costs nothing")
-			await wait_for(func() -> bool: return (race.net as NetServer).player_count() == 0, 30.0)
+			await _results_flow(race)
 	Net.close()
 	print("---- net lobby host: %d failed ----" % _fails)
 	get_tree().quit(1 if _fails > 0 else 0)
+
+func _win(s: GameSession) -> void:
+	await get_tree().create_timer(1.0).timeout
+	s.player.carried = s.m.goal
+	s.m._deposit(s.player)
+
+
+func _button(rs: ResultsScreen, text: String) -> Button:
+	for b in rs.find_children("*", "Button", true, false):
+		if (b as Button).text == text:
+			return b
+	return null
+
+
+func _results_flow(race: GameSession) -> void:
+	## The host wins: the results screen with the host's choices. Back to the
+	## lobby, start again, win again, then Next game - the friend comes along.
+	var ns := race.net as NetServer
+	var friend: Rat = ns.seats.values()[0] if not ns.seats.is_empty() else null
+	await _win(race)
+	var rs := race.hud.results
+	check(race.m.over and rs != null and rs.host_role() == "host", "the host wins: the results screen opens")
+	if rs == null:
+		return
+	check(_button(rs, "Next game (new map)") != null and _button(rs, "Back to the lobby") != null and _button(rs, "Main menu (ends the game)") != null,
+		"the host can start the next game, go back to the lobby, or end it")
+	check(int(race.player.stats.get("banked", 0)) == race.m.goal, "the host's tally: %d cheese banked" % int(race.player.stats.get("banked", 0)))
+	var emoted := await wait_for(func() -> bool: return friend != null and is_instance_valid(friend) and friend.emote == "cheer", 15.0)
+	check(emoted, "the friend's emote reaches the host")
+	var bots_emote := await wait_for(func() -> bool:
+		for r in race.m.rats:
+			if r.is_bot and r.emote_t > 0.0:
+				return true
+		return false, 10.0)
+	check(bots_emote, "bots emote too")
+	var race_id := race.get_instance_id()
+	_button(rs, "Back to the lobby").pressed.emit()
+	var lob_ok := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session.get_instance_id() != race_id \
+			and main.session.loaded and main.session.m.lobby and (main.session.net as NetServer).player_count() > 0, 30.0)
+	check(lob_ok, "Back to the lobby: everyone is in the playground again")
+	if not lob_ok:
+		return
+	var lob: GameSession = main.session
+	await get_tree().create_timer(1.0).timeout
+	lob.start_requested.emit()
+	var lob_id := lob.get_instance_id()
+	var r2_ok := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session.get_instance_id() != lob_id \
+			and main.session.loaded and not main.session.m.lobby and (main.session.net as NetServer).player_count() > 0, 30.0)
+	check(r2_ok, "and the host starts another match")
+	if not r2_ok:
+		return
+	var r2: GameSession = main.session
+	await _win(r2)
+	var r2_id := r2.get_instance_id()
+	check(r2.hud.results != null, "won again")
+	if r2.hud.results == null:
+		return
+	r2.hud.results.first_button().pressed.emit()   # Next game (new map)
+	var r3_ok := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session.get_instance_id() != r2_id \
+			and main.session.loaded and not main.session.m.lobby and not main.session.m.over and (main.session.net as NetServer).player_count() > 0, 30.0)
+	check(r3_ok, "Next game: straight into a new match, the friend with us")
+	if r3_ok:
+		await wait_for(func() -> bool: return (main.session.net as NetServer).player_count() == 0, 30.0)
+
 
 func type_contra_code() -> void:
 	## Up Up Down Down Left Right Left Right B A, as real key presses.

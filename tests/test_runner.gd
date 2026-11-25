@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -5329,3 +5329,169 @@ func test_gamepad_input() -> void:
 	remove_child(ctl)
 	ctl.free()
 	end(m)
+
+
+func test_results_stats_and_emotes() -> void:
+	## The results screen's tallies: what each rat did over the match, counted
+	## by the authority; emotes once it's over; and what each screen offers.
+	var m := new_match()
+	flat_arena(m, ARENA, 6)
+	var a := arena_rat(m, 0, "digger")
+	var b := arena_rat(m, 1, "scout", Vector3(1.0, 0, 0))
+	# digging: blocks broken, cheese mined, scrap earned
+	var dirt := ARENA + Vector3i(0, 0, -2)
+	m.world.set_block(dirt, Blocks.DIRT)
+	var cheese := ARENA + Vector3i(-1, 0, -2)
+	m.world.set_block(cheese, Blocks.CHEESE)
+	var scrap := ARENA + Vector3i(1, 0, -2)
+	m.world.set_block(scrap, Blocks.SCRAP)
+	var scrap0 := a.scrap
+	for c: Vector3i in [dirt, cheese, scrap]:
+		var n := 0
+		while m.world.get_cell(c) != Blocks.AIR and n < 40:
+			a.dig_cd = 0.0
+			m.try_dig(a, c)
+			n += 1
+	check(int(a.stats.get("blocks", 0)) >= 3, "blocks broken counted (%d)" % int(a.stats.get("blocks", 0)))
+	check(int(a.stats.get("mined", 0)) == 1, "cheese mined counted")
+	check(int(a.stats.get("scrap", 0)) > 0 and int(a.stats["scrap"]) == a.scrap - scrap0, "scrap earned counted (%d)" % int(a.stats.get("scrap", 0)))
+	# bonks: one landed, one taken; the dropped cheese picked up by the other team is stolen
+	b.carried = 1
+	a.bonk_cd = 0.0
+	check(m.try_bonk(a, b), "bonk")
+	check(int(a.stats.get("bonks", 0)) == 1 and int(b.stats.get("bonked", 0)) == 1, "bonks landed and times bonked")
+	check(m.pickups.size() >= 1 and m.pickups[-1].from_team == 1, "the dropped cheese remembers whose it was")
+	var p: Match.Pickup = m.pickups[-1]
+	p.lock_t = 0.0
+	p.pos = a.center()
+	p.vel = Vector3.ZERO
+	var before := a.carried
+	m._step_pickups(DT)
+	check(a.carried == before + 1 and int(a.stats.get("stolen", 0)) == 1, "picking up the other team's dropped cheese is a steal")
+	# your own team's dropped cheese is not
+	var mate := arena_rat(m, 0, "builder", Vector3(-1.0, 0, 0))
+	var own := m.spawn_pickup("cheese", mate.center(), Vector3.ZERO)
+	own.from_team = 0
+	m._step_pickups(DT)
+	check(mate.carried == 1 and int(mate.stats.get("stolen", 0)) == 0, "a teammate's dropped cheese isn't stolen")
+	# a vault raid is a steal too
+	m.scores[1] = 2
+	var thief := arena_rat(m, 0, "scout")
+	thief.position = MapGenerator.spawn_point(1)
+	for r in m.rats:
+		if r.team == 1:
+			r.position = Vector3(ARENA) + Vector3(0.5, 0, 0.5)   # no defender home
+	for i in int(Config.RAID_TIME / DT) + 5:
+		m._check_raid(thief, DT)
+	check(int(thief.stats.get("stolen", 0)) == 1, "a vault raid counts as stolen")
+	# banking
+	a.carried = 2
+	m._deposit(a)
+	check(int(a.stats.get("banked", 0)) == 2, "cheese banked counted")
+	# traps and TNT
+	a.gadgets = {"trap": 2, "tnt": 1, "ladder": 1}
+	check(m.try_place_gadget(a, ARENA + Vector3i(0, 0, 2), "trap") == "", "place a trap")
+	check(m.try_place_gadget(a, ARENA + Vector3i(0, 0, 3), "ladder") == "", "place a ladder")
+	check(int(a.stats.get("traps", 0)) == 1, "traps placed (ladders aren't traps)")
+	var t := ARENA + Vector3i(3, 0, 3)
+	check(m.try_place_gadget(a, t, "tnt") == "", "place TNT")
+	m.light_tnt(t, 0.05)
+	for i in 10:
+		m._step_tnt(DT)
+	check(int(a.stats.get("tnt", 0)) == 1, "TNT set off counted for the rat who placed it")
+	# the network form
+	var packed := m.stats_packed()
+	var copy := new_match()
+	for r in m.rats:
+		copy.spawn_rat(r.team, r.class_id, true, r.id)
+	copy.apply_stats(packed)
+	var same := true
+	for r in m.rats:
+		for k: String in Match.STATS:
+			same = same and int(copy.rat_by_id(r.id).stats.get(k, 0)) == int(r.stats.get(k, 0))
+	check(same, "the tallies survive the trip to a player's game")
+	end(copy)
+	# emotes: only once it's over, only real ones
+	check(not m.emote(a, "cheer"), "no emotes mid-match")
+	m.over = true
+	m.winner = 0
+	check(not m.emote(a, "moonwalk"), "only the known emotes")
+	check(m.emote(a, "cheer") and a.emote == "cheer" and a.emote_t > 0.0, "W: cheer")
+	check(not m.emote(a, "cheer"), "held down, it plays to the end rather than restarting")
+	check(m.emote(a, "flop") and a.emote == "flop", "another emote cuts in")
+	var fake := FakeRemote.new()
+	m.remote = fake
+	m.emote(a, "dance")
+	check(fake.acts.size() == 1 and fake.acts[0] == ["emote", ["dance"]], "a player's emote goes to the server")
+	m.remote = null
+	# bots join in
+	m.make_bot(b)
+	var bot_emoted := false
+	for i in 600:
+		m.step(DT)
+		if b.emote_t > 0.0:
+			bot_emoted = true
+			break
+	check(bot_emoted, "bots emote on the results screen (%s)" % b.emote)
+	# input -> emote
+	var ev := InputEventAction.new()
+	ev.pressed = true
+	var want := {"move_forward": "cheer", "move_left": "dance", "move_right": "taunt", "move_back": "flop", "jump": "flip", "dig": ""}
+	var all_ok := true
+	for action: String in want:
+		ev.action = action
+		all_ok = all_ok and ResultsScreen.emote_for(ev) == want[action]
+	check(all_ok, "W A D S and Space pick the five emotes; other keys don't")
+	var pad_a := InputEventJoypadButton.new()
+	pad_a.button_index = JOY_BUTTON_A
+	pad_a.pressed = true
+	var pad_y := InputEventJoypadButton.new()
+	pad_y.button_index = JOY_BUTTON_Y
+	pad_y.pressed = true
+	check(ResultsScreen.emote_for(pad_a) == "" and ResultsScreen.emote_for(pad_y) == "flip", "on a gamepad A presses buttons and Y flips")
+	# leaders, MVP and who gets which buttons
+	check(ResultsScreen.mvp(m.rats, 0) == a, "the MVP is the winners' standout")
+	check(int(ResultsScreen.leaders(m.rats)["banked"]) == 2, "the top value per tally is picked out")
+	var rs := ResultsScreen.new()
+	rs.m = m
+	rs.me = a
+	add_child(rs)
+	check(rs.host_role() == "offline" and rs.first_button().text.begins_with("Play again"), "offline: Play again")
+	rs.free()
+	m.networked = true
+	rs = ResultsScreen.new()
+	rs.m = m
+	rs.me = a
+	add_child(rs)
+	var texts := []
+	for btn in rs.find_children("*", "Button", true, false):
+		texts.append((btn as Button).text)
+	check(rs.host_role() == "host" and texts.has("Next game (new map)") and texts.has("Back to the lobby"), "the host: Next game, Back to the lobby (%s)" % str(texts))
+	rs.free()
+	m.replica = true
+	m.next_in = 7.2
+	rs = ResultsScreen.new()
+	rs.m = m
+	rs.me = a
+	add_child(rs)
+	check(rs.host_role() == "client" and rs.status_text() == "Next round in 8 s" and rs.first_button().text.begins_with("Leave"),
+		"a player on someone's server: the countdown and Leave (%s)" % rs.status_text())
+	m.next_in = -1.0
+	check(rs.status_text().contains("Waiting for the host"), "on a friend's game: waiting for the host")
+	rs.free()
+	m.replica = false
+	m.networked = false
+	# the playground counts nothing
+	var lob := new_match({"mode": "lobby"})
+	var l1 := lob.spawn_rat(0, "digger", false)
+	lob.tally(l1, "bonks")
+	check(l1.stats.is_empty(), "the lobby playground keeps no tallies")
+	end(lob)
+	end(m)
+
+
+class FakeRemote:
+	var acts := []
+	func act(method: String, args: Array) -> String:
+		acts.append([method, args])
+		return ""

@@ -38,6 +38,7 @@ var max_players := Net.HOST_MAX_CLIENTS   # connected players (a dedicated serve
 var _roster_sig := ""              # rats' names as last sent
 var _roster_left := 0              # snapshots that still carry the names after a change
 var _snaps := 0
+var next_in := -1.0                # a dedicated server: seconds until its next round, shown on the results screen
 const CLIENT_FX := ["spring", "jetpack", "dash", "jump", "land", "splash", "splash_out", "shield"]
 
 
@@ -322,6 +323,9 @@ func on_act(id: int, method: String, a: Array) -> void:
 		"place_bubble":
 			if _ok(a, [TYPE_VECTOR3I]):
 				m.place_bubble(rat, a[0])
+		"emote":
+			if _ok(a, [TYPE_STRING]):
+				m.emote(rat, a[0])
 		"try_bonk":
 			if _ok(a, [TYPE_INT]):
 				var target := m.rat_by_id(a[0])
@@ -465,7 +469,10 @@ func _flush_events(peers: Dictionary) -> void:
 	var gl: Array = []
 	for c: Vector3i in _gates:
 		gl.append([c, m.world.layered_gate(c)])
-	var pkt := var_to_bytes({"b": _blocks, "mi": mi, "g": gl, "fx": _fx, "to": _toasts, "won": _won})
+	var ev := {"b": _blocks, "mi": mi, "g": gl, "fx": _fx, "to": _toasts, "won": _won}
+	if _won >= 0:
+		ev["ss"] = m.stats_packed()   # everyone's tallies, for the results screen
+	var pkt := var_to_bytes(ev)
 	for id: int in seats:
 		if peers.has(id) and Net.is_open(id):   # (it may have closed during this tick)
 			Net._s_events.rpc_id(id, pkt)
@@ -516,6 +523,17 @@ func _snapshot(with_names := false) -> Dictionary:
 		snap["ro"] = roster()
 	if m.lobby:
 		snap["ix"] = m.infinite_next   # the cheat code, so everyone's banner shows it
+	if m.over:
+		# the results screen: who is emoting, when the next round starts, and
+		# (now and then, for anyone who joined during it) everyone's tallies
+		var em: Array = []
+		for r in m.rats:
+			if r.emote_t > 0.0:
+				em.append([r.id, r.emote, r.emote_t])
+		snap["em"] = em
+		snap["nx"] = next_in
+		if with_names or _snaps % 20 == 0:
+			snap["ss"] = m.stats_packed()
 	return snap
 
 

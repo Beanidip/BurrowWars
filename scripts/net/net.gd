@@ -25,7 +25,7 @@ signal join_failed(reason: String)     # client: could not connect or was refuse
 signal disconnected(reason: String)    # client: lost the server mid-game
 
 const DEFAULT_PORT := 24565
-const PROTOCOL := 10                   # bump whenever the wire format or block ids change
+const PROTOCOL := 11                   # bump whenever the wire format or block ids change
 const MAX_CLIENTS := 31                # a dedicated server: 16v16 (every seat a player)
 const HOST_MAX_CLIENTS := 15           # a game hosted from the menu: 8v8 with the host
 const NAME_MAX := 16

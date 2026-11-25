@@ -6,7 +6,7 @@ extends CanvasLayer
 ## the Match authority.
 
 signal exit_requested
-signal rematch_requested
+signal rematch_requested(to_lobby: bool)   # the results screen: the next game (or the host: back to the lobby)
 signal start_requested       # the host pressed Start in the lobby
 
 const MAT_SHORT := ["Dirt", "Stone", "Ice", "Obsid."]
@@ -45,6 +45,7 @@ var _toasts: VBoxContainer
 var _marker_labels: Array[Label] = []
 var _paint_chip: ColorRect
 var _dialog: Control
+var results: ResultsScreen      # the end-of-match screen, once it is up
 var _dialog_kind := ""
 var _dialog_notice: Label
 var _dialog_scrap: Label
@@ -713,10 +714,10 @@ func open_dialog(kind: String) -> void:
 			_fill_pause(v)
 			get_tree().paused = not m.networked   # an online match never stops for one player
 		_:
-			v = UiKit.center_panel(_root, 640, 460)
-			_fill_results(v)
+			_show_results()
+			return
 	_dialog = v.get_meta("root")
-	if Inputs.using_pad or kind == "results":
+	if Inputs.using_pad:
 		UiKit.focus_first(_dialog, _focus_pick)   # (with a mouse, nothing is pre-selected)
 
 
@@ -1058,41 +1059,18 @@ func _on_won(team: int) -> void:
 	get_tree().paused = false
 
 
-func _fill_results(v: VBoxContainer) -> void:
-	var team := m.winner
-	var mine := team == rat.team
-	var title := UiKit.label("%s TEAM WINS!" % Match.TEAM_NAMES[team].to_upper(), 40, UiKit.TEAM[team])
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
-	var sub := UiKit.label("The golden cheese is yours. Squeak with pride!" if mine else "Out-burrowed this time. Dig faster, bonk harder!", 17)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(sub)
-	var score := UiKit.label("Blue %d   -   %d Red        Match time %d:%02d        Final scrap value x%.2f" % [
-		m.scores[0], m.scores[1], int(m.time) / 60, int(m.time) % 60, m.multiplier()], 16, UiKit.BRASS)
-	score.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(score)
-	var grid := GridContainer.new()
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 28)
-	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	for head: String in ["Rat", "Class", "Team", "Scrap"]:
-		grid.add_child(UiKit.label(head, 14, UiKit.BRASS))
-	for r in m.rats:
-		var c: Color = UiKit.TEAM[r.team].lightened(0.3)
-		grid.add_child(UiKit.label(r.display_name, 15, c))
-		grid.add_child(UiKit.label(r.cls["name"], 15, c))
-		grid.add_child(UiKit.label(Match.TEAM_NAMES[r.team], 15, c))
-		grid.add_child(UiKit.label(str(r.scrap), 15, c))
-	v.add_child(grid)
-	var h := HBoxContainer.new()
-	h.alignment = BoxContainer.ALIGNMENT_CENTER
-	h.add_theme_constant_override("separation", 12)
-	var again := UiKit.button("Back to the lobby" if bool(m.settings.get("lobby", false)) else "Rematch (new map)",
-		func() -> void: rematch_requested.emit(), Vector2(220, 46))
-	if m.replica:
-		again = UiKit.button("Next round starts soon...", func() -> void: pass, Vector2(260, 46))
-		again.disabled = true
-	h.add_child(again)
-	h.add_child(UiKit.button("Main menu", _exit, Vector2(200, 46)))
-	v.add_child(h)
-	again.grab_focus()
+func _show_results() -> void:
+	## The end-of-match screen (ResultsScreen) fills the whole view.
+	var r := ResultsScreen.new()
+	r.m = m
+	r.me = rat
+	r.next_game.connect(func() -> void: rematch_requested.emit(false))
+	r.to_lobby.connect(func() -> void: rematch_requested.emit(true))
+	r.leave.connect(_exit)
+	for c in _root.get_children():
+		if c is CanvasItem:
+			(c as CanvasItem).visible = false   # the hotbar, score and the rest: the results screen replaces them
+	_root.add_child(r)
+	_dialog = r
+	results = r
+	r.first_button().grab_focus()

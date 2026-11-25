@@ -253,6 +253,17 @@ func _run_round() -> void:
 		var live: GameSession = round_ref.get_ref()
 		return live != null and live.m.over, 120.0)
 	check(won, "the round ends with a winner on our screen")
+	if won:
+		var live: GameSession = round_ref.get_ref()
+		var shown := await wait_for(func() -> bool:
+			return live != null and is_instance_valid(live) and live.hud.results != null and live.hud.results.status_text().begins_with("Next round in"), 5.0)
+		check(shown, "the results screen counts down to the next round (%s)" % (live.hud.results.status_text() if live != null and is_instance_valid(live) and live.hud.results != null else "-"))
+		if live != null and is_instance_valid(live):
+			var banked := 0
+			for r in live.m.rats:
+				banked += int(r.stats.get("banked", 0))
+			check(banked >= 1, "with everyone's tallies from the server (%d cheese banked)" % banked)
+			check(live.hud.results != null and live.hud.results.first_button().text.begins_with("Leave"), "and a way to leave; the next round isn't ours to start")
 	var next := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) \
 			and main.session != s and main.session.player != null, 40.0)
 	if next and main.session.m.lobby:
@@ -296,6 +307,43 @@ func _run_lobby() -> void:
 		var race: GameSession = main.session
 		check(race.player.display_name == "Tester" and race.player.team == 1 and race.m.rats.size() == 4, "same name and team, in a full 2v2 match")
 		check(race.m.infinite and race.m.unlimited() and toast_says(race.hud, "infinite"), "with infinite resources for us too, and we're told")
+		# the host wins it: the results screen, our emote, then the host's choices
+		var rref: WeakRef = weakref(race)
+		var over := await wait_for(func() -> bool:
+			var live: GameSession = rref.get_ref()
+			return live != null and live.m.over and live.hud.results != null, 40.0)
+		check(over, "the match ends and the results screen opens")
+		if over:
+			check(race.hud.results.status_text().contains("Waiting for the host"), "we wait for the host (%s)" % race.hud.results.status_text())
+			var host_rat: Rat = null
+			for r in race.m.rats:
+				if r.team == 0 and not r.is_bot:
+					host_rat = r
+			var got := await wait_for(func() -> bool: return host_rat != null and int(host_rat.stats.get("banked", 0)) == race.m.goal, 5.0)
+			check(got, "the host's tallies reached us (%s banked)" % (host_rat.stats.get("banked", "?") if host_rat != null else "-"))
+			var ev := InputEventAction.new()
+			ev.action = "move_forward"
+			ev.pressed = true
+			Input.parse_input_event(ev)
+			await wait(0.2)
+			check(race.player.emote == "cheer", "W: our rat cheers")
+		var back := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session != rref.get_ref() \
+				and main.session.player != null and main.session.m.lobby, 40.0)
+		check(back, "the host took everyone back to the lobby, us included")
+		if back:
+			var lob: GameSession = main.session
+			var again := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session != lob \
+					and main.session.player != null and not main.session.m.lobby, 40.0)
+			check(again, "and started another match from it")
+			if again:
+				var r2ref: WeakRef = weakref(main.session)
+				var ended := await wait_for(func() -> bool:
+					var live: GameSession = r2ref.get_ref()
+					return live != null and live.m.over, 40.0)
+				var third := await wait_for(func() -> bool: return main.session != null and is_instance_valid(main.session) and main.session != r2ref.get_ref() \
+						and main.session.player != null and not main.session.m.lobby and not main.session.m.over, 40.0)
+				check(ended and third, "after that one, the host's Next game took us straight into a new match")
+				await wait(5.0)   # (so the host, still building its map, sees us there)
 		await wait(1.0)
 	Net.close()
 	print("---- net lobby: %d failed ----" % _fails)

@@ -14,6 +14,14 @@ signal rat_spawned(rat: Rat)
 signal windup_spawned(body: Rat)   # a Wind-up Decoy's body, for a sprite
 
 const TEAM_NAMES := ["Blue", "Red"]
+## What the results screen tallies for every rat, in the order it lists them.
+const STATS := ["banked", "mined", "stolen", "bonks", "bonked", "blocks", "tnt", "traps", "scrap"]
+const STAT_NAMES := {"banked": "Cheese banked", "mined": "Cheese mined", "stolen": "Cheese stolen", "bonks": "Bonks landed",
+	"bonked": "Times bonked", "blocks": "Blocks broken", "tnt": "TNT set off", "traps": "Traps placed", "scrap": "Scrap earned"}
+const TRAP_GADGETS := ["trap", "sticky", "pitfall", "decoy", "squeaker"]   # (and the Wind-up Decoy)
+## Emotes on the results screen: one per movement key, plus jump.
+const EMOTES := ["cheer", "dance", "taunt", "flop", "flip"]
+const EMOTE_TIME := 1.6
 const BOT_NAMES := ["Nibbles", "Gouda", "Brie", "Scrabble", "Whiskers", "Cheddar", "Pip", "Rind"]
 
 
@@ -26,6 +34,7 @@ class Pickup:
 	var lock_t := 0.0
 	var mats: Dictionary = {}
 	var wet := false           # in water (for splashes going in and out)
+	var from_team := -1        # cheese a rat dropped: its team (the other team picking it up stole it)
 
 
 var world: VoxelWorld
@@ -68,6 +77,7 @@ var lava: LiquidFlow
 var water: LiquidFlow
 var over := false
 var winner := -1
+var next_in := -1.0             # seconds until the server starts the next round (-1: when the host says)
 var time := 0.0
 var auto_step := true
 var visual := true
@@ -277,6 +287,10 @@ func step(dt: float) -> void:
 
 func _tick(dt: float) -> void:
 	time += dt
+	for r in rats:
+		r.emote_t = maxf(0.0, r.emote_t - dt)
+	if over and not replica:
+		_bots_emote(dt)
 	if replica:
 		# Only our own rat is simulated here; the server sends the rest.
 		for r in rats:
@@ -523,6 +537,7 @@ func _check_raid(r: Rat, dt: float) -> void:
 		r.raid_t = 0.0
 		scores[enemy] -= 1
 		r.carried += 1
+		tally(r, "stolen")
 		score_changed.emit()
 		fx.emit("pickup", r.position, r.team)
 		toast.emit("%s stole a cheese from the %s vault!" % [r.display_name, TEAM_NAMES[enemy]], -1)
@@ -531,6 +546,7 @@ func _check_raid(r: Rat, dt: float) -> void:
 func _deposit(r: Rat) -> void:
 	var n := r.carried
 	r.carried = 0
+	tally(r, "banked", n)
 	scores[r.team] += n
 	score_changed.emit()
 	fx.emit("deposit", r.position, r.team)
@@ -676,13 +692,16 @@ func _break(rat: Rat, cell: Vector3i, id: int, quiet := false) -> void:
 	if not quiet:
 		fx.emit("break", Vector3(cell), id)
 	var drop := Blocks.drop(id)
+	tally(rat, "blocks")
 	if drop == "cheese":
 		spawn_pickup("cheese", Vector3(cell) + Vector3(0.5, 0.3, 0.5), Vector3(0, 2.5, 0))
+		tally(rat, "mined")
 	elif rat == null:
 		return
 	elif drop == "scrap":
 		var gain := roundi(Config.BASE_SCRAP_PER_BLOCK * multiplier())
 		rat.scrap += gain
+		tally(rat, "scrap", gain)
 		fx.emit("scrap", Vector3(cell), gain)
 	elif drop.begins_with("mat:"):
 		var m := drop.substr(4)
@@ -880,6 +899,8 @@ func try_place_gadget(rat: Rat, cell: Vector3i, gadget: String = "", dir := Vect
 		tnt[cell] = {"owner": rat.id, "fuse": -1.0}
 	elif Blocks.is_placed_trap(block):
 		trap_owner[cell] = rat.team
+	if TRAP_GADGETS.has(g):
+		tally(rat, "traps")
 	elif Blocks.is_machine(block):
 		siege.register(cell, block, rat)
 	rat.play_action("build", 0.3)
@@ -894,7 +915,10 @@ func try_use_equipped(rat: Rat, aim: Dictionary, look: Vector3, gentle: bool, di
 	if rat.equipped == "dynamite" or rat.equipped == "impulse":
 		return dynamite.try_throw(rat, look, gentle, rat.equipped)
 	if rat.equipped == "windup":
-		return windup.try_place(rat, look)
+		var why := windup.try_place(rat, look)
+		if why == "":
+			tally(rat, "traps")
+		return why
 	if aim.is_empty():
 		return "Aim at a surface to place a gadget"
 	var aimed := Vector3i(aim["cell"])
@@ -1249,6 +1273,7 @@ func _drop(rat: Rat, count: int, lock_seconds: float) -> void:
 		var p := spawn_pickup("cheese", rat.position + Vector3(0, 0.5, 0), Vector3(cos(ang) * 2.0, 4.5, sin(ang) * 2.0))
 		p.lock_id = rat.id
 		p.lock_t = lock_seconds
+		p.from_team = rat.team
 
 
 func drop_cheese(rat: Rat, aim: Dictionary = {}, look := Vector3.ZERO) -> bool:
@@ -1276,6 +1301,7 @@ func drop_cheese(rat: Rat, aim: Dictionary = {}, look := Vector3.ZERO) -> bool:
 		pk = spawn_pickup("cheese", rat.eye() + f * 0.4, f * 5.0 + Vector3(0, 2.5, 0))
 	pk.lock_id = rat.id
 	pk.lock_t = 1.0
+	pk.from_team = rat.team
 	fx.emit("place", pk.pos - Vector3(0.5, 0.3, 0.5), Blocks.CHEESE)
 	return true
 
@@ -1302,6 +1328,9 @@ func try_bonk(rat: Rat, target: Rat) -> bool:
 	var dir := target.position - rat.position
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.01 else Vector3(-sin(rat.yaw), 0, -cos(rat.yaw))
+	if not lobby:
+		tally(rat, "bonks")
+		tally(target, "bonked")
 	target.vel = (dir * 7.0 + Vector3(0, 5.0, 0)) * launch_power()
 	target.knock = 0.4
 	target.on_floor = false
@@ -1309,6 +1338,58 @@ func try_bonk(rat: Rat, target: Rat) -> bool:
 		_drop(target, 1, Config.BONK_PICKUP_LOCK)
 	fx.emit("bonk", target.position, null)
 	return true
+
+
+# ---------------------------------------------------------------- results screen
+
+func tally(rat: Rat, key: String, n := 1) -> void:
+	## Count something for the results screen (the authority counts; clients
+	## are sent the totals when the match ends).
+	if rat == null or replica or lobby or n == 0:
+		return
+	rat.stats[key] = int(rat.stats.get(key, 0)) + n
+
+
+func stats_packed() -> PackedInt32Array:
+	## Every rat's tallies, compact for the network: id, then STATS in order.
+	var out := PackedInt32Array()
+	for r in rats:
+		out.append(r.id)
+		for k: String in STATS:
+			out.append(int(r.stats.get(k, 0)))
+	return out
+
+
+func apply_stats(p: PackedInt32Array) -> void:
+	var w := STATS.size() + 1
+	for i in range(0, p.size() - w + 1, w):
+		var r := rat_by_id(p[i])
+		if r == null:
+			continue
+		for j in STATS.size():
+			r.stats[STATS[j]] = p[i + 1 + j]
+
+
+func emote(rat: Rat, kind: String) -> bool:
+	## A results-screen emote (the movement keys). Only once the match is over.
+	if not over or rat == null or not EMOTES.has(kind):
+		return false
+	if rat.emote == kind and rat.emote_t > 0.0:
+		return false   # (held down: it plays to the end, then again)
+	rat.emote = kind
+	rat.emote_t = EMOTE_TIME
+	if remote != null:
+		remote.act("emote", [kind])
+	return true
+
+
+func _bots_emote(dt: float) -> void:
+	## Bots join in on the results screen: winners celebrate, losers mostly sulk.
+	for r in rats:
+		if not r.is_bot or r.emote_t > 0.0 or _rng.randf() > dt * 0.7:
+			continue
+		var pool := ["cheer", "dance", "flip", "taunt"] if r.team == winner else ["flop", "flop", "taunt", "dance"]
+		emote(r, pool[_rng.randi() % pool.size()])
 
 
 func respawn(rat: Rat) -> void:
@@ -1586,6 +1667,8 @@ func _step_pickups(dt: float) -> void:
 				if r.carried >= r.capacity():
 					continue
 				r.carried += 1
+				if p.from_team >= 0 and p.from_team != r.team:
+					tally(r, "stolen")   # one the other team dropped (a bonk, a trap...)
 				fx.emit("pickup", p.pos, r.team)
 			else:
 				for m: String in p.mats:
@@ -1618,6 +1701,7 @@ func _step_tnt(dt: float) -> void:
 
 
 func _explode(cell: Vector3i) -> void:
+	tally(rat_by_id(int((tnt.get(cell, {}) as Dictionary).get("owner", -1))), "tnt")
 	tnt.erase(cell)
 	world.set_block(cell, Blocks.AIR)
 	blast(Vector3(cell) + Vector3(0.5, 0.5, 0.5), Config.TNT_RADIUS, Config.TNT_POWER)

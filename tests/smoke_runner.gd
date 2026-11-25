@@ -56,6 +56,16 @@ func count_block(w: VoxelWorld, from: Vector3i, size: Vector3i, id: int) -> int:
 	return n
 
 
+func m_emote_check(s: GameSession) -> void:
+	## The results screen: W makes our rat cheer on its card.
+	var ev := InputEventAction.new()
+	ev.action = "move_forward"
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	await frames(3)
+	check(s.player.emote == "cheer" and s.player.emote_t > 0.0, "W makes your rat cheer on the results screen")
+
+
 func frames(n: int) -> void:
 	for i in n:
 		await get_tree().process_frame
@@ -273,8 +283,12 @@ func _run() -> void:
 	await frames(10)
 	if s.hud._dialog != null:
 		check(fits((s.hud._dialog as Control).get_child(1) as Control), "results fit the viewport")
+	check(s.hud.results != null and s.hud.results.first_button() != null and s.hud.results.first_button().text.begins_with("Play again"),
+		"with Play again, Main menu and Quit")
+	await m_emote_check(s)
+	await frames(20)
 	await shot("14_results")
-	s.hud.rematch_requested.emit()
+	s.hud.results.first_button().pressed.emit()
 	await until_loaded(s)
 	await frames(30)
 	check(main.session != null and main.session != s and not main.session.m.over, "rematch starts a fresh match")

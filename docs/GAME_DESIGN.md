@@ -13,6 +13,37 @@ Where the cheese is: a teaser block on a plinth in the open, ruins and a scrap l
 underground, single blocks buried in stone, obsidian vaults (slow to crack), and a
 jackpot in the mushroom chapel at the centre, reached by the sewer that both teams share.
 
+## The results screen
+
+When a team reaches the goal, everyone sees the results: the winner, the score and the match
+time, and every rat standing in a line-up (winners first), each over its tallies for the match:
+
+| Tally | Counts |
+|---|---|
+| Cheese banked | cheese you carried home |
+| Cheese mined | cheese blocks you dug out |
+| Cheese stolen | vault raids, plus cheese the other team dropped (bonked, trapped) that you picked up |
+| Bonks landed / Times bonked | bonks that hit (not ones a Rat Knight Shield stopped) |
+| Blocks broken | blocks your paws broke (not blasts) |
+| TNT set off | your TNT and Mobile TNT that went off, whoever lit it |
+| Traps placed | Mouse Traps, Sticky Traps, Pitfalls, Cheese Decoys, Squeaker Pads, Wind-up Decoys |
+| Scrap earned | scrap from mining (not refunds or the stash) |
+
+The best at each tally is picked out in gold (except Times bonked), and the winning team's
+standout gets an **MVP** badge (banked x10, stolen x6, mined x4, bonks x2, plus TNT, traps and
+a little for blocks). Small teams stand side by side; bigger ones one above the other, scrolled
+to your own card. The lobby playground keeps no tallies.
+
+**Emotes:** while it's up, the movement keys make your rat perform on its card: **W** cheer,
+**A** dance, **D** taunt, **S** flop, **Space** flip (a controller: the left stick, **Y** to
+flip). Online, everyone sees everyone's. Bots join in: winners celebrate, losers mostly sulk.
+
+**What next:** offline, **Play again** (a new map), **Main menu** or **Quit game**. The host of
+an online game picks **Next game** (a new map, straight in), **Back to the lobby** (the
+playground first) or **Main menu** (which ends the game for everyone); players stay connected
+through either of the first two. Other players see "Waiting for the host" (on a dedicated server,
+a countdown to the next round) and can **Leave**.
+
 ## Core numbers
 
 | Rule | Value |

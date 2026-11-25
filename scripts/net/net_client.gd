@@ -127,6 +127,9 @@ func on_snap(s: Dictionary) -> void:
 		m.scores[1] = int(sc[1])
 		m.score_changed.emit()
 	m.winner = int(s.get("w", -1))
+	m.next_in = float(s.get("nx", -1.0))
+	if s.get("ss") is PackedInt32Array:
+		m.apply_stats(s["ss"])
 	if bool(s.get("o", false)) and not m.over:
 		m.over = true
 		m.won.emit(m.winner)
@@ -148,6 +151,21 @@ func on_snap(s: Dictionary) -> void:
 	m.windup.apply(s.get("wd", []))
 	var pads: Variant = s.get("tp", [])
 	m.tele_net = pads if pads is Array else []
+	_apply_emotes(s.get("em", []))
+
+
+func _apply_emotes(list: Variant) -> void:
+	if not (list is Array):
+		return
+	for e: Variant in list:
+		if not (e is Array) or (e as Array).size() < 3 or not (e[0] is int) or not (e[1] is String):
+			continue
+		var r := m.rat_by_id(e[0])
+		if r == null or r.id == my_id or not Match.EMOTES.has(e[1]):
+			continue   # (our own emotes start here as we press the keys)
+		if r.emote != String(e[1]) or float(e[2]) > r.emote_t + 0.3:
+			r.emote = String(e[1])
+		r.emote_t = float(e[2])
 
 
 func _apply_rats(list: Array) -> void:
@@ -273,6 +291,8 @@ func on_events(e: Dictionary) -> void:
 		m.fx.emit(String(f[0]), f[1], f[2])
 	for t: Array in e.get("to", []):
 		m.toast.emit(String(t[0]), int(t[1]))
+	if e.get("ss") is PackedInt32Array:
+		m.apply_stats(e["ss"])
 	var won := int(e.get("won", -1))
 	if won >= 0 and not m.over:
 		m.over = true
