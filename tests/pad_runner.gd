@@ -141,7 +141,23 @@ func _run() -> void:
 	await shot("pad_01_home")
 	for i in 3:
 		await pad(JOY_BUTTON_DPAD_DOWN)
-	check(focus_text().contains("How to Play"), "and on down the list (%s)" % focus_text())
+	check(focus_text().contains("Customize Rat"), "and on down the list (%s)" % focus_text())
+	# --- Customize Rat with a controller: pick a hat, back out -----------
+	var hat_was := String(Config.get_value("hat"))
+	Config.set_value("hat", "")
+	await pad(JOY_BUTTON_A)
+	check(page_has(menu, "Customize Rat") and focus_text() == "No hat", "A opens Customize Rat, on your current hat (%s)" % focus_text())
+	await pad(JOY_BUTTON_DPAD_RIGHT)
+	await pad(JOY_BUTTON_A)
+	check(String(Config.get_value("hat")) == "party", "D-pad and A pick a hat (%s)" % String(Config.get_value("hat")))
+	await shot("pad_01b_customize")
+	await pad(JOY_BUTTON_B)
+	check(page_has(menu, "Learn to Play"), "B goes back home")
+	Config.set_value("hat", hat_was)
+	Config.save()
+	for i in 5:
+		await pad(JOY_BUTTON_DPAD_DOWN)
+	check(focus_text().contains("How to Play"), "further down: How to Play (%s)" % focus_text())
 	await pad(JOY_BUTTON_A)
 	check(page_has(menu, "How to Play"), "A opens the focused page")
 	var help_scroll: ScrollContainer = menu._page.find_children("*", "ScrollContainer", true, false)[0]
