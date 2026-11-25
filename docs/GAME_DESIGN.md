@@ -84,6 +84,18 @@ the choice is remembered. Free Build and the playground ignore them.
   leaves 2 scrap blocks at the bottom of the crater, so it's worth running to afterwards. Bots
   run out of the ring. Numbers: `Config.METEOR_*`.
 
+- **Lava Rise:** at 1 minute, lava starts filling the open air at the bottom of the map (the
+  deepest caves) and climbs 5 blocks a minute, a layer every 12 s that creeps in cell by cell.
+  It stops at the layer just under the base platforms. Anything dug or blasted open below the
+  line fills back in after a second. Bots stop going for cheese and scrap that's under it.
+- **Flash Freeze:** at 45 s (warned 5 s before) every water block on the map turns to ice;
+  anyone swimming ends up on top of it.
+- **Fungal Outbreak:** from 30 s, a giant mushroom sprouts every 20-35 s at a random spot on
+  open ground away from the bases: a 5-9 block stem, then a broad cap (radius 2-3) to stand
+  on, grown over 4 s and never into a rat. At most 30 a match. They dig like any mushroom.
+
+Numbers for all of them: `Config.METEOR_*`, `LAVA_RISE_*`, `FREEZE_*`, `FUNGUS_*`.
+
 To add another: a new id in `scripts/match/mutators.gd`, then `m.has_mutator(id)` where it acts.
 
 ## Core numbers

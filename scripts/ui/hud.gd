@@ -103,6 +103,12 @@ func _ready() -> void:
 		_push_toast("Dig for golden cheese and carry it back to your base. First to %d wins!" % m.goal, UiKit.BRASS)
 	if m.has_mutator("meteors") and not m.free_mode:
 		_push_toast("METEOR SHOWER: when a red ring appears, get out of it! Each meteor leaves scrap in its crater.", Color(1.0, 0.55, 0.3))
+	if m.has_mutator("lava_rise") and not m.free_mode:
+		_push_toast("LAVA RISE: from 1 minute in, lava climbs up from the bottom of the map. Don't dig too deep for too long!", Color(1.0, 0.45, 0.2))
+	if m.has_mutator("flash_freeze") and not m.free_mode:
+		_push_toast("FLASH FREEZE: at 45 seconds every drop of water turns to ice.", Color(0.6, 0.85, 1.0))
+	if m.has_mutator("fungal") and not m.free_mode:
+		_push_toast("FUNGAL OUTBREAK: giant mushrooms will sprout across the battlefield.", Color(0.95, 0.5, 0.5))
 	if m.infinite:
 		_push_toast("CHEAT CODE: infinite scrap, materials and gadgets for everyone this match!", Color(1.0, 0.85, 0.3))
 

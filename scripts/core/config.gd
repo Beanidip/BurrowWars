@@ -66,7 +66,24 @@ const METEOR_WARN := 3.0           # seconds the red ring shows before it strike
 const METEOR_HEIGHT := 45.0        # how high above the target it appears
 const METEOR_RADIUS := 3.5         # crater radius in blocks (and the bonk zone, plus a little)
 const METEOR_POWER := 14.0         # dig hits at the centre of the crater (TNT is 10)
-const METEOR_SCRAP := 2            # scrap blocks the meteorite leaves at the bottom         # a bot heads home to bank once it carries this much
+const METEOR_SCRAP := 2            # scrap blocks the meteorite leaves at the bottom
+## Lava Rise (a match option)
+const LAVA_RISE_START := 60.0      # seconds in: lava appears in the open air at the bottom of the map
+const LAVA_RISE_STEP := 5          # blocks it climbs each minute after that (a layer at a time)
+const LAVA_RISE_MAX := 30          # the highest layer: just under the base platforms (MapGenerator.GROUND - 2)
+const LAVA_REFILL := 1.0           # seconds before a hole dug below the lava line fills back in
+## Flash Freeze (a match option)
+const FREEZE_AT := 45.0            # seconds in: every water block turns to ice
+const FREEZE_WARN := 5.0           # seconds of warning before
+const FREEZE_PER_TICK := 400       # blocks frozen each tick (it sweeps through in a moment)
+## Fungal Outbreak (a match option)
+const FUNGUS_FIRST := 30.0         # seconds in: the first giant mushroom
+const FUNGUS_GAP_MIN := 20.0       # seconds between mushrooms, at random in this range
+const FUNGUS_GAP_MAX := 35.0
+const FUNGUS_GROW := 4.0           # seconds a mushroom takes to grow
+const FUNGUS_HEIGHT_MIN := 5       # stem height
+const FUNGUS_HEIGHT_MAX := 9
+const FUNGUS_MAX := 30             # at most this many per match         # a bot heads home to bank once it carries this much
 const GROWTH_BONUS := 1.5
 const STACK_MAX := 10
 const CHISEL_RATE := 9.0          # microvoxel edits per second

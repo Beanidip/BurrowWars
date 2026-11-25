@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "scrap_race", "bots_finish_a_scrap_race", "meteor_shower", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "scrap_race", "bots_finish_a_scrap_race", "meteor_shower", "lava_freeze_fungus", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -5814,3 +5814,117 @@ func test_meteor_shower() -> void:
 	end(free)
 	end(m2)
 	end(m)
+
+
+func count_blocks(m: Match, id: int, y := -1) -> int:
+	var n := 0
+	for x in VoxelWorld.SX:
+		for z in VoxelWorld.SZ:
+			if y >= 0:
+				n += 1 if m.world.get_cell(Vector3i(x, y, z)) == id else 0
+			else:
+				for yy in VoxelWorld.SY:
+					n += 1 if m.world.get_cell(Vector3i(x, yy, z)) == id else 0
+	return n
+
+
+func test_lava_freeze_fungus() -> void:
+	## Lava Rise, Flash Freeze and Fungal Outbreak.
+	check(Mutators.clean(["fungal", "lava_rise", "flash_freeze", "meteors"]) == ["meteors", "lava_rise", "flash_freeze", "fungal"], "four extras")
+	# --- Lava Rise: the schedule, and a layer creeping in ---
+	var m := new_match({"goal": 50, "mutators": ["lava_rise"]})
+	var x := m.extras
+	check(x.lava_target(59.0) == 0, "no lava for the first minute")
+	m.time = 60.0
+	x.step(DT)
+	var fl := x.lava_floor
+	check(fl >= 1 and fl < 10 and x.lava_target(60.0) == fl and x.lava_target(72.0) == fl + 1 and x.lava_target(120.0) == fl + 5,
+		"then from the lowest open air (y %d), 5 blocks a minute, a layer at a time" % fl)
+	check(x.lava_target(99999.0) == Config.LAVA_RISE_MAX and Config.LAVA_RISE_MAX == MapGenerator.GROUND - 2,
+		"and it stops at the layer just under the bases (y %d)" % Config.LAVA_RISE_MAX)
+	var air0 := x._lava_queue.size() + count_blocks(m, Blocks.LAVA, fl) - count_blocks(new_match_cached(), Blocks.LAVA, fl)
+	var ticks := 0
+	while ticks < int(12.0 / DT):
+		x.step(DT)
+		ticks += 1
+	var air1 := 0
+	for xx in VoxelWorld.SX:
+		for zz in VoxelWorld.SZ:
+			var c := Vector3i(xx, fl, zz)
+			air1 += 1 if m.world.get_cell(c) == Blocks.AIR and not MapGenerator.in_any_base(c, 1.0) else 0
+	check(x.lava_level == fl and air0 > 500 and air1 == 0, "over 12 s the bottom layer fills with lava (%d open cells -> %d)" % [air0, air1])
+	check(count_blocks(m, Blocks.LAVA, fl + 1) == count_blocks(new_match_cached(), Blocks.LAVA, fl + 1), "the next layer hasn't started yet")
+	# a hole opened under the line fills back in
+	var hole := Vector3i(-1, -1, -1)
+	for xx in VoxelWorld.SX:
+		for zz in VoxelWorld.SZ:
+			if hole.x < 0 and m.world.get_cell(Vector3i(xx, fl, zz)) == Blocks.LAVA and not MapGenerator.in_any_base(Vector3i(xx, fl, zz), 1.0):
+				hole = Vector3i(xx, fl, zz)
+	m.world.set_block(hole, Blocks.AIR)
+	for i in int((Config.LAVA_REFILL + 0.2) / DT):
+		x.step(DT)
+	check(m.world.get_cell(hole) == Blocks.LAVA, "a hole dug below the line fills back in")
+	end(m)
+	# --- Flash Freeze ---
+	var f := new_match({"goal": 50, "mutators": ["flash_freeze"]})
+	var water0 := count_blocks(f, Blocks.WATER)
+	var ice0 := count_blocks(f, Blocks.ICE)
+	var toasts: Array[String] = []
+	f.toast.connect(func(t: String, _team: int) -> void: toasts.append(t))
+	f.time = Config.FREEZE_AT - Config.FREEZE_WARN + 0.1
+	f.extras.step(DT)
+	check(toasts.size() == 1 and toasts[0].contains("cold snap") and not f.extras.frozen, "a warning first")
+	f.time = Config.FREEZE_AT
+	for i in 60:
+		f.extras.step(DT)
+	check(water0 > 100 and count_blocks(f, Blocks.WATER) == 0 and count_blocks(f, Blocks.ICE) == ice0 + water0,
+		"then every water block turns to ice (%d)" % water0)
+	end(f)
+	# --- Fungal Outbreak ---
+	var g := new_match({"goal": 50, "mutators": ["fungal"]})
+	flat_arena(g, ARENA, 6)
+	for dx in range(-5, 6):
+		for dz in range(-5, 6):
+			for dy in range(0, 14):
+				g.world.set_block(ARENA + Vector3i(dx, dy, dz), Blocks.AIR)
+	var under := arena_rat(g, 0, "scout", Vector3(2.0, 0, 0))   # (where a cap might reach: never entombed)
+	g.extras._fungus_next = 999.0
+	check(g.extras.grow_mushroom(ARENA), "a mushroom starts growing")
+	check(g.world.get_cell(ARENA) == Blocks.AIR, "it grows, rather than appearing at once")
+	for i in int((Config.FUNGUS_GROW + 0.3) / DT):
+		g.extras.step(DT)
+	var stem := 0
+	while g.world.get_cell(ARENA + Vector3i(0, stem, 0)) == Blocks.SHROOM_STEM:
+		stem += 1
+	var cap := 0
+	for dx in range(-3, 4):
+		for dz in range(-3, 4):
+			cap += 1 if g.world.get_cell(ARENA + Vector3i(dx, stem, dz)) == Blocks.SHROOM_CAP else 0
+	check(stem >= Config.FUNGUS_HEIGHT_MIN and stem <= Config.FUNGUS_HEIGHT_MAX and cap >= 13,
+		"a giant mushroom: a %d-block stem and a %d-block cap to stand on" % [stem, cap])
+	check(not under.blocked(), "nobody is grown into it")
+	end(g)
+	var g2 := new_match({"goal": 50, "mutators": ["fungal"]})
+	var caps0 := count_blocks(g2, Blocks.SHROOM_CAP)
+	g2.spawn_rat(0, "digger", true)
+	while g2.time < Config.FUNGUS_FIRST + Config.FUNGUS_GROW + 0.5:
+		g2.step(DT)
+	check(g2.extras.mushrooms == 1 and count_blocks(g2, Blocks.SHROOM_CAP) > caps0 + 10, "on its own: the first one %.0f s in" % Config.FUNGUS_FIRST)
+	end(g2)
+	end_cached()
+
+
+var _cached: Match = null
+
+
+func new_match_cached() -> Match:
+	## (an untouched copy of the default test map, for comparisons)
+	if _cached == null:
+		_cached = new_match({"goal": 50})
+	return _cached
+
+
+func end_cached() -> void:
+	if _cached != null:
+		end(_cached)
+		_cached = null

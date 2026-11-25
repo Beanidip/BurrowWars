@@ -98,6 +98,7 @@ var dynamite: DynamiteSystem
 var windup: WindupSystem
 var siege: SiegeSystem
 var meteors: MeteorSystem
+var extras: ExtrasSystem
 
 var _next_uid := 1
 var _rng := RandomNumberGenerator.new()
@@ -124,6 +125,7 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 	windup = WindupSystem.new(self)
 	siege = SiegeSystem.new(self)
 	meteors = MeteorSystem.new(self)
+	extras = ExtrasSystem.new(self)
 	lava = LiquidFlow.lava(self)
 	water = LiquidFlow.water(self)
 	if not replica:   # a replica only mirrors the server's terrain changes
@@ -187,6 +189,7 @@ func _on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 		decoys[cell] = Blocks.trap_team(new_id)
 	else:
 		decoys.erase(cell)
+	extras.on_block_changed(cell, _old, new_id)
 	if scrap_race:
 		if new_id == Blocks.SCRAP:
 			scrap_cells[cell] = true
@@ -441,6 +444,7 @@ func _tick(dt: float) -> void:
 	dynamite.step(dt)
 	windup.step(dt)
 	meteors.step(dt)
+	extras.step(dt)
 	_drop_crumbs()
 	siege.step(dt)
 	lava.step(dt)

@@ -194,6 +194,8 @@ func _pick_cheese() -> Variant:
 		if int(m.decoys[c]) != rat.team:
 			spots.append(c)      # the other team's Cheese Decoys look like cheese to us too
 	for c: Vector3i in spots:
+		if c.y <= m.extras.lava_level:
+			continue   # (Lava Rise: under the lava now)
 		var p2 := Vector3(c) + Vector3(0.5, 0.0, 0.5)
 		# per-bot preference noise so teammates spread over different deposits
 		var noise := fmod(absf(float(c.x * 31 + c.y * 17 + c.z * 13) + jitter), 9.0)
@@ -231,6 +233,8 @@ func _nearest_scrap() -> Variant:
 	var best: Variant = null
 	var best_cost := INF
 	for c: Vector3i in m.scrap_cells:
+		if c.y <= m.extras.lava_level:
+			continue
 		var p := Vector3(c) + Vector3(0.5, 0.0, 0.5)
 		var noise := fmod(absf(float(c.x * 31 + c.y * 17 + c.z * 13) + jitter), 9.0)
 		var cost := p.distance_to(rat.position) + noise + absf(p.y - rat.position.y) * 0.5

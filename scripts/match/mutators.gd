@@ -4,10 +4,13 @@ class_name Mutators
 ## "mutators": an array of ids from LIST. Add one here, give it a name and a
 ## line of description, and check Match.has_mutator(id) where it acts.
 
-const LIST := ["meteors"]
-const NAMES := {"meteors": "Meteor Shower"}
+const LIST := ["meteors", "lava_rise", "flash_freeze", "fungal"]
+const NAMES := {"meteors": "Meteor Shower", "lava_rise": "Lava Rise", "flash_freeze": "Flash Freeze", "fungal": "Fungal Outbreak"}
 const BLURBS := {
 	"meteors": "Meteors fall at random through the match: a red ring warns where, then the blast digs a crater, bonks anyone caught in it, and leaves a chunk of scrap.",
+	"lava_rise": "From 1 minute in, lava fills the open air at the bottom of the map and creeps up 5 blocks every minute, until it's just under the bases.",
+	"flash_freeze": "At 45 seconds a cold snap turns every drop of water on the map to ice.",
+	"fungal": "Giant mushrooms sprout across the battlefield through the match: new platforms, and new obstacles.",
 }
 
 
