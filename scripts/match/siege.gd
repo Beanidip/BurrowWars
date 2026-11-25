@@ -289,7 +289,7 @@ func predict(mc: Machine, points := 14) -> Array[Vector3]:
 	var p := muzzle(mc)
 	var v := aim_dir(mc) * Config.CANNON_SPEED
 	for i in points * 4:
-		v.y -= SHOT_GRAVITY * 0.03
+		v.y -= SHOT_GRAVITY * m.gravity() * 0.03
 		p += v * 0.03
 		if i % 4 == 3:
 			out.append(p)
@@ -389,7 +389,7 @@ func _swing(mc: Machine, dt: float) -> void:
 	var h := dt / float(slices)
 	for i in slices:
 		var was := mc.omega
-		mc.omega += (-(SHOT_GRAVITY / CRANE_CABLE) * sin(mc.theta) - 0.22 * mc.omega) * h
+		mc.omega += (-(SHOT_GRAVITY * m.gravity() / CRANE_CABLE) * sin(mc.theta) - 0.22 * mc.omega) * h
 		mc.theta = clampf(mc.theta + mc.omega * h, -1.45, 1.45)
 		if signf(mc.omega) != signf(was):
 			mc.smashed.clear()   # turned round: the next pass hits everything afresh
@@ -446,7 +446,7 @@ func _fly(s: Shot, dt: float) -> bool:
 	var steps := maxi(1, ceili(s.vel.length() * dt / 0.25))
 	var h := dt / float(steps)
 	for i in steps:
-		s.vel.y -= SHOT_GRAVITY * h
+		s.vel.y -= SHOT_GRAVITY * m.gravity() * h
 		s.pos += s.vel * h
 		if s.pos.y < -4.0:
 			return true

@@ -82,7 +82,16 @@ const FUNGUS_GAP_MAX := 35.0
 const FUNGUS_GROW := 4.0           # seconds a mushroom takes to grow
 const FUNGUS_HEIGHT_MIN := 5       # stem height
 const FUNGUS_HEIGHT_MAX := 9
-const FUNGUS_MAX := 30             # at most this many per match         # a bot heads home to bank once it carries this much
+const FUNGUS_MAX := 30             # at most this many per match
+## Modifiers (match options that change the rules for the whole match)
+const SUPER_SPRING := 1.7320508    # Super Springs: spring launch speed x this (x sqrt 3 = three times as high)
+const LOW_GRAVITY := 0.4           # Low Gravity: gravity x this for rats, pickups, TNT and siege shots
+const TNT_MADNESS_PRICE := 0.25    # TNT Madness: TNT and Mobile TNT cost this share of the price (at least 1)
+const ROULETTE_EVERY := 120.0      # Class Roulette: seconds between everyone's class changes
+const SCRAP_RUSH := 3              # Scrap Rush: scrap from each block x this
+const CHEESE_RAIN_MIN := 15.0      # Cheese Rain: seconds between drops, at random in this range
+const CHEESE_RAIN_MAX := 30.0
+const CHEESE_RAIN_COUNT := 2       # cheese per drop (at most)         # a bot heads home to bank once it carries this much
 const GROWTH_BONUS := 1.5
 const STACK_MAX := 10
 const CHISEL_RATE := 9.0          # microvoxel edits per second

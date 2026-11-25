@@ -178,14 +178,17 @@ func reset(id: int, rat: Rat, now: int = -1) -> void:
 	st["good"] = rat.position
 	st["inside"] = 0.0
 	var up := maxf(0.0, rat.vel.y)
-	_support(st, rat, rat.position, now, up * up / (2.0 * Rat.GRAVITY) + JUMP_RISE)
+	_support(st, rat, rat.position, now, up * up / (2.0 * Rat.GRAVITY) + JUMP_RISE)   # (_support scales it for Low Gravity)
 
 
 func _support(st: Dictionary, rat: Rat, pos: Vector3, now: int, allow: float) -> void:
 	st["base_y"] = pos.y
 	st["base_t"] = now
 	var jet := rat.gear == "jetpack"
-	st["allow"] = allow + (JET_RISE if jet else 0.0)
+	# (Low Gravity: everything rises higher and falls slower, in proportion)
+	var lift := 1.0 / maxf(rat.gravity_scale, 0.05)
+	st["allow"] = (allow + (JET_RISE if jet else 0.0)) * lift
+	st["g"] = Rat.GRAVITY * rat.gravity_scale
 	st["jet"] = Config.JETPACK_TIME if jet else 0.0
 
 
@@ -239,10 +242,11 @@ func ceiling(st: Dictionary, now: int) -> float:
 	## up to its allowance while it could still be rising, then falling.
 	var allow := float(st["allow"])
 	var t := float(now - int(st["base_t"])) / 1000.0 - LAG_GRACE
-	var t_up := sqrt(2.0 * allow / Rat.GRAVITY) * 1.5 + float(st["jet"]) + 0.3
+	var g := float(st.get("g", Rat.GRAVITY))
+	var t_up := sqrt(2.0 * allow / g) * 1.5 + float(st["jet"]) + 0.3
 	var top := float(st["base_y"]) + allow + RISE_SLACK
 	if t > t_up:
-		top -= 0.5 * Rat.GRAVITY * (t - t_up) * (t - t_up)
+		top -= 0.5 * g * (t - t_up) * (t - t_up)
 	return top
 
 
@@ -268,7 +272,7 @@ func _boost_near(rat: Rat, pos: Vector3) -> float:
 			for dx in range(-1, 2):
 				var id := w.get_cell(f + Vector3i(dx, dy, dz))
 				if id == Blocks.SPRING:
-					return SPRING_RISE
+					return SPRING_RISE * rat.spring_scale * rat.spring_scale   # (Super Springs: three times as high)
 				if id == Blocks.WALL_SPRING:
 					best = JUMP_RISE + 1.0
 	return best

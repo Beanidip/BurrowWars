@@ -355,6 +355,8 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"pickup_scrap":
 			_sound("discovery_chime", pos, 1.4, -4.0)
 			_sprite("collect", pos, 0.45)
+		"cheese_rain":
+			_sound("discovery_chime", pos, 1.6, 2.0, 0.3)
 		"fungus":
 			_sound("pop", pos, 0.55, 2.0, 0.4)
 			_burst(pos + Vector3(0, 0.5, 0), Color(0.85, 0.3, 0.3), 16, 3.0)

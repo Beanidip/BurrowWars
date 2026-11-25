@@ -107,6 +107,12 @@ func _ready() -> void:
 		_push_toast("LAVA RISE: from 1 minute in, lava climbs up from the bottom of the map. Don't dig too deep for too long!", Color(1.0, 0.45, 0.2))
 	if m.has_mutator("flash_freeze") and not m.free_mode:
 		_push_toast("FLASH FREEZE: at 45 seconds every drop of water turns to ice.", Color(0.6, 0.85, 1.0))
+	var mods: Array[String] = []
+	for id: String in Mutators.MODIFIERS:
+		if m.has_mutator(id) and not m.free_mode:
+			mods.append("%s (%s)" % [String(Mutators.NAMES[id]), String(Mutators.BLURBS[id]).trim_suffix(".").to_lower()])
+	if not mods.is_empty():
+		_push_toast("MODIFIERS: " + "; ".join(mods) + ".", Color(0.75, 0.9, 1.0))
 	if m.has_mutator("fungal") and not m.free_mode:
 		_push_toast("FUNGAL OUTBREAK: giant mushrooms will sprout across the battlefield.", Color(0.95, 0.5, 0.5))
 	if m.infinite:
@@ -810,7 +816,7 @@ func _fill_workshop(v: VBoxContainer) -> void:
 		_owned_labels.append(own_label)
 		text.add_child(own_label)
 		text.add_child(UiKit.wrapped(item["desc"], 13, UiKit.PAPER.darkened(0.2)))
-		var cost := ClassDefs.price(rat.cls, String(item["id"]), m.unlimited())
+		var cost := m.price(rat, String(item["id"]))
 		var price := "free" if cost == 0 else "%d scrap" % cost
 		var buy := UiKit.button("Buy  -  " + price, _buy.bind(String(item["id"])), Vector2(170, 40))
 		if _focus_pick == null:

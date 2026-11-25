@@ -127,8 +127,8 @@ Scrap is the money; cheese banked by either team makes every scrap block worth m
 | Value | Setting | In play | What it does | Where |
 |---|---|---|---|---|
 | `2` | `BASE_SCRAP_PER_BLOCK` |  | Scrap you get for mining one scrap block, before the multiplier. | `scripts/core/config.gd:54` |
-| `1.5` | `GROWTH_BONUS` |  | How fast scrap gains value as cheese is banked. Value = 1 + (cheese banked by both teams / goal) x this. At 1.5, scrap is worth 2.5x by the time a team wins. | `scripts/core/config.gd:86` |
-| `10` | `STACK_MAX` |  | Most of one gadget you can carry (a workshop item can set a lower 'max'). | `scripts/core/config.gd:87` |
+| `1.5` | `GROWTH_BONUS` |  | How fast scrap gains value as cheese is banked. Value = 1 + (cheese banked by both teams / goal) x this. At 1.5, scrap is worth 2.5x by the time a team wins. | `scripts/core/config.gd:95` |
+| `10` | `STACK_MAX` |  | Most of one gadget you can carry (a workshop item can set a lower 'max'). | `scripts/core/config.gd:96` |
 | `3.5` | `STASH_REACH` |  | How close (blocks) you must stand to a Team Stash to use it. | `scripts/core/config.gd:25` |
 | `5` | `STASH_BLASTS` |  | TNT blasts that break a Team Stash. | `scripts/core/config.gd:24` |
 | `2.5` | `CHEESE_PER_GOAL` |  | A Cheese Race map always holds at least this many cheese per point of goal (goal 8 -> 20+ cheese). | `scripts/world/map_generator.gd:104` |
@@ -163,8 +163,8 @@ Speeds are in blocks per second; 1 block is about one rat tall.
 | `3.0` | `DIG_RATE` | dirt in 0.67 s, stone in 1.33 s | Dig hits per second while holding dig. | `scripts/core/config.gd:8` |
 | `4.5` | `DIG_REACH` |  | How far (blocks) you can dig, build and bonk from your eyes. | `scripts/core/config.gd:9` |
 | `12` | `OBSIDIAN_HITS` |  | Dig hits to break obsidian (other blocks are in the block table below). | `scripts/world/blocks.gd:18` |
-| `9.0` | `CHISEL_RATE` |  | Chisel edits (one microvoxel each) per second. | `scripts/core/config.gd:88` |
-| `9` | `PANTOGRAPH_MAX` |  | Biggest blueprint the pantograph copies, in blocks per side. | `scripts/core/config.gd:114` |
+| `9.0` | `CHISEL_RATE` |  | Chisel edits (one microvoxel each) per second. | `scripts/core/config.gd:97` |
+| `9` | `PANTOGRAPH_MAX` |  | Biggest blueprint the pantograph copies, in blocks per side. | `scripts/core/config.gd:123` |
 
 ## Cheese, bonks and raids
 
@@ -200,20 +200,20 @@ Blast power is in dig hits at the centre, falling to nothing at the radius.
 
 | Value | Setting | In play | What it does | Where |
 |---|---|---|---|---|
-| `2.9` | `TNT_RADIUS` |  | Placed TNT: blast radius in blocks. | `scripts/core/config.gd:89` |
-| `10.0` | `TNT_POWER` |  | Placed TNT: dig hits at the centre. | `scripts/core/config.gd:90` |
-| `2.4` | `DYNAMITE_RADIUS` |  | Mobile TNT: blast radius in blocks. | `scripts/core/config.gd:91` |
-| `6.5` | `DYNAMITE_POWER` |  | Mobile TNT: dig hits at the centre. | `scripts/core/config.gd:92` |
-| `3.0` | `DYNAMITE_FUSE` |  | Mobile TNT: seconds from throw to boom. | `scripts/core/config.gd:93` |
-| `12.0` | `DYNAMITE_THROW_SPEED` |  | Mobile TNT and Impulse Grenades: how hard they're thrown. | `scripts/core/config.gd:94` |
-| `16` | `DYNAMITE_MAX_ACTIVE` |  | Sticks and grenades in the air at once (everyone together). | `scripts/core/config.gd:95` |
-| `0.4` | `IMPULSE_FUSE` |  | Impulse Grenade: seconds from sticking to bursting. | `scripts/core/config.gd:96` |
-| `2.5` | `IMPULSE_FLIGHT` |  | Impulse Grenade: bursts in mid-air after this long if it hits nothing. | `scripts/core/config.gd:97` |
-| `4.0` | `IMPULSE_RADIUS` |  | Impulse Grenade: blocks it pushes things within. | `scripts/core/config.gd:98` |
-| `13.0` | `IMPULSE_PUSH` |  | Impulse Grenade: speed it throws a rat at right beside it (half at the edge). | `scripts/core/config.gd:99` |
-| `8.0` | `IMPULSE_LIFT` |  | Impulse Grenade: extra upward speed, scaled the same way. | `scripts/core/config.gd:100` |
-| `14.0` | `IMPULSE_MAX_UP` | about 4.1 blocks up at most | Impulse Grenade: the most upward speed it can give. | `scripts/core/config.gd:101` |
-| `0.6` | `IMPULSE_CARRY` |  | Impulse Grenade: a cheese carrier is pushed this much as hard. | `scripts/core/config.gd:102` |
+| `2.9` | `TNT_RADIUS` |  | Placed TNT: blast radius in blocks. | `scripts/core/config.gd:98` |
+| `10.0` | `TNT_POWER` |  | Placed TNT: dig hits at the centre. | `scripts/core/config.gd:99` |
+| `2.4` | `DYNAMITE_RADIUS` |  | Mobile TNT: blast radius in blocks. | `scripts/core/config.gd:100` |
+| `6.5` | `DYNAMITE_POWER` |  | Mobile TNT: dig hits at the centre. | `scripts/core/config.gd:101` |
+| `3.0` | `DYNAMITE_FUSE` |  | Mobile TNT: seconds from throw to boom. | `scripts/core/config.gd:102` |
+| `12.0` | `DYNAMITE_THROW_SPEED` |  | Mobile TNT and Impulse Grenades: how hard they're thrown. | `scripts/core/config.gd:103` |
+| `16` | `DYNAMITE_MAX_ACTIVE` |  | Sticks and grenades in the air at once (everyone together). | `scripts/core/config.gd:104` |
+| `0.4` | `IMPULSE_FUSE` |  | Impulse Grenade: seconds from sticking to bursting. | `scripts/core/config.gd:105` |
+| `2.5` | `IMPULSE_FLIGHT` |  | Impulse Grenade: bursts in mid-air after this long if it hits nothing. | `scripts/core/config.gd:106` |
+| `4.0` | `IMPULSE_RADIUS` |  | Impulse Grenade: blocks it pushes things within. | `scripts/core/config.gd:107` |
+| `13.0` | `IMPULSE_PUSH` |  | Impulse Grenade: speed it throws a rat at right beside it (half at the edge). | `scripts/core/config.gd:108` |
+| `8.0` | `IMPULSE_LIFT` |  | Impulse Grenade: extra upward speed, scaled the same way. | `scripts/core/config.gd:109` |
+| `14.0` | `IMPULSE_MAX_UP` | about 4.1 blocks up at most | Impulse Grenade: the most upward speed it can give. | `scripts/core/config.gd:110` |
+| `0.6` | `IMPULSE_CARRY` |  | Impulse Grenade: a cheese carrier is pushed this much as hard. | `scripts/core/config.gd:111` |
 | `10` | `GATE_HP` |  | Hits a Team Gate takes before breaking: wrecking ball hits count 1, a TNT blast 5. | `scripts/core/config.gd:12` |
 
 ## Gear
@@ -236,23 +236,23 @@ One piece worn at a time; the gear button (J) uses it.
 
 | Value | Setting | In play | What it does | Where |
 |---|---|---|---|---|
-| `2` | `CANNON_SCRAP` |  | Scrap Cannon: scrap each shot costs the gunner (free in Free Build and the playground). | `scripts/core/config.gd:106` |
-| `2.2` | `CANNON_COOLDOWN` | at most 27 shots a minute | Scrap Cannon: seconds between shots. | `scripts/core/config.gd:103` |
-| `24.0` | `CANNON_SPEED` |  | Scrap Cannon: speed of the cannonball (higher = flatter, longer shots). | `scripts/core/config.gd:104` |
+| `2` | `CANNON_SCRAP` |  | Scrap Cannon: scrap each shot costs the gunner (free in Free Build and the playground). | `scripts/core/config.gd:115` |
+| `2.2` | `CANNON_COOLDOWN` | at most 27 shots a minute | Scrap Cannon: seconds between shots. | `scripts/core/config.gd:112` |
+| `24.0` | `CANNON_SPEED` |  | Scrap Cannon: speed of the cannonball (higher = flatter, longer shots). | `scripts/core/config.gd:113` |
 | `14.0` | `SHOT_GRAVITY` |  | Scrap Cannon: how fast cannonballs drop. | `scripts/match/siege.gd:15` |
-| `3` | `CANNON_HIT` |  | Scrap Cannon: dig hits on the struck block; the six touching it take 2, the rest of the 3x3x3 take 1. | `scripts/core/config.gd:105` |
-| `13.0` | `CANNON_PUSH` |  | Scrap Cannon: speed a direct hit throws a rat at. | `scripts/core/config.gd:107` |
-| `7.0` | `CANNON_LIFT` |  | Scrap Cannon: the upward part of that throw. | `scripts/core/config.gd:108` |
-| `2.6` | `CANNON_SPLASH` |  | Scrap Cannon: blocks from the impact the blast still shoves enemy rats. | `scripts/core/config.gd:109` |
+| `3` | `CANNON_HIT` |  | Scrap Cannon: dig hits on the struck block; the six touching it take 2, the rest of the 3x3x3 take 1. | `scripts/core/config.gd:114` |
+| `13.0` | `CANNON_PUSH` |  | Scrap Cannon: speed a direct hit throws a rat at. | `scripts/core/config.gd:116` |
+| `7.0` | `CANNON_LIFT` |  | Scrap Cannon: the upward part of that throw. | `scripts/core/config.gd:117` |
+| `2.6` | `CANNON_SPLASH` |  | Scrap Cannon: blocks from the impact the blast still shoves enemy rats. | `scripts/core/config.gd:118` |
 | `2.4` | `CRANE_MIN_SPEED` |  | Wrecking Crane: the ball must swing at least this fast (blocks/s) to do damage. | `scripts/core/config.gd:13` |
 | `0.85` | `BALL_KEEP_BROKE` |  | Wrecking Crane: share of its speed the ball keeps after smashing a block to pieces. | `scripts/match/siege.gd:378` |
 | `0.6` | `BALL_KEEP_HELD` |  | Wrecking Crane: share it keeps after hitting a block that held (it still goes through). | `scripts/match/siege.gd:379` |
 | `3.0` | `CRANE_CABLE` |  | Wrecking Crane: cable length (longer = wider, slower swing). | `scripts/match/siege.gd:13` |
 | `2.5` | `CRANE_REACH` |  | Wrecking Crane: boom length (how far out the ball hangs). | `scripts/match/siege.gd:12` |
-| `4` | `CRANE_MAX_HIT` |  | Not used by the game any more (left over; safe to ignore). | `scripts/core/config.gd:110` |
-| `1.0` | `DOZER_COOLDOWN` |  | Bulldozer: seconds between rams. | `scripts/core/config.gd:111` |
-| `2` | `DOZER_HIT` |  | Bulldozer: dig hits on each of the 6 blocks (3 wide, 2 high) in front of the blade. | `scripts/core/config.gd:112` |
-| `0.45` | `MACHINE_MOVE_TIME` |  | Seconds a machine takes to ride one block along a conveyor. | `scripts/core/config.gd:113` |
+| `4` | `CRANE_MAX_HIT` |  | Not used by the game any more (left over; safe to ignore). | `scripts/core/config.gd:119` |
+| `1.0` | `DOZER_COOLDOWN` |  | Bulldozer: seconds between rams. | `scripts/core/config.gd:120` |
+| `2` | `DOZER_HIT` |  | Bulldozer: dig hits on each of the 6 blocks (3 wide, 2 high) in front of the blade. | `scripts/core/config.gd:121` |
+| `0.45` | `MACHINE_MOVE_TIME` |  | Seconds a machine takes to ride one block along a conveyor. | `scripts/core/config.gd:122` |
 
 ## Bots
 
@@ -296,8 +296,8 @@ turn any of them into a named setting.
 | Value | What | What it does | Where |
 |---|---|---|---|
 | `6` | Starting scrap | Scrap every rat starts a match with. | `scripts/match/match.gd:224` |
-| `7.0` | Bonk throw (sideways) | How hard a bonk shoves the bonked rat away. | `scripts/match/match.gd:1454` |
-| `[7.0, 3.0, 0.0]` | Bot rest times | Seconds bots pause between decisions for Relaxed, Normal and Fierce. | `scripts/ui/main_menu.gd:424` |
-| `8` | Default cheese goal | Goal offered in the Cheese Race setup the first time (players can change it, 3-250). | `scripts/core/config.gd:130` |
-| `1.6` | Highway speed boost | Speed multiplier while running on a Highway (1.6 = 60% faster). | `scripts/actors/rat.gd:175` |
-| `0.5` | Sticky Trap slow | Speed multiplier while stuck in an enemy Sticky Trap. | `scripts/actors/rat.gd:171` |
+| `7.0` | Bonk throw (sideways) | How hard a bonk shoves the bonked rat away. | `scripts/match/match.gd:1479` |
+| `[7.0, 3.0, 0.0]` | Bot rest times | Seconds bots pause between decisions for Relaxed, Normal and Fierce. | `scripts/ui/main_menu.gd:426` |
+| `8` | Default cheese goal | Goal offered in the Cheese Race setup the first time (players can change it, 3-250). | `scripts/core/config.gd:139` |
+| `1.6` | Highway speed boost | Speed multiplier while running on a Highway (1.6 = 60% faster). | `scripts/actors/rat.gd:177` |
+| `0.5` | Sticky Trap slow | Speed multiplier while stuck in an enemy Sticky Trap. | `scripts/actors/rat.gd:173` |

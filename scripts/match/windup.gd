@@ -80,6 +80,7 @@ func spawn(team: int, owner_id: int, class_id: String, shown_name: String, at: V
 	w.dir = dir
 	var b := Rat.new()
 	b.setup(m.world, -w.uid, team, class_id, true)
+	m.apply_modifiers(b)
 	var owner := m.rat_by_id(owner_id)
 	if owner != null:
 		b.hat = owner.hat   # (it passes for its owner: same hat)

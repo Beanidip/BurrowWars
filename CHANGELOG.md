@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - Modifiers
+
+| Change | Files |
+|---|---|
+| A second drop-down checklist on the setup page, **Modifiers** (rule changes for the whole match), next to Extras; `--mutators` takes them too | `match/mutators.gd`, `ui/main_menu.gd` |
+| **Super Springs** (3x as high), **Low Gravity** (rats, pickups, TNT and siege shots), **TNT Madness** (TNT at a quarter price), **Class Roulette** (everyone a random new class every 2 minutes), **Scrap Rush** (3x scrap), **Fragile World** (everything breaks in one hit), **Cheese Rain** (cheese falls from the sky every 15-30 s) | `match/match.gd`, `match/extras.gd`, `actors/rat.gd`, `match/siege.gd`, `match/dynamite.gd`, `match/windup.gd`, `ui/hud.gd`, `actors/bot_brain.gd`, `core/config.gd` |
+| The anti-cheat's height limits scale with Low Gravity and Super Springs. Network protocol 15 | `net/anti_cheat.gd`, `net/net.gd` |
+
 ## Unreleased - Extras: Lava Rise, Flash Freeze, Fungal Outbreak
 
 | Change | Files |

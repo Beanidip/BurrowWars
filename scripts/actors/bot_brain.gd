@@ -286,7 +286,7 @@ func _bank_scrap() -> void:
 func _shop() -> void:
 	## Bots buy gear too: a jetpack, once they can afford it at base.
 	if rat.gear == "" and m.can_shop(rat) and not m.free_mode \
-			and rat.scrap >= ClassDefs.price(rat.cls, "jetpack", false):
+			and rat.scrap >= m.price(rat, "jetpack"):
 		m.try_buy(rat, "jetpack")
 
 

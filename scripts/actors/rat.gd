@@ -80,6 +80,8 @@ var net_dirty := false            # server: the authority moved this remote play
 var net_kick := 0                 # server: bumped whenever the authority moved this rat itself
 
 # presentation hooks (read by RatSprite)
+var gravity_scale := 1.0          # Low Gravity (Match.apply_modifiers)
+var spring_scale := 1.0           # Super Springs
 var scrap_held := 0               # Scrap Race: scrap mined (part of `scrap`) not yet banked at home
 var hat := ""                     # cosmetic (Hats.LIST); players choose theirs, bots wear none
 var stats: Dictionary = {}        # this match's tallies for the results screen (keys: Match.STATS)
@@ -281,7 +283,7 @@ func _step_motion(dt: float) -> void:
 		if jump_pressed and _world.block_at(position + Vector3(0, HEIGHT + 0.3, 0)) != Blocks.WATER:
 			vel.y = JUMP_SPEED      # kick off just under the surface
 	else:
-		vel.y -= GRAVITY * dt
+		vel.y -= GRAVITY * gravity_scale * dt
 		if wading and (jump_pressed or jump_held) and vel.y < 3.7:
 			vel.y = JUMP_SPEED      # leap out of the water instead of bobbing at the surface
 			jumps_left = 1
@@ -460,7 +462,7 @@ func _spring_sides() -> void:
 			var away := position - (Vector3(c) + Vector3(0.5, 0.0, 0.5))
 			away.y = 0.0
 			away = away.normalized() if away.length() > 0.05 else Vector3(-dx, 0, -dz).normalized()
-			vel = away * 5.0 + Vector3(0, Config.SPRING_SIDE_SPEED, 0)
+			vel = away * 5.0 + Vector3(0, Config.SPRING_SIDE_SPEED * spring_scale, 0)
 			knock = 0.3
 			on_floor = false
 			jumps_left = 1
@@ -491,7 +493,7 @@ func _move(motion: Vector3) -> void:
 				on_floor = true
 				grounded = true
 				if _world.block_at(position - Vector3(0, 0.1, 0)) == Blocks.SPRING:
-					vel.y = SPRING_SPEED
+					vel.y = SPRING_SPEED * spring_scale
 					landed_on_spring = true
 					on_floor = false
 					jumps_left = 1

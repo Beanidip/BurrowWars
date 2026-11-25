@@ -98,6 +98,25 @@ the choice is remembered. Free Build and the playground ignore them.
 
 Numbers for all of them: `Config.METEOR_*`, `LAVA_RISE_*`, `FREEZE_*`, `FUNGUS_*`.
 
+## Modifiers (match options)
+
+A second drop-down, **Modifiers**, changes the rules for the whole match (same places as Extras;
+`--mutators` takes these ids too):
+
+| Modifier | Id | What it does |
+|---|---|---|
+| Super Springs | `super_springs` | Springs launch rats (and loose cheese) three times as high: speed x sqrt 3 |
+| Low Gravity | `low_gravity` | Gravity x 0.4 for rats, pickups, TNT, cannonballs and the wrecking ball: jumps about 2.5x as high, slow falls, long cannon shots, a lazy crane swing |
+| TNT Madness | `tnt_madness` | TNT and Mobile TNT cost a quarter of the price (at least 1 scrap) |
+| Class Roulette | `class_roulette` | Every 2 minutes everyone, bots too, becomes a random different class (cheese over the new carry limit drops) |
+| Scrap Rush | `scrap_rush` | Each scrap block is worth 3x |
+| Fragile World | `fragile_world` | Every block breaks in one hit (bases and bedrock still don't) |
+| Cheese Rain | `cheese_rain` | Every 15-30 s one or two cheese fall from the sky at random spots away from the bases, with a marker where they'll land |
+
+The server's movement checks allow for Low Gravity and Super Springs, so honest players aren't
+corrected. Numbers: `Config.SUPER_SPRING`, `LOW_GRAVITY`, `TNT_MADNESS_PRICE`, `ROULETTE_EVERY`,
+`SCRAP_RUSH`, `CHEESE_RAIN_*`.
+
 To add another: a new id in `scripts/match/mutators.gd`, then `m.has_mutator(id)` where it acts.
 
 ## Core numbers

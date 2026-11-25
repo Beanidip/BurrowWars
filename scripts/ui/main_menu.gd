@@ -223,7 +223,8 @@ func _setup_page() -> void:
 	var mode_blurb := UiKit.label("Bank the most golden cheese." if _mode == "race" else "Bank scrap; cheese makes yours worth more.", 15, UiKit.PAPER.darkened(0.1))
 	modes.add_child(mode_blurb)
 	_page.add_child(UiKit.row(UiKit.label("Mode"), modes))
-	_page.add_child(UiKit.row(UiKit.label("Extras"), _extras_picker()))
+	_page.add_child(UiKit.row(UiKit.label("Extras"), _option_picker(Mutators.EXTRAS, "Events during the match: open the list and tick any.")))
+	_page.add_child(UiKit.row(UiKit.label("Modifiers"), _option_picker(Mutators.MODIFIERS, "Rule changes for the whole match: tick any.")))
 	# team
 	var teams := HBoxContainer.new()
 	teams.add_theme_constant_override("separation", 8)
@@ -332,8 +333,8 @@ func _goal_text() -> String:
 	return "Cheese goal: %d  (map holds %d+ cheese)" % [_goal, MapGenerator.min_cheese(_goal)]
 
 
-func _extras_picker() -> Control:
-	## A drop-down checklist of match options (Mutators): tick any number.
+func _option_picker(ids: Array, hint: String) -> Control:
+	## A drop-down checklist of match options (one group of Mutators): tick any number.
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	var pick := MenuButton.new()
@@ -342,22 +343,23 @@ func _extras_picker() -> Control:
 	pick.focus_mode = Control.FOCUS_ALL
 	var popup := pick.get_popup()
 	popup.hide_on_checkable_item_selection = false   # (tick several in one go)
-	for i in Mutators.LIST.size():
-		var id: String = Mutators.LIST[i]
+	for i in ids.size():
+		var id: String = ids[i]
 		popup.add_check_item(String(Mutators.NAMES[id]), i)
 		popup.set_item_checked(i, _mutators.has(id))
 		popup.set_item_tooltip(i, String(Mutators.BLURBS[id]))
-	var about := UiKit.wrapped("", 14, UiKit.PAPER.darkened(0.15))
-	about.custom_minimum_size = Vector2(440, 0)
+	var about := UiKit.wrapped("", 13, UiKit.PAPER.darkened(0.15))
+	about.custom_minimum_size = Vector2(460, 0)
 	var refresh := func() -> void:
-		var names := Mutators.describe(_mutators)
+		var mine: Array = _mutators.filter(func(id: String) -> bool: return ids.has(id))
+		var names := Mutators.describe(mine)
 		pick.text = "%s  v" % (names if names != "" else "None")
-		var lines: Array[String] = []
-		for id: String in _mutators:
-			lines.append(String(Mutators.BLURBS[id]))
-		about.text = " ".join(lines) if not lines.is_empty() else "Twists for the match: open the list and tick any."
+		if mine.size() > 2:
+			pick.text = "%d ticked  v" % mine.size()
+		# (one line: the latest one ticked; each option's tooltip has the rest)
+		about.text = String(Mutators.BLURBS[mine[-1]]) if not mine.is_empty() else hint
 	popup.id_pressed.connect(func(i: int) -> void:
-		var id: String = Mutators.LIST[i]
+		var id: String = ids[i]
 		if _mutators.has(id):
 			_mutators.erase(id)
 		else:

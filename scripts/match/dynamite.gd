@@ -127,7 +127,7 @@ func _simulate_impulse(s: Stick, dt: float) -> void:
 	var w := m.world
 	if w.block_at(s.pos) == Blocks.WATER:
 		s.vel *= maxf(0.0, 1.0 - 2.5 * dt)
-	s.vel.y = maxf(s.vel.y - GRAVITY * dt, -30.0)
+	s.vel.y = maxf(s.vel.y - GRAVITY * m.gravity() * dt, -30.0)
 	var steps := maxi(1, ceili(s.vel.length() * dt / 0.09))
 	var h := dt / float(steps)
 	for i in steps:
@@ -174,7 +174,7 @@ func _simulate(s: Stick, dt: float) -> void:
 		m.fx.emit("trap", s.pos, null)
 	elif here == Blocks.WATER:
 		s.vel *= maxf(0.0, 1.0 - 2.5 * dt)
-	s.vel.y = maxf(s.vel.y - GRAVITY * dt, -30.0)
+	s.vel.y = maxf(s.vel.y - GRAVITY * m.gravity() * dt, -30.0)
 	var steps := maxi(1, ceili(s.vel.length() * dt / 0.09))
 	var h := dt / float(steps)
 	for i in steps:

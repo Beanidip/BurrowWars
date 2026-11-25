@@ -232,6 +232,7 @@ func spawn_rat(team: int, class_id: String, is_bot: bool, fixed_id := -1) -> Rat
 	if is_bot and not replica:
 		bots.append(BotBrain.new(self, rat, _rng.randi()))
 	rat_spawned.emit(rat)
+	apply_modifiers(rat)
 	return rat
 
 
@@ -298,6 +299,26 @@ func multiplier(team := -1) -> float:
 
 func has_mutator(id: String) -> bool:
 	return mutators.has(id)
+
+
+func gravity() -> float:
+	## Low Gravity: everything falls slower (rats, pickups, TNT, siege shots).
+	return Config.LOW_GRAVITY if has_mutator("low_gravity") and not free_mode else 1.0
+
+
+func apply_modifiers(rat: Rat) -> void:
+	## A rat's physics under this match's modifiers (every rat, on every game:
+	## a player's own game moves its rat itself).
+	rat.gravity_scale = gravity()
+	rat.spring_scale = Config.SUPER_SPRING if has_mutator("super_springs") and not free_mode else 1.0
+
+
+func price(rat: Rat, item_id: String) -> int:
+	## What an item costs this rat here (class discounts, TNT Madness).
+	var cost := ClassDefs.price(rat.cls, item_id, unlimited())
+	if has_mutator("tnt_madness") and (item_id == "tnt" or item_id == "dynamite") and cost > 0:
+		cost = maxi(1, roundi(cost * Config.TNT_MADNESS_PRICE))
+	return cost
 
 
 func meteor_strike(at: Vector3) -> void:
@@ -794,6 +815,8 @@ func hits_for(rat: Rat, cell: Vector3i, id: int) -> int:
 	if Blocks.is_placed_trap(id) or Blocks.is_teleporter(id):
 		var owner := int(trap_owner.get(cell, Blocks.tele_team(id) if Blocks.is_teleporter(id) else Blocks.trap_team(id)))
 		return Config.TRAP_HITS_OWN if rat != null and owner >= 0 and rat.team == owner else Config.TRAP_HITS_ENEMY
+	if has_mutator("fragile_world") and not free_mode and int(Blocks.HITS[id]) > 0:
+		return 1   # Fragile World: everything breaks in one hit (bases and bedrock still don't)
 	return int(Blocks.HITS[id])
 
 
@@ -818,6 +841,8 @@ func _break(rat: Rat, cell: Vector3i, id: int, quiet := false) -> void:
 		return
 	elif drop == "scrap":
 		var gain := roundi(Config.BASE_SCRAP_PER_BLOCK * multiplier(rat.team))
+		if has_mutator("scrap_rush") and not free_mode:
+			gain *= Config.SCRAP_RUSH
 		rat.scrap += gain
 		if scrap_race:
 			rat.scrap_held += gain   # carried until you get it home
@@ -1751,11 +1776,11 @@ func _step_pickups(dt: float) -> void:
 				p.vel = Vector3.ZERO
 			p.pos = wp
 		else:
-			p.vel.y = maxf(p.vel.y - 20.0 * dt, -20.0)
+			p.vel.y = maxf(p.vel.y - 20.0 * gravity() * dt, -20.0)
 			var np := p.pos + p.vel * dt
 			var below := world.block_at(Vector3(p.pos.x, np.y - 0.15, p.pos.z))
 			if below == Blocks.SPRING and p.vel.y <= 0.0:
-				p.vel.y = 13.0          # springs launch loose cheese too...
+				p.vel.y = 13.0 * (Config.SUPER_SPRING if has_mutator("super_springs") else 1.0)   # springs launch loose cheese too...
 				if Vector2(p.vel.x, p.vel.z).length() < 1.5:
 					var ang := _rng.randf() * TAU   # ...and nudge it sideways, so it hops off rather than bouncing forever
 					p.vel.x = cos(ang) * 2.2
@@ -2170,7 +2195,7 @@ func try_buy(rat: Rat, item_id: String) -> String:
 		return "Match is over"
 	if not can_shop(rat):
 		return "Return to your base to use the workshop"
-	var cost := ClassDefs.price(rat.cls, item_id, unlimited())
+	var cost := price(rat, item_id)
 	if item_id == "teleporter" and not free_mode:
 		# one set per rat: buying tops you up to a full set, at the price per missing pad
 		var missing := int(item["qty"]) - int(rat.gadgets.get("teleporter", 0)) - int(tele_in.has(rat.id)) - int(tele_out.has(rat.id))

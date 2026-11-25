@@ -12,6 +12,10 @@ class_name ExtrasSystem
 ##    reach cheese and scrap - carefully.
 ##  - Flash Freeze: at FREEZE_AT (warned FREEZE_WARN before), every water
 ##    block on the map turns to ice.
+##  - Class Roulette (a modifier): every ROULETTE_EVERY seconds everyone
+##    becomes a random different class.
+##  - Cheese Rain (a modifier): every CHEESE_RAIN_* seconds a cheese or two
+##    falls from the sky somewhere on the battlefield.
 ##  - Fungal Outbreak: from FUNGUS_FIRST, every FUNGUS_GAP_* seconds a giant
 ##    mushroom grows somewhere on the battlefield over FUNGUS_GROW seconds:
 ##    stem up, then a broad cap - new platforms and new obstacles.
@@ -36,6 +40,12 @@ var mushrooms := 0
 var _fungus_next := Config.FUNGUS_FIRST
 var _growing: Array = []           # [[cell, block, seconds until it appears], ...]
 
+# class roulette, cheese rain
+var roulettes := 0
+var _roulette_next := Config.ROULETTE_EVERY
+var cheese_rained := 0
+var _rain_next := -1.0
+
 
 func _init(p_match: Match) -> void:
 	m = p_match
@@ -53,6 +63,56 @@ func step(dt: float) -> void:
 		_freeze_step()
 	if on("fungal"):
 		_fungus_step(dt)
+	if on("class_roulette") and not m.over:
+		_roulette_next -= dt
+		if _roulette_next <= 0.0:
+			_roulette_next = Config.ROULETTE_EVERY
+			roulette()
+	if on("cheese_rain") and not m.over:
+		if _rain_next < 0.0:
+			_rain_next = _rng.randf_range(Config.CHEESE_RAIN_MIN, Config.CHEESE_RAIN_MAX)
+		_rain_next -= dt
+		if _rain_next <= 0.0:
+			_rain_next = _rng.randf_range(Config.CHEESE_RAIN_MIN, Config.CHEESE_RAIN_MAX)
+			rain_cheese()
+
+
+# ---------------------------------------------------------------- class roulette, cheese rain
+
+func roulette() -> void:
+	## Everyone (bots too) becomes a random class other than the one they are.
+	roulettes += 1
+	for r in m.rats:
+		var others: Array = ClassDefs.ORDER.filter(func(c: String) -> bool: return c != r.class_id)
+		r.set_class(others[_rng.randi() % others.size()], false)
+		r.ability_cd = [2.0, 2.0]
+		if r.carried > r.capacity():
+			m._drop(r, r.carried - r.capacity(), 0.5)
+		m.fx.emit("ability", r.position, "class")
+	m.toast.emit("CLASS ROULETTE! Everyone is a new class. Next spin in %d s." % int(Config.ROULETTE_EVERY), -1)
+
+
+func rain_cheese() -> int:
+	## A cheese or two falls from the sky at random spots away from the bases.
+	var n := _rng.randi_range(1, Config.CHEESE_RAIN_COUNT)
+	var dropped := 0
+	for i in n:
+		for attempt in 30:
+			var x := _rng.randi_range(5, VoxelWorld.SX - 6)
+			var z := _rng.randi_range(5, VoxelWorld.SZ - 6)
+			if _near_base(x, z):
+				continue
+			var ground := m.meteors.surface(x, z)
+			m.spawn_pickup("cheese", Vector3(x + 0.5, VoxelWorld.SY - 2, z + 0.5), Vector3.ZERO)
+			for team in 2:
+				m.add_marker(Vector3(x + 0.5, ground + 1.5, z + 0.5), "Cheese!", team, 8.0)
+			m.fx.emit("cheese_rain", Vector3(x + 0.5, ground, z + 0.5), null)
+			dropped += 1
+			break
+	cheese_rained += dropped
+	if dropped > 0:
+		m.toast.emit("Cheese is falling from the sky!", -1)
+	return dropped
 
 
 # ---------------------------------------------------------------- lava rise

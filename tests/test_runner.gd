@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "scrap_race", "bots_finish_a_scrap_race", "meteor_shower", "lava_freeze_fungus", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "scrap_race", "bots_finish_a_scrap_race", "meteor_shower", "lava_freeze_fungus", "modifiers", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -5944,3 +5944,117 @@ func end_cached() -> void:
 	if _cached != null:
 		end(_cached)
 		_cached = null
+
+
+func jump_height(m: Match) -> float:
+	## How high a rat gets from a standing jump on the arena floor.
+	var r := arena_rat(m, 0, "digger")
+	for i in 20:
+		r.step(DT)
+	var y0 := r.position.y
+	r.jump_pressed = true
+	var top := y0
+	for i in 400:
+		r.step(DT)
+		r.jump_pressed = false
+		top = maxf(top, r.position.y)
+	m.remove_rat(r)
+	return top - y0
+
+
+func test_modifiers() -> void:
+	## The Modifiers drop-down: rule changes for the whole match.
+	check(Mutators.MODIFIERS.size() == 7 and Mutators.LIST.size() == Mutators.EXTRAS.size() + 7, "seven modifiers, in their own list")
+	var plain := new_match()
+	flat_arena(plain, ARENA, 6)
+	var base_jump := jump_height(plain)
+	# Low Gravity
+	var lg := new_match({"mutators": ["low_gravity"]})
+	flat_arena(lg, ARENA, 6)
+	var lg_jump := jump_height(lg)
+	check(is_equal_approx(lg.gravity(), Config.LOW_GRAVITY) and lg_jump > base_jump * 2.0,
+		"Low Gravity: jumps go much higher (%.1f vs %.1f blocks)" % [lg_jump, base_jump])
+	# ...and the server's anti-cheat knows it: an honest low-gravity jump is fine
+	var r := arena_rat(lg, 0, "scout")
+	for i in 20:
+		r.step(DT)
+	var ac := AntiCheat.new()
+	ac.log_violations = false
+	var clock := 10000
+	ac.reset(5, r, clock)
+	r.jump_pressed = true
+	var bad := ""
+	for i in 300:
+		r.step(DT)
+		r.jump_pressed = false
+		if i % 2 == 0:
+			clock += 33
+			var v := ac.check_move(5, r, r.position, clock)
+			if v != "" and bad == "":
+				bad = v
+	check(bad == "", "and an honest low-gravity jump passes the server's checks (%s)" % bad)
+	# Super Springs
+	var ss := new_match({"mutators": ["super_springs"]})
+	flat_arena(ss, ARENA, 6)
+	ss.world.set_block(ARENA + Vector3i(0, -1, 0), Blocks.SPRING)
+	var sr := arena_rat(ss, 0, "digger")
+	sr.position.y += 2.0
+	var launch := 0.0
+	for i in 120:
+		sr.step(DT)
+		if sr.landed_on_spring:
+			launch = sr.vel.y
+			break
+	check(is_equal_approx(launch, Rat.SPRING_SPEED * Config.SUPER_SPRING), "Super Springs: launched at %.1f (three times as high)" % launch)
+	# TNT Madness
+	var tm := new_match({"mutators": ["tnt_madness"]})
+	var tr := tm.spawn_rat(0, "digger", false)
+	check(tm.price(tr, "tnt") == maxi(1, roundi(ClassDefs.price(tr.cls, "tnt", false) * Config.TNT_MADNESS_PRICE))
+		and tm.price(tr, "tnt") < ClassDefs.price(tr.cls, "tnt", false) and tm.price(tr, "jetpack") == ClassDefs.price(tr.cls, "jetpack", false),
+		"TNT Madness: TNT costs %d instead of %d; the rest as usual" % [tm.price(tr, "tnt"), ClassDefs.price(tr.cls, "tnt", false)])
+	# Class Roulette
+	var cr := new_match({"mutators": ["class_roulette"]})
+	var classes := {}
+	for i in 4:
+		var rr := cr.spawn_rat(i % 2, ClassDefs.ORDER[i], true)
+		classes[rr.id] = rr.class_id
+	cr.extras.roulette()
+	var changed := 0
+	for rr in cr.rats:
+		changed += 1 if rr.class_id != classes[rr.id] and ClassDefs.ORDER.has(rr.class_id) else 0
+	check(changed == 4, "Class Roulette: everyone becomes a different class (%d of 4)" % changed)
+	cr.time = 0.0
+	cr.extras._roulette_next = 0.5
+	for i in 40:
+		cr.extras.step(DT)
+	check(cr.extras.roulettes == 2, "and it spins on its own")
+	# Scrap Rush
+	var sc := new_match({"mutators": ["scrap_rush"]})
+	flat_arena(sc, ARENA, 6)
+	var miner := arena_rat(sc, 0, "digger")
+	var cell := ARENA + Vector3i(0, 0, -2)
+	sc.world.set_block(cell, Blocks.SCRAP)
+	var s0 := miner.scrap
+	for i in 40:
+		miner.dig_cd = 0.0
+		sc.try_dig(miner, cell)
+		if sc.world.get_cell(cell) == Blocks.AIR:
+			break
+	check(miner.scrap - s0 == Config.BASE_SCRAP_PER_BLOCK * Config.SCRAP_RUSH, "Scrap Rush: a scrap block is worth %d" % (miner.scrap - s0))
+	# Fragile World
+	var fw := new_match({"mutators": ["fragile_world"]})
+	check(fw.hits_for(null, Vector3i.ZERO, Blocks.OBSIDIAN) == 1 and fw.hits_for(null, Vector3i.ZERO, Blocks.STONE) == 1
+		and fw.hits_for(null, Vector3i.ZERO, Blocks.BEDROCK) == int(Blocks.HITS[Blocks.BEDROCK]),
+		"Fragile World: everything breaks in one hit (bedrock and bases still don't)")
+	# Cheese Rain
+	var rain := new_match({"mutators": ["cheese_rain"]})
+	var n := rain.extras.rain_cheese()
+	check(n >= 1 and rain.pickups.size() == n and rain.pickups[0].pos.y > VoxelWorld.SY - 4, "Cheese Rain: %d cheese appear high in the sky" % n)
+	for i in int(8.0 / DT):
+		rain._step_pickups(DT)
+	var landed := true
+	for p in rain.pickups:
+		landed = landed and p.vel.length() < 0.01 and p.pos.y < VoxelWorld.SY - 10
+	check(landed, "and fall to the ground")
+	for mm in [plain, lg, ss, tm, cr, sc, fw, rain]:
+		end(mm)
