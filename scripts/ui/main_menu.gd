@@ -65,6 +65,9 @@ var _back := Callable()   # where B / Esc goes from this page (nowhere on the ho
 ## repository by default), so adding one is a one-line change; each row then
 ## asks that server for its live status (see docs/MULTIPLAYER.md).
 var _server_rows: Array = []        # [entry, status label, ping label, join button]
+var _preview: TextureRect           # Customize Rat: your rat, turning and moving
+var _preview_as := {"class": "digger", "team": 0, "view": "front", "t": 0.0}
+var _hat_buttons: Dictionary = {}   # hat id -> its button
 
 
 func _ready() -> void:
@@ -144,6 +147,12 @@ func _show_home() -> void:
 	col.add_child(Icons.on_button(UiKit.button("Learn to Play", _start_tutorial, Vector2(320, 44)), "book"))
 	col.add_child(Icons.on_button(UiKit.button("Play Online", _show_online, Vector2(320, 44)), "online"))
 	col.add_child(Icons.on_button(UiKit.button("Free Build", _show_free.bind(false), Vector2(320, 44)), "hammer"))
+	var dress := UiKit.button("Customize Rat", _show_customize, Vector2(320, 44))
+	dress.icon = Hats.icon("party", int(Config.get_value("last_team")))
+	dress.expand_icon = true
+	dress.add_theme_constant_override("icon_max_width", 26)
+	dress.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	col.add_child(dress)
 	col.add_child(Icons.on_button(UiKit.button("How to Play", _show_help, Vector2(320, 44)), "book"))
 	col.add_child(Icons.on_button(UiKit.button("Settings & Controls", _show_settings, Vector2(320, 44)), "gear"))
 	col.add_child(Icons.on_button(UiKit.button("Credits & Licences", _show_credits, Vector2(320, 44)), "book"))
@@ -424,6 +433,110 @@ func _show_settings() -> void:
 	UiKit.focus_first(sc[1])
 
 
+# ---------------------------------------------------------------- customize
+
+func _show_customize() -> void:
+	## Customize Rat: pick the hat your rat wears in every match. The preview
+	## can show any class and team, and turn around.
+	_clear()
+	_page.add_child(UiKit.label("Customize Rat", 28, UiKit.BRASS))
+	_preview_as = {"class": _class, "team": _team, "view": "front", "t": 0.0}
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 28)
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_page.add_child(row)
+
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 8)
+	row.add_child(left)
+	var stage := PanelContainer.new()
+	stage.add_theme_stylebox_override("panel", UiKit.box(Color(0.12, 0.09, 0.06, 0.9), UiKit.BRASS, 10, 2, 8))
+	left.add_child(stage)
+	_preview = TextureRect.new()
+	_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_preview.custom_minimum_size = Vector2(240, 240 * RatSprite.CELL_H / RatSprite.CELL)
+	stage.add_child(_preview)
+	left.add_child(UiKit.button("Turn around", func() -> void:
+		var views := ["front", "side", "back"]
+		_preview_as["view"] = views[(views.find(_preview_as["view"]) + 1) % views.size()], Vector2(256, 40)))
+	var classes := HBoxContainer.new()
+	classes.add_theme_constant_override("separation", 4)
+	left.add_child(classes)
+	for id: String in ClassDefs.ORDER:
+		var b := Icons.on_button(UiKit.button("", func() -> void: _preview_as["class"] = id, Vector2(61, 44)), id, true, 32)
+		b.tooltip_text = "See it on a %s" % String(ClassDefs.CLASSES[id]["name"])
+		classes.add_child(b)
+	var teams := HBoxContainer.new()
+	teams.add_theme_constant_override("separation", 4)
+	left.add_child(teams)
+	for t in 2:
+		var tb := UiKit.button(Match.TEAM_NAMES[t], func() -> void: _preview_as["team"] = t, Vector2(126, 36))
+		tb.add_theme_color_override("font_color", UiKit.TEAM[t].lightened(0.3))
+		teams.add_child(tb)
+	var note := UiKit.label("Preview only: pick your class\nand team when you start a game.", 13, UiKit.PAPER.darkened(0.25))
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	left.add_child(note)
+
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 8)
+	row.add_child(right)
+	right.add_child(UiKit.label("Hats", 22, UiKit.BRASS))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	right.add_child(grid)
+	var group := ButtonGroup.new()
+	_hat_buttons.clear()
+	var current := Hats.clean(Config.get_value("hat"))
+	for id: String in Hats.LIST:
+		var b := UiKit.button(String(Hats.NAMES[id]), _pick_hat.bind(id), Vector2(178, 52))
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = id == current
+		var tex := Hats.icon(id, _team)
+		if tex != null:
+			b.icon = tex
+			b.expand_icon = true
+			b.add_theme_constant_override("icon_max_width", 36)
+			b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		grid.add_child(b)
+		_hat_buttons[id] = b
+	var hint := UiKit.label("Everyone sees your hat online. Purely for looks.", 14, UiKit.PAPER.darkened(0.15))
+	right.add_child(hint)
+
+	var back := UiKit.button("Back", _show_home, Vector2(160, 44))
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_page.add_child(back)
+	_back = _show_home
+	(_hat_buttons[current] as Button).grab_focus()
+
+
+func _pick_hat(id: String) -> void:
+	Config.set_value("hat", Hats.clean(id))
+	Config.save()
+	if _hat_buttons.has(id):
+		(_hat_buttons[id] as Button).button_pressed = true
+
+
+func _animate_preview(delta: float) -> void:
+	## The rat in the preview: idle, a little run, a hop, round again.
+	_preview_as["t"] = float(_preview_as["t"]) + delta
+	var t := float(_preview_as["t"])
+	var anim: String = ["idle", "idle", "run", "jump"][int(t / 1.6) % 4]
+	var frame := int(t * float(RatSprite.FPS[anim])) % int(RatSprite.FRAMES[anim])
+	var hat := Hats.clean(Config.get_value("hat"))
+	var cls := String(_preview_as["class"])
+	var team := int(_preview_as["team"])
+	var view := String(_preview_as["view"])
+	var tex := RatSprite._frame(cls, team, anim, frame, view, hat) if view != "side" else null
+	if tex == null:
+		tex = RatSprite._frame(cls, team, anim, frame, "side", hat)
+	_preview.texture = tex
+
+
 # ---------------------------------------------------------------- online
 
 func _show_online() -> void:
@@ -555,7 +668,8 @@ func _join(address: String) -> void:
 		return
 	Config.set_value("last_address", address.strip_edges())
 	Config.save()
-	var err := Net.join(String(hp[0]), int(hp[1]), {"name": Net.player_name, "team": _team, "class": _class})
+	var err := Net.join(String(hp[0]), int(hp[1]), {"name": Net.player_name, "team": _team, "class": _class,
+		"hat": Hats.clean(Config.get_value("hat"))})
 	if err != "":
 		_status.text = err
 		return
@@ -566,7 +680,9 @@ func _join(address: String) -> void:
 			waiting.text = reason, CONNECT_ONE_SHOT)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _preview != null and is_instance_valid(_preview):
+		_animate_preview(delta)
 	# joining: the map arrives in parts after the server seats us
 	var got := Net.join_progress()
 	if got >= 0.0 and _status != null and is_instance_valid(_status):

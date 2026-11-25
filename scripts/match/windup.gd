@@ -80,6 +80,9 @@ func spawn(team: int, owner_id: int, class_id: String, shown_name: String, at: V
 	w.dir = dir
 	var b := Rat.new()
 	b.setup(m.world, -w.uid, team, class_id, true)
+	var owner := m.rat_by_id(owner_id)
+	if owner != null:
+		b.hat = owner.hat   # (it passes for its owner: same hat)
 	b.display_name = shown_name
 	b.carried = 1               # the cheese it shows off (its speed is a carrier's, too)
 	b.position = at
@@ -211,7 +214,7 @@ func snapshot() -> Array:
 	for w in walkers:
 		var b := w.body
 		out.append([w.uid, w.team, b.class_id, b.display_name, b.position, b.vel, b.yaw,
-			(1 if b.on_floor else 0) | (4 if b.in_water else 0)])
+			(1 if b.on_floor else 0) | (4 if b.in_water else 0), b.hat])
 	return out
 
 
@@ -232,6 +235,8 @@ func apply(list: Array) -> void:
 		b.yaw = float(e[6])
 		b.on_floor = (int(e[7]) & 1) != 0
 		b.in_water = (int(e[7]) & 4) != 0
+		if e.size() > 8:
+			b.hat = Hats.clean(e[8])
 	for w in walkers.duplicate():
 		if not seen.has(w.uid):
 			remove(w)

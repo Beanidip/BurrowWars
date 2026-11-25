@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -5495,3 +5495,71 @@ class FakeRemote:
 	func act(method: String, args: Array) -> String:
 		acts.append([method, args])
 		return ""
+
+
+func test_hats() -> void:
+	## Hats: every one loads, sits on the head in every frame of every view,
+	## takes the team colour, and is the player's own online.
+	for id: String in Hats.LIST:
+		check(id == "" or Hats.image(id) != null, "hat art for %s" % (id if id != "" else "(none)"))
+	check(Hats.clean("crown") == "crown" and Hats.clean("jetpack") == "" and Hats.clean(42) == "", "only known hats are worn")
+	RatSprite.clear_caches()
+	var plain := RatSprite._frame("digger", 0, "idle", 0, "front")
+	var crowned := RatSprite._frame("digger", 0, "idle", 0, "front", "crown")
+	check(plain != null and crowned != null and plain.get_height() == RatSprite.CELL_H and plain.get_width() == RatSprite.CELL,
+		"frames have room above for a hat (%d x %d)" % [plain.get_width() if plain else 0, plain.get_height() if plain else 0])
+	var a := (plain as AtlasTexture).atlas.get_image().get_region(Rect2i((plain as AtlasTexture).region))
+	var b := (crowned as AtlasTexture).atlas.get_image().get_region(Rect2i((crowned as AtlasTexture).region))
+	var top_a := a.get_used_rect().position.y
+	var top_b := b.get_used_rect().position.y
+	check(top_a >= Hats.ROOM - 1 and top_b < top_a, "the crown sits on top of the head (top row %d -> %d)" % [top_a, top_b])
+	# on every drawn frame: the hat is there, above the head, inside the frame
+	var sheet := (load(RatSprite.sheet_path("scout", "side")) as Texture2D).get_image()
+	sheet.convert(Image.FORMAT_RGBA8)
+	var anchors := Hats.anchors_of(sheet, RatSprite.CELL)
+	var inside := true
+	for at: Vector2i in anchors:
+		var p: Vector2i = anchors[at]
+		inside = inside and p.x >= 4 and p.x < RatSprite.CELL - 4 and p.y + Hats.ROOM >= (Hats.image("wizard").get_height() - Hats.SINK)
+	check(anchors.size() >= 20 and inside, "every scout frame has a head to put a hat on, with room for the tallest hat (%d frames)" % anchors.size())
+	# team colours: the party hat's magenta stripes go blue or red
+	var blue := (Hats.icon("party", 0) as Texture2D).get_image()
+	var red := (Hats.icon("party", 1) as Texture2D).get_image()
+	var stripe := Vector2i(5, 6)
+	check(blue.get_pixelv(stripe).b > blue.get_pixelv(stripe).r and red.get_pixelv(stripe).r > red.get_pixelv(stripe).b,
+		"a hat's magenta takes the team colour")
+	# a match: you wear yours; bots none; online the server takes it from your hello
+	var m := new_match({"team_size": 1})
+	var ns := NetServer.new()
+	ns.m = m
+	add_child(ns)
+	m.spawn_rat(1, "scout", true)            # (the seat the player takes)
+	var bot := m.spawn_rat(1, "scout", true)
+	ns.on_hello(55, {"name": "Hatter", "team": 1, "class": "scout", "hat": "tophat"})
+	var me: Rat = ns.seats.get(55)
+	check(me != null and me.hat == "tophat", "a joining player's hat comes with them")
+	ns.on_hello(56, {"name": "Sneaky", "team": 0, "class": "digger", "hat": "../../secret"})
+	var other: Rat = ns.seats.get(56)
+	check(other != null and other.hat == "", "an unknown hat from a client is ignored")
+	var snap := ns._snapshot(true)
+	check((snap.get("ha", {}) as Dictionary).get(me.id, "") == "tophat", "the server tells everyone who wears what")
+	var copy := new_match({"team_size": 1})
+	var nc := NetClient.new(copy, {"rat": -99, "snap": snap, "world": m.world.snapshot(), "private": {}})
+	add_child(nc)
+	nc.on_snap(snap)
+	var seen := copy.rat_by_id(me.id)
+	check(seen != null and seen.hat == "tophat" and copy.rat_by_id(bot.id) != null and copy.rat_by_id(bot.id).hat == "",
+		"a player's game puts it on the right rat")
+	remove_child(nc)
+	nc.free()
+	end(copy)
+	# the wind-up decoy wears its owner's hat
+	me.gadgets["windup"] = 1
+	me.equipped = "windup"
+	var why := m.windup.try_place(me, Vector3(1, 0, 0))
+	check(why == "" and m.windup.walkers.size() == 1 and m.windup.walkers[0].body.hat == "tophat",
+		"a Wind-up Decoy wears its owner's hat (%s)" % why)
+	ns.on_peer_left(55)
+	check(me.is_bot and me.hat == "", "a bot taking over the seat takes the hat off")
+	ns.free()
+	end(m)

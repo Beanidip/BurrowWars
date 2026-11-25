@@ -21,6 +21,7 @@ Status key:
 | `assets/ui/panel_frame.png` | Project-made | Drawn by `UiKit` (saved as a file to make it editable) | Part of the game | No | Yes, or redraw |
 | `assets/ui/app_icon.png`, `app_icon.ico` | Project-made | `tools/make_app_icon.py` | Part of the game | No | Placeholder until the redraw |
 | `assets/icons/icons.png` | Project-made | `tools/make_icons.py` | Part of the game | No | Yes, or redraw |
+| `assets/hats/*.png` | Project-made | `tools/make_hats.py` | Part of the game | No | Placeholder until the redraw |
 | `assets/blocks/scrap.png` | Project-made | `tools/make_block_textures.py` (drawn after your reference picture) | Part of the game | No | Yes, or redraw |
 | `assets/fx/*.png` (all effect sheets: explosions, block breaks, hit sparks, dust, splashes, jetpack, teleport, impulse...) | Third-party | [pixelfx](https://github.com/patch-gg/pixelfx) by Patch and Hugo Duprez, rendered by `tools/import_fx.py`, some recoloured | MIT (`assets/fx/LICENSE-pixelfx.txt`, shown in Credits) | Per pixelfx's README: procedurally drawn effects; check before launch | **Yes** (kept) |
 | `assets/sfx/splash.wav`, `sizzle.wav`, `squeak.wav`, `pop.wav`, `toot.wav`, `alarm.wav`, `windup.wav`, `teleport.wav`, `impulse.wav` | Project-made | `tools/make_sfx.py` (synthesised) | Part of the game | No | Placeholder until the redo |

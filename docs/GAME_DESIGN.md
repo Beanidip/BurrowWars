@@ -13,6 +13,14 @@ Where the cheese is: a teaser block on a plinth in the open, ruins and a scrap l
 underground, single blocks buried in stone, obsidian vaults (slow to crack), and a
 jackpot in the mushroom chapel at the centre, reached by the sewer that both teams share.
 
+## Hats
+
+**Customize Rat** (main menu) picks the hat your rat wears: Party Hat, Top Hat, Crown, Cheese
+Wedge, Bobble Beanie, Viking Helmet, Chef's Toque, Propeller Cap, Wizard Hat, Daisy, Cowboy Hat,
+Pirate Hat, or none. It is remembered, worn in every match (including the results screen and
+on your Wind-up Decoys, which pass for you), and online everyone sees it. Purely cosmetic; all
+are free. Bots wear none. The preview can show any class and team and turn around.
+
 ## The results screen
 
 When a team reaches the goal, everyone sees the results: the winner, the score and the match

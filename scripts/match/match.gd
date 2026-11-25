@@ -220,6 +220,7 @@ func make_bot(rat: Rat) -> void:
 	## A rat whose player left (or a fresh seat): a bot takes over.
 	rat.is_bot = true
 	rat.net_peer = 0
+	rat.hat = ""
 	rat.display_name = BOT_NAMES[(rat.id * 3 + rat.team) % BOT_NAMES.size()]
 	for b in bots:
 		if b.rat == rat:

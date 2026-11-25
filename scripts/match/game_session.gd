@@ -76,6 +76,7 @@ func _ready() -> void:
 	else:
 		var team := int(settings.get("team", 0))
 		player = m.spawn_rat(team, String(settings.get("class", "digger")), false)
+		player.hat = Hats.clean(Config.get_value("hat"))
 		if not m.free_mode:
 			var size := int(settings.get("team_size", 2))
 			var pick := 1

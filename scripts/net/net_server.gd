@@ -98,6 +98,7 @@ func on_hello(id: int, hello: Dictionary) -> void:
 			return
 		rat = m.spawn_rat(want if m.lobby or not m.free_mode else 0, cls, false)
 	m.make_player(rat, id, pname)
+	rat.hat = Hats.clean(hello.get("hat", ""))
 	if rat.class_id != cls:
 		rat.set_class(cls, true)
 	if m.lobby:
@@ -498,7 +499,7 @@ func _snapshot(with_names := false) -> Dictionary:
 	_snaps += 1
 	var sig := ""
 	for r in m.rats:
-		sig += "%d:%s|" % [r.id, r.display_name]
+		sig += "%d:%s:%s|" % [r.id, r.display_name, r.hat]
 	if sig != _roster_sig:
 		_roster_sig = sig
 		_roster_left = 20
@@ -521,6 +522,11 @@ func _snapshot(with_names := false) -> Dictionary:
 		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "wd": m.windup.snapshot(), "tp": m.tele_pads(), "lt": m.lobby_left}
 	if send_names:
 		snap["ro"] = roster()
+		var hats := {}
+		for r in m.rats:
+			if r.hat != "":
+				hats[r.id] = r.hat
+		snap["ha"] = hats   # (with the names: whenever someone's changes, and once a second)
 	if m.lobby:
 		snap["ix"] = m.infinite_next   # the cheat code, so everyone's banner shows it
 	if m.over:

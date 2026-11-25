@@ -20,6 +20,7 @@ extends Sprite3D
 ## and a Red copy by swapping that hue for the team's (UiKit.TEAM), keeping
 ## every pixel's shading. Keep other parts of the rat out of that hue range.
 const CELL := 72
+const CELL_H := CELL + Hats.ROOM   # frames as the game uses them: room for a hat above (see Hats)
 const ANIMS := ["idle", "run", "jump", "dig", "attack", "hurt", "build", "use", "down"]
 const KEY_HUE_MIN := 0.76
 const KEY_HUE_MAX := 0.90
@@ -39,6 +40,7 @@ static func clear_caches() -> void:
 	_cache.clear()
 	_sheets.clear()
 	_filled.clear()
+	Hats.clear_cache()
 
 var rat: Rat
 var celebrate := false
@@ -58,7 +60,7 @@ func _ready() -> void:
 	shaded = false
 	pixel_size = 1.25 / 72.0
 	centered = true
-	offset = Vector2(0, 30)
+	offset = Vector2(0, 30 + Hats.ROOM / 2)   # (the frames have room for a hat on top)
 	for i in 6:
 		var m := MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -107,16 +109,17 @@ func _process(delta: float) -> void:
 	_face_camera()
 	var tex: Texture2D = null
 	if view != "side":
-		tex = _frame(rat.class_id, rat.team, a, frame, view)
+		tex = _frame(rat.class_id, rat.team, a, frame, view, rat.hat)
 	var side := tex == null
 	if side:
-		tex = _frame(rat.class_id, rat.team, a, frame)
+		tex = _frame(rat.class_id, rat.team, a, frame, "side", rat.hat)
 	texture = tex
 	flip_h = _flip and side
 	for i in _cheese.size():
 		_cheese[i].visible = i < rat.carried
 	_tag.text = tag_text if tag_text != "" else rat.display_name
 	_tag.visible = tag_shown
+	_tag.position.y = 1.3 if rat.hat != "" else 1.05   # (above the hat)
 	_tag.modulate = Color(0.55, 0.75, 1.0) if rat.team == 0 else Color(1.0, 0.6, 0.55)
 
 
@@ -163,10 +166,11 @@ static func sheet_path(class_id: String, v := "side") -> String:
 	return "res://assets/rats/%s.png" % art
 
 
-static func sheet_texture(class_id: String, team: int, v := "side") -> Texture2D:
-	## A class's sheet in a team's colours (made once, then cached).
+static func sheet_texture(class_id: String, team: int, v := "side", hat := "") -> Texture2D:
+	## A class's sheet in a team's colours, wearing a hat (made once, then
+	## cached). Its frames are CELL x CELL_H: room for the hat above each.
 	var path := sheet_path(class_id, v)
-	var key := "%s:%d" % [path, team]
+	var key := "%s:%d:%s" % [path, team, hat]
 	if _sheets.has(key):
 		return _sheets[key]
 	var tex: Texture2D = null
@@ -182,6 +186,7 @@ static func sheet_texture(class_id: String, team: int, v := "side") -> Texture2D
 					if not img.get_region(Rect2i(col * CELL, row * CELL, CELL, CELL)).is_invisible():
 						cells[Vector2i(col, row)] = true
 			_filled[path] = cells
+		img = Hats.dress(img, hat, CELL, path)   # (before tinting, so a hat's magenta takes the team colour too)
 		tex = ImageTexture.create_from_image(tint(img, (UiKit.TEAM[clampi(team, 0, 1)] as Color).h))
 	elif v == "side":
 		Log.warn("missing rat sprite sheet: " + path)
@@ -210,18 +215,18 @@ static func tint(img: Image, hue: float) -> Image:
 	return Image.create_from_data(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8, data)
 
 
-static func _frame(class_id: String, team: int, anim: String, frame: int, v := "side") -> Texture2D:
-	## One cell of a class's team-coloured sheet, cut out once and cached.
-	## null for a front or back cell that was left empty.
-	var key := "%s:%d:%s:%d:%s" % [class_id, team, anim, frame, v]
+static func _frame(class_id: String, team: int, anim: String, frame: int, v := "side", hat := "") -> Texture2D:
+	## One frame of a class's team-coloured sheet (with a hat), cut out once
+	## and cached. null for a front or back cell that was left empty.
+	var key := "%s:%d:%s:%d:%s:%s" % [class_id, team, anim, frame, v, hat]
 	if _cache.has(key):
 		return _cache[key]
-	var sheet := sheet_texture(class_id, team, v)
+	var sheet := sheet_texture(class_id, team, v, hat)
 	var tex: AtlasTexture = null
 	var cell := Vector2i(frame, ANIMS.find(anim))
 	if sheet != null and (v == "side" or (_filled.get(sheet_path(class_id, v), {}) as Dictionary).has(cell)):
 		tex = AtlasTexture.new()
 		tex.atlas = sheet
-		tex.region = Rect2(cell.x * CELL, cell.y * CELL, CELL, CELL)
+		tex.region = Rect2(cell.x * CELL, cell.y * CELL_H, CELL, CELL_H)
 	_cache[key] = tex
 	return tex

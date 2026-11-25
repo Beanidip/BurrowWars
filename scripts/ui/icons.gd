@@ -46,7 +46,7 @@ static func class_tex(class_id: String) -> Texture2D:
 			# the first idle frame (top-left cell, in Blue), cropped to the rat itself
 			portrait = AtlasTexture.new()
 			portrait.atlas = sheet
-			portrait.region = Rect2(12, 10, 48, 48)
+			portrait.region = Rect2(12, 10 + Hats.ROOM, 48, 48)
 		_cache[key] = portrait
 	return _cache[key]
 

@@ -102,6 +102,7 @@ const DEFAULTS := {
 	"last_class": "digger",
 	"last_team": 0,
 	"player_name": "",
+	"hat": "",                       # Customize Rat (Hats.LIST)
 	"last_address": "",
 	"host_lobby": true,
 	"tutorial_done": false,

@@ -224,15 +224,15 @@ func _card(r: Rat, winners: bool) -> Control:
 	v.add_child(badge)
 	# the rat itself, big, facing you
 	var stage := Control.new()
-	stage.custom_minimum_size = Vector2(CARD_W - 12, PIC - 14)   # (the art has empty space above the ears)
+	stage.custom_minimum_size = Vector2(CARD_W - 12, PIC - 14 + (12 if r.hat != "" else 0))   # (the art has space above the ears; a hat needs some)
 	stage.clip_contents = false
 	v.add_child(stage)
 	var pic := TextureRect.new()
 	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pic.size = Vector2(PIC, PIC)
-	pic.pivot_offset = Vector2(PIC, PIC) * 0.5
+	pic.size = Vector2(PIC, PIC * RatSprite.CELL_H / RatSprite.CELL)   # (frames have room for a hat on top)
+	pic.pivot_offset = pic.size * 0.5
 	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stage.add_child(pic)
 	var name_l := UiKit.label(r.display_name, 15, UiKit.TEAM[r.team].lightened(0.35))
@@ -391,12 +391,13 @@ func _animate(c: Dictionary, delta: float) -> void:
 	var frame := int(t * float(RatSprite.FPS[anim])) % frames
 	if anim == "down" and r.emote_t > 0.0:
 		frame = mini(int((Match.EMOTE_TIME - r.emote_t) * float(RatSprite.FPS[anim])), frames - 1)   # flop over and stay down
-	var tex := RatSprite._frame(r.class_id, r.team, anim, frame, "front")
+	var tex := RatSprite._frame(r.class_id, r.team, anim, frame, "front", r.hat)
 	var side := tex == null
 	if side:
-		tex = RatSprite._frame(r.class_id, r.team, anim, frame)
+		tex = RatSprite._frame(r.class_id, r.team, anim, frame, "side", r.hat)
 	pic.texture = tex
 	pic.flip_h = flip
 	pic.rotation = spin
 	pic.scale = squash
-	pic.position = Vector2((stage.size.x - PIC) * 0.5, -16.0) + off
+	var room := float(Hats.ROOM) * PIC / RatSprite.CELL
+	pic.position = Vector2((stage.size.x - PIC) * 0.5, stage.size.y - (PIC - 14) - 16.0 - room) + off

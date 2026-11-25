@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased - Hats
+
+| Change | Files |
+|---|---|
+| **Customize Rat** in the main menu: pick one of 12 hats (or none). A live preview shows it on any class and team, front, side and back. Remembered between games | `ui/main_menu.gd`, `core/config.gd` |
+| Hats are drawn onto the rat sprites at the top of the head in every frame, so they follow every animation and view; magenta parts take the team colour. Frames now have 16 px of room above for tall hats | `actors/hats.gd`, `actors/rat_sprite.gd`, `ui/icons.gd`, `ui/results_screen.gd` |
+| Online: your hat goes to the server with your name and everyone sees it; unknown hats are ignored, and a bot taking over a seat takes the hat off. Wind-up Decoys wear their owner's hat. Network protocol 12 | `net/net_server.gd`, `net/net_client.gd`, `match/windup.gd`, `match/match.gd` |
+| Placeholder hat art from `tools/make_hats.py`; what to draw is in `docs/ART_TO_MAKE.md` | `assets/hats/`, `tools/make_hats.py` |
+
 ## Unreleased - Results screen with stats and emotes
 
 | Change | Files |

@@ -33,6 +33,28 @@ cell's bottom edge. Paint team-coloured parts **magenta** (the game recolours th
 
 The Wind-up Decoy is drawn from the same sheets (a clockwork copy of its owner), so it updates with them.
 
+### Hats: `assets/hats/` (12 files)
+
+Chosen under **Customize Rat** in the main menu. One small PNG each, drawn **facing you**, up to
+**24 × 22** pixels. The bottom row is where it sits: the game finds the top of the head in every
+frame and puts the hat there, so one picture works for every class, animation and view (front,
+side, back). Magenta parts take the team colour. The placeholders come from `tools/make_hats.py`
+(`python3 tools/make_hats.py preview` writes `build/hats_preview.png`: every hat on every class).
+
+| File | Hat | File | Hat |
+|---|---|---|---|
+| `party.png` | Party Hat (team-coloured stripes) | `chef.png` | Chef's Toque |
+| `tophat.png` | Top Hat (team-coloured band) | `propeller.png` | Propeller Cap |
+| `crown.png` | Crown | `wizard.png` | Wizard Hat |
+| `cheese.png` | Cheese Wedge | `flower.png` | Daisy |
+| `beanie.png` | Bobble Beanie | `cowboy.png` | Cowboy Hat |
+| `viking.png` | Viking Helmet | `pirate.png` | Pirate Hat |
+
+To add one: draw `assets/hats/<id>.png`, then add `<id>` to `LIST` and its name to `NAMES` in
+`scripts/actors/hats.gd`. Each class already wears its own headgear in the art (hard hat,
+goggles, cap), so hats sit on top of it; if you redraw the rats bareheaded, hats will sit on
+the head itself, no code change.
+
 ## 2. Title screen and menus: `assets/ui/`
 
 | File | Size | What | Status |

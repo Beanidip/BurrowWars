@@ -80,6 +80,7 @@ var net_dirty := false            # server: the authority moved this remote play
 var net_kick := 0                 # server: bumped whenever the authority moved this rat itself
 
 # presentation hooks (read by RatSprite)
+var hat := ""                     # cosmetic (Hats.LIST); players choose theirs, bots wear none
 var stats: Dictionary = {}        # this match's tallies for the results screen (keys: Match.STATS)
 var emote := ""                   # the results screen: the emote being played (Match.EMOTES), while emote_t > 0
 var emote_t := 0.0
