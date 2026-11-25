@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.0 - Release builds for Windows, Linux and macOS
+
+| Change | Files |
+|---|---|
+| Version 2.2.0. A macOS export preset (a universal app for Intel and Apple Silicon, ad-hoc signed; not notarised yet), so all three desktop builds come from this repository; ETC2/ASTC texture import switched on, which Apple Silicon needs | `project.godot`, `export_presets.cfg` |
+
 ## Unreleased - Music
 
 | Change | Files |
