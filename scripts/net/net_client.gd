@@ -122,6 +122,10 @@ func on_snap(s: Dictionary) -> void:
 	m.lobby_left = float(s.get("lt", -1.0))
 	if m.lobby:
 		m.infinite_next = bool(s.get("ix", false))
+	var va: Variant = s.get("va")
+	if va is Array and (va as Array).size() == 2:
+		m.vault[0] = int(va[0])
+		m.vault[1] = int(va[1])
 	var sc: Array = s.get("sc", [0, 0])
 	if int(sc[0]) != m.scores[0] or int(sc[1]) != m.scores[1]:
 		m.scores[0] = int(sc[0])
@@ -326,6 +330,7 @@ func on_private(p: Dictionary) -> void:
 	r.carried = int(p.get("ca", r.carried))
 	r.raid_t = float(p.get("raid", r.raid_t))
 	r.gear = String(p.get("gear", r.gear))
+	r.scrap_held = int(p.get("sh", r.scrap_held))
 	if p.get("bank") is Dictionary:
 		m.team_bank[r.team] = p["bank"]
 

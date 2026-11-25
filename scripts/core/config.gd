@@ -52,6 +52,12 @@ const POUND_COOLDOWN := 0.6
 const DOUBLE_JUMP_COST := 10.0
 const STAMINA_REGEN := 14.0
 const BASE_SCRAP_PER_BLOCK := 2
+## Scrap Race: teams race to bank a scrap goal; banked cheese raises their own scrap value.
+const SCRAP_GOAL := 300            # default goal (the setup page offers 50-3000)
+const SCRAP_CHEESE_REF := 8        # banked cheese that adds GROWTH_BONUS to a team's scrap value (8 cheese: x2.5)
+const SCRAP_BONK_SHARE := 0.5      # a bonk knocks loose this share of the scrap you haven't banked yet
+const SCRAP_DROP_MIN := 4          # ...but at least this much (or all of it, if less)
+const BOT_SCRAP_HAUL := 30         # a bot heads home to bank once it carries this much
 const GROWTH_BONUS := 1.5
 const STACK_MAX := 10
 const CHISEL_RATE := 9.0          # microvoxel edits per second
@@ -97,6 +103,8 @@ const DEFAULTS := {
 	"render_scale": 1.0,             # 3D resolution, 0.5..1.0 (the HUD stays sharp)
 	"camera_distance": 4.0,
 	"goal": 8,
+	"scrap_goal": 300,               # Scrap Race (Config.SCRAP_GOAL)
+	"last_mode": "race",             # the setup page's mode: race | scrap
 	"team_size": 2,
 	"bot_skill": 1,
 	"last_class": "digger",

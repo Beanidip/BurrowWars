@@ -36,6 +36,8 @@ pair "net: WebSocket server + client (what browsers use)" "$GODOT" --headless --
   :: BW_URL=ws://127.0.0.1:24595
 pair "net: 16v16 WebSocket server, a player joins" "$GODOT" --headless --path . -- --server --transport ws --port 24593 --team-size 16 --lobby 0 \
   :: BW_URL=ws://127.0.0.1:24593 BW_NET_TEST=join BW_EXPECT_RATS=32
+pair "net: Scrap Race server, a player joins" "$GODOT" --headless --path . -- --server --transport ws --port 24588 --mode scrap --goal 500 --team-size 2 --lobby 0 \
+  :: BW_URL=ws://127.0.0.1:24588 BW_NET_TEST=join BW_EXPECT_MODE=scrap
 printf '{"servers": [{"name": "Test Server", "region": "Local", "url": "ws://127.0.0.1:24590"}]}' > "$logdir/servers.json"
 pair "net: server list shows live status and joins" "$GODOT" --headless --path . -- --server --transport ws --port 24590 --team-size 2 --lobby 0 \
   :: BW_URL=ws://127.0.0.1:24590 BW_NET_TEST=browser BW_SERVER_LIST="$logdir/servers.json"

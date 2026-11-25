@@ -15,8 +15,9 @@ signal windup_spawned(body: Rat)   # a Wind-up Decoy's body, for a sprite
 
 const TEAM_NAMES := ["Blue", "Red"]
 ## What the results screen tallies for every rat, in the order it lists them.
-const STATS := ["banked", "mined", "stolen", "bonks", "bonked", "blocks", "tnt", "traps", "scrap"]
-const STAT_NAMES := {"banked": "Cheese banked", "mined": "Cheese mined", "stolen": "Cheese stolen", "bonks": "Bonks landed",
+const STATS := ["scrapbank", "banked", "mined", "stolen", "bonks", "bonked", "blocks", "tnt", "traps", "scrap"]
+const SCRAP_RACE_ONLY := ["scrapbank"]   # tallies the results screen shows only in a Scrap Race
+const STAT_NAMES := {"scrapbank": "Scrap banked", "banked": "Cheese banked", "mined": "Cheese mined", "stolen": "Cheese stolen", "bonks": "Bonks landed",
 	"bonked": "Times bonked", "blocks": "Blocks broken", "tnt": "TNT set off", "traps": "Traps placed", "scrap": "Scrap earned"}
 const TRAP_GADGETS := ["trap", "sticky", "pitfall", "decoy", "squeaker"]   # (and the Wind-up Decoy)
 ## Emotes on the results screen: one per movement key, plus jump.
@@ -27,7 +28,7 @@ const BOT_NAMES := ["Nibbles", "Gouda", "Brie", "Scrabble", "Whiskers", "Cheddar
 
 class Pickup:
 	var uid := 0
-	var kind := "cheese"       # "cheese" | "stash"
+	var kind := "cheese"       # "cheese" | "stash" | "scrap" (Scrap Race: knocked-loose scrap, amount in mats["scrap"])
 	var pos := Vector3.ZERO
 	var vel := Vector3.ZERO
 	var lock_id := -1          # rat that may not collect this yet
@@ -44,11 +45,14 @@ var infinite := false               # nobody runs out of anything: scrap, materi
 var perf := [0, 0, 0]               # step() timing for server health lines: [usec total, usec worst, steps]
 var infinite_next := false          # (lobby) the host entered the code: the match it starts is infinite
 var lobby := false                  # the playground everyone waits in before a hosted match
+var scrap_race := false             # Scrap Race: the score is banked scrap; cheese only raises a team's scrap value
 var lobby_props: Dictionary = {}    # Vector3i -> true: playground fixtures nobody can break
 var lobby_left := -1.0              # seconds until a server's lobby ends; -1 = when the host says
 var _bull_cd: Dictionary = {}       # rat id -> seconds before it can score another bullseye
 var goal := 8
-var scores: Array[int] = [0, 0]
+var scores: Array[int] = [0, 0]   # what wins: cheese banked (Cheese Race) or scrap banked (Scrap Race)
+var vault: Array[int] = [0, 0]
+var scrap_cells: Dictionary = {}   # Scrap Race, authority: every scrap block (for the bots)     # cheese in each team's vault (in a Cheese Race, the same as scores)
 var rats: Array[Rat] = []
 var bots: Array[BotBrain] = []
 var pickups: Array[Pickup] = []
@@ -103,6 +107,7 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 	visual = with_visuals
 	lobby = settings.get("mode", "race") == "lobby"
 	free_mode = settings.get("mode", "race") == "free" or lobby   # everything is free in the lobby too
+	scrap_race = settings.get("mode", "race") == "scrap"
 	infinite = bool(settings.get("infinite", false)) and not lobby
 	infinite_next = lobby and bool(settings.get("infinite", false))
 	goal = int(settings.get("goal", 8))
@@ -122,7 +127,7 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 		world.block_changed.connect(water.on_block_changed)
 		world.block_changed.connect(_on_block_changed)
 		world.block_changed.connect(siege.on_block_changed)
-	var need := 0 if free_mode else MapGenerator.min_cheese(goal)
+	var need := cheese_needed(settings)
 	var map_file := String(settings.get("map_file", ""))
 	var imported := false
 	if map_file != "" and not replica and not lobby:
@@ -143,6 +148,9 @@ func setup(match_settings: Dictionary, with_visuals := true, as_replica := false
 		MapGenerator.generate(world, map_seed, need)
 	for cell: Vector3i in _find_blocks(Blocks.TNT):
 		tnt[cell] = {"owner": -1, "fuse": -1.0}
+	if scrap_race and not replica:
+		for cell: Vector3i in _find_blocks(Blocks.SCRAP):
+			scrap_cells[cell] = true
 	for cell: Vector3i in _find_blocks(Blocks.BUBBLE):
 		bubbles[cell] = Config.BUBBLE_TIME     # bubbles in a loaded map still pop
 	for id: int in [Blocks.DECOY_BLUE, Blocks.DECOY_RED]:
@@ -175,6 +183,11 @@ func _on_block_changed(cell: Vector3i, _old: int, new_id: int) -> void:
 		decoys[cell] = Blocks.trap_team(new_id)
 	else:
 		decoys.erase(cell)
+	if scrap_race:
+		if new_id == Blocks.SCRAP:
+			scrap_cells[cell] = true
+		else:
+			scrap_cells.erase(cell)
 
 
 func _find_blocks(id: int) -> Array[Vector3i]:
@@ -264,9 +277,27 @@ func in_base(rat: Rat, team := -1) -> bool:
 	return MapGenerator.base_zone(t).grow(0.01).has_point(rat.position + Vector3(0, 0.3, 0))
 
 
-func multiplier() -> float:
-	## ScrapMultiplier = 1 + (combined cheese / goal) x growth bonus.
-	return 1.0 + float(scores[0] + scores[1]) / float(maxi(goal, 1)) * float(settings.get("growth", Config.GROWTH_BONUS))
+func multiplier(team := -1) -> float:
+	## The scrap value. Cheese Race: 1 + (combined banked cheese / goal) x
+	## growth bonus, the same for everyone. Scrap Race: each team's own,
+	## 1 + (its banked cheese / SCRAP_CHEESE_REF) x growth bonus (team -1:
+	## the better of the two).
+	var growth := float(settings.get("growth", Config.GROWTH_BONUS))
+	if scrap_race:
+		if team < 0:
+			return maxf(multiplier(0), multiplier(1))
+		return 1.0 + float(vault[clampi(team, 0, 1)]) / float(Config.SCRAP_CHEESE_REF) * growth
+	return 1.0 + float(vault[0] + vault[1]) / float(maxi(goal, 1)) * growth
+
+
+static func cheese_needed(s: Dictionary) -> int:
+	## Cheese a generated map must hold for these settings.
+	match String(s.get("mode", "race")):
+		"free", "lobby":
+			return 0
+		"scrap":
+			return MapGenerator.min_cheese(Config.SCRAP_CHEESE_REF * 2)
+	return MapGenerator.min_cheese(int(s.get("goal", 8)))
 
 
 # ---------------------------------------------------------------- stepping
@@ -290,6 +321,8 @@ func _tick(dt: float) -> void:
 	time += dt
 	for r in rats:
 		r.emote_t = maxf(0.0, r.emote_t - dt)
+		if r.scrap_held > r.scrap and not replica:
+			r.scrap_held = maxi(0, r.scrap)   # spent before it was banked: that part never counts
 	if over and not replica:
 		_bots_emote(dt)
 	if replica:
@@ -513,6 +546,8 @@ func _check_rat_hazards(r: Rat, dt: float) -> void:
 			toast.emit("SNAP! %s stepped on a mouse trap." % r.display_name, -1)
 	if r.carried > 0 and not free_mode and in_base(r):
 		_deposit(r)
+	if scrap_race and r.scrap_held > 0 and in_base(r):
+		_bank_scrap(r)
 
 
 func _check_raid(r: Rat, dt: float) -> void:
@@ -521,7 +556,7 @@ func _check_raid(r: Rat, dt: float) -> void:
 	## their own base freezes the raid, and everyone is warned when it starts.
 	## The cheese is moved, never created.
 	var enemy := 1 - r.team
-	if over or free_mode or scores[enemy] <= 0 or r.carried >= r.capacity() or r.stun > 0.0 or r.knock > 0.0 \
+	if over or free_mode or vault[enemy] <= 0 or r.carried >= r.capacity() or r.stun > 0.0 or r.knock > 0.0 \
 			or r.flying or not in_base(r, enemy):
 		r.raid_t = 0.0
 		return
@@ -536,7 +571,9 @@ func _check_raid(r: Rat, dt: float) -> void:
 	r.raid_t += dt
 	if r.raid_t >= Config.RAID_TIME:
 		r.raid_t = 0.0
-		scores[enemy] -= 1
+		vault[enemy] -= 1
+		if not scrap_race:
+			scores[enemy] -= 1
 		r.carried += 1
 		tally(r, "stolen")
 		score_changed.emit()
@@ -548,15 +585,38 @@ func _deposit(r: Rat) -> void:
 	var n := r.carried
 	r.carried = 0
 	tally(r, "banked", n)
-	scores[r.team] += n
+	vault[r.team] += n
+	if not scrap_race:
+		scores[r.team] += n
 	score_changed.emit()
 	fx.emit("deposit", r.position, r.team)
-	toast.emit("%s banked %d cheese for %s!  (scrap x%.2f)" % [r.display_name, n, TEAM_NAMES[r.team], multiplier()], -1)
-	if scores[r.team] >= goal and not over:
+	toast.emit("%s banked %d cheese for %s!  (scrap x%.2f)" % [r.display_name, n, TEAM_NAMES[r.team], multiplier(r.team)], -1)
+	_check_win(r.team)
+
+
+func _bank_scrap(r: Rat) -> void:
+	## Scrap Race: home with scrap you mined - it counts for the team. (It
+	## stays in your pocket to spend; spending it before you bank it means it
+	## never counts.)
+	var n := mini(r.scrap_held, r.scrap if not unlimited() else r.scrap_held)
+	r.scrap_held = 0
+	if n <= 0:
+		return
+	tally(r, "scrapbank", n)
+	scores[r.team] += n
+	score_changed.emit()
+	fx.emit("deposit_scrap", r.position, r.team)
+	if n >= 10:
+		toast.emit("%s banked %d scrap for %s!" % [r.display_name, n, TEAM_NAMES[r.team]], -1)
+	_check_win(r.team)
+
+
+func _check_win(team: int) -> void:
+	if scores[team] >= goal and not over:
 		over = true
-		winner = r.team
-		won.emit(r.team)
-		Log.info("match won by %s at t=%.1fs, score %d-%d" % [TEAM_NAMES[r.team], time, scores[0], scores[1]])
+		winner = team
+		won.emit(team)
+		Log.info("match won by %s at t=%.1fs, score %d-%d" % [TEAM_NAMES[team], time, scores[0], scores[1]])
 
 
 # ---------------------------------------------------------------- digging
@@ -700,8 +760,10 @@ func _break(rat: Rat, cell: Vector3i, id: int, quiet := false) -> void:
 	elif rat == null:
 		return
 	elif drop == "scrap":
-		var gain := roundi(Config.BASE_SCRAP_PER_BLOCK * multiplier())
+		var gain := roundi(Config.BASE_SCRAP_PER_BLOCK * multiplier(rat.team))
 		rat.scrap += gain
+		if scrap_race:
+			rat.scrap_held += gain   # carried until you get it home
 		tally(rat, "scrap", gain)
 		fx.emit("scrap", Vector3(cell), gain)
 	elif drop.begins_with("mat:"):
@@ -1337,6 +1399,9 @@ func try_bonk(rat: Rat, target: Rat) -> bool:
 	target.on_floor = false
 	if target.carried > 0:
 		_drop(target, 1, Config.BONK_PICKUP_LOCK)
+	if scrap_race and target.scrap_held > 0:
+		var n := mini(target.scrap_held, maxi(Config.SCRAP_DROP_MIN, ceili(target.scrap_held * Config.SCRAP_BONK_SHARE)))
+		drop_scrap(target, n, Config.BONK_PICKUP_LOCK)
 	fx.emit("bonk", target.position, null)
 	return true
 
@@ -1568,6 +1633,8 @@ func drop_everything(rat: Rat) -> void:
 	## pickups (moved, never copied).
 	if rat.carried > 0:
 		_drop(rat, rat.carried, 1.0)
+	if scrap_race and rat.scrap_held > 0:
+		drop_scrap(rat, rat.scrap_held, 1.0)
 	var any := false
 	for m: String in rat.mats:
 		if int(rat.mats[m]) > 0:
@@ -1579,6 +1646,22 @@ func drop_everything(rat: Rat) -> void:
 		stash.lock_t = 1.0
 		for m: String in rat.mats:
 			rat.mats[m] = 0
+
+
+func drop_scrap(rat: Rat, n: int, lock_seconds: float) -> void:
+	## Scrap Race: unbanked scrap knocked loose, as one pickup anyone can grab
+	## (moved, never copied: it leaves the rat's pocket).
+	n = mini(n, mini(rat.scrap_held, rat.scrap))
+	if n <= 0:
+		return
+	rat.scrap_held -= n
+	rat.scrap -= n
+	var ang := _rng.randf() * TAU
+	var p := spawn_pickup("scrap", rat.position + Vector3(0, 0.5, 0), Vector3(cos(ang) * 2.0, 4.5, sin(ang) * 2.0))
+	p.mats = {"scrap": n}
+	p.lock_id = rat.id
+	p.lock_t = lock_seconds
+	p.from_team = rat.team
 
 
 func _step_pickups(dt: float) -> void:
@@ -1671,6 +1754,12 @@ func _step_pickups(dt: float) -> void:
 				if p.from_team >= 0 and p.from_team != r.team:
 					tally(r, "stolen")   # one the other team dropped (a bonk, a trap...)
 				fx.emit("pickup", p.pos, r.team)
+			elif p.kind == "scrap":
+				var n := int(p.mats.get("scrap", 0))
+				r.scrap += n
+				if scrap_race:
+					r.scrap_held += n   # someone's loose scrap: yours now, once you get it home
+				fx.emit("pickup_scrap", p.pos, r.team)
 			else:
 				for m: String in p.mats:
 					r.mats[m] = mini(int(r.mats.get(m, 0)) + int(p.mats[m]), 99)

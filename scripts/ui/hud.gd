@@ -97,6 +97,8 @@ func _ready() -> void:
 			Inputs.key_name("gear"), Inputs.key_name("interact")], UiKit.BRASS)
 	elif m.free_mode:
 		_push_toast("Free Build: N toggles flight, F5 saves the map, F9 loads it. Everything is free.", UiKit.BRASS)
+	elif m.scrap_race:
+		_push_toast("SCRAP RACE: mine orange scrap and carry it home to bank it. First to %d scrap wins! Cheese you bank makes your team's scrap worth more." % m.goal, UiKit.BRASS)
 	else:
 		_push_toast("Dig for golden cheese and carry it back to your base. First to %d wins!" % m.goal, UiKit.BRASS)
 	if m.infinite:
@@ -406,7 +408,10 @@ func _process(_delta: float) -> void:
 		_score_labels[t].text = "%s  %d / %d" % [Match.TEAM_NAMES[t], m.scores[t], m.goal] if t == 0 else "%d / %d  %s" % [m.scores[t], m.goal, Match.TEAM_NAMES[t]]
 		_score_bars[t].max_value = m.goal
 		_score_bars[t].value = m.scores[t]
-	_mult.text = "Scrap value x%.2f" % m.multiplier()
+	if m.scrap_race:
+		_mult.text = "SCRAP RACE  -  your scrap value x%.2f  (theirs x%.2f)" % [m.multiplier(rat.team), m.multiplier(1 - rat.team)]
+	else:
+		_mult.text = "Scrap value x%.2f" % m.multiplier()
 	_stamina.max_value = rat.max_stamina()
 	_stamina.value = rat.stamina
 	_stamina_text.text = "Stamina %d / %d" % [int(rat.stamina), int(rat.max_stamina())]
@@ -429,6 +434,8 @@ func _process(_delta: float) -> void:
 		_q_name.text = "empty"
 		_q_count.text = "buy: %s" % Inputs.key_name("workshop")
 	_status.text = "%s  -  %s team\nScrap: %d" % [rat.cls["name"], Match.TEAM_NAMES[rat.team], rat.scrap]
+	if m.scrap_race and rat.scrap_held > 0:
+		_status.text += "  (%d to bank: get it home!)" % rat.scrap_held
 	_q_icon.texture = Icons.tex(rat.equipped)
 	_gear_icon.texture = Icons.tex(rat.gear)
 	if rat.gear == "":
@@ -504,7 +511,7 @@ func _process(_delta: float) -> void:
 		_target.text += "   |   Carrying cheese: get to your base!"
 	if rat.raid_t > 0.0:
 		_target.text = "Raiding the vault...  %d%%" % int(100.0 * rat.raid_t / Config.RAID_TIME)
-	elif not m.free_mode and m.in_base(rat, 1 - rat.team) and m.scores[1 - rat.team] > 0 and rat.carried < rat.capacity():
+	elif not m.free_mode and m.in_base(rat, 1 - rat.team) and m.vault[1 - rat.team] > 0 and rat.carried < rat.capacity():
 		_target.text = "A defender is home - the vault is locked while they stand in it"
 	_crosshair.visible = _dialog == null
 	_update_markers()
@@ -516,7 +523,9 @@ func _process(_delta: float) -> void:
 		var have := rat.scrap if key == "scrap" else int(rat.mats.get(key, 0))
 		(_stash_labels[key] as Label).text = "%s:  you %d   |   stash %d" % [key.capitalize(), have, int(bank.get(key, 0))]
 	if _dialog_scrap != null:
-		_dialog_scrap.text = "Your scrap: %d      Scrap value x%.2f" % [rat.scrap, m.multiplier()]
+		_dialog_scrap.text = "Your scrap: %d      Scrap value x%.2f" % [rat.scrap, m.multiplier(rat.team)]
+		if m.scrap_race and rat.scrap_held > 0:
+			_dialog_scrap.text += "      (%d not banked yet: spending it means it never counts)" % rat.scrap_held
 
 
 func _sync_cheese() -> void:

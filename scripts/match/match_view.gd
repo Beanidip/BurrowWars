@@ -75,6 +75,12 @@ func _make_pickup(kind: String) -> MeshInstance3D:
 		wedge.left_to_right = 0.0
 		node.mesh = wedge
 		mat.albedo_color = Color(1.0, 0.82, 0.18)
+	elif kind == "scrap":
+		# knocked-loose scrap (Scrap Race): a little orange heap of bits
+		var bits := BoxMesh.new()
+		bits.size = Vector3(0.34, 0.22, 0.34)
+		node.mesh = bits
+		mat.albedo_color = Color(0.93, 0.5, 0.16)
 	else:
 		var sack := BoxMesh.new()
 		sack.size = Vector3(0.4, 0.4, 0.4)
@@ -346,6 +352,12 @@ func _on_fx(kind: String, pos: Vector3, data: Variant) -> void:
 		"pickup_stash":
 			_sound("block_place", pos, 1.3)
 			_sprite("collect", pos, 0.45)
+		"pickup_scrap":
+			_sound("discovery_chime", pos, 1.4, -4.0)
+			_sprite("collect", pos, 0.45)
+		"deposit_scrap":
+			_sound("discovery_chime", pos, 0.9, 0.0)
+			_burst(pos + Vector3(0, 1.0, 0), Color(0.93, 0.5, 0.16), 14, 6.0)
 		"scrap":
 			_sound("discovery_chime", c, 1.2, -4.0)
 			_float_text(c + Vector3(0, 0.4, 0), "+%d scrap" % int(data), Color(1.0, 0.75, 0.4))

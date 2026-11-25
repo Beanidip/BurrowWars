@@ -52,6 +52,24 @@ playground first) or **Main menu** (which ends the game for everyone); players s
 through either of the first two. Other players see "Waiting for the host" (on a dedicated server,
 a countdown to the next round) and can **Leave**.
 
+## Scrap Race
+
+The same map, teams and tools, a different race: the first team to **bank** the scrap goal
+(default 300, 50-3000 on the setup page) wins.
+
+- Scrap you mine is **carried** until you get it home: step into your base and it's banked for
+  the team (it stays in your pocket to spend, too). The HUD shows how much you're carrying.
+- **Bonks knock half your unbanked scrap loose** (at least 4) as a pickup anyone can grab, and
+  what the other team picks up is theirs to bank. Respawning drops it all.
+- **Spending** scrap you haven't banked yet means it never counts. Bank first, then shop.
+- **Cheese is the multiplier, per team:** your team's scrap value is 1 + (cheese in your vault /
+  8) x 1.5, so 8 banked cheese makes every scrap block worth 2.5x as much to you. Raiding
+  their vault takes a cheese, and some of their scrap value, with it.
+- Bots: two in three mine scrap and haul it home once they carry 30; the rest fetch cheese.
+  A 2v2 of bots to 300 takes about nine minutes.
+
+Dedicated servers run it with `--mode scrap` (`--goal` is then the scrap goal).
+
 ## Core numbers
 
 | Rule | Value |

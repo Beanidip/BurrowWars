@@ -6,6 +6,7 @@ extends Node
 ##
 ##   godot --headless --path . -- --server [--port 24565] [--name "My Server"]
 ##         [--goal 10] [--team-size 4] [--skill 1] [--free] [--round-break 15]
+##         [--mode scrap]                (Scrap Race: --goal is then the scrap goal; default 300)
 ##         [--lobby 30]                  (seconds in the playground before each round; 0 = none)
 ##         [--map path/to/saved.bwmap]   (every round then starts on that map)
 ##         [--transport ws]              (WebSocket on TCP instead of ENet on UDP:
@@ -48,7 +49,7 @@ static func parse_args() -> Dictionary:
 			var key := a.substr(2)
 			if key in ["server", "free", "no-status"]:
 				out[key] = true
-			elif key in ["port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map",
+			elif key in ["mode", "port", "name", "goal", "team-size", "skill", "seed", "round-break", "lobby", "map",
 					"transport", "tls-cert", "tls-key", "status-port", "log-every"] and i + 1 < args.size():
 				out[key] = args[i + 1]
 				i += 1
@@ -98,7 +99,7 @@ func status() -> Dictionary:
 		"uptime": (Time.get_ticks_msec() - _started) / 1000,
 	}
 	if m != null:
-		st["mode"] = "lobby" if m.lobby else ("free" if m.free_mode else "race")
+		st["mode"] = "lobby" if m.lobby else ("free" if m.free_mode else ("scrap" if m.scrap_race else "race"))
 		st["rats"] = m.rats.size()
 		st["team_size"] = int(m.settings.get("team_size", 0))
 		st["goal"] = int(m.settings.get("goal", 0))
@@ -133,8 +134,19 @@ func _server_name() -> String:
 	return n if n != "" else "Burrow Wars server"
 
 
+func _mode() -> String:
+	if bool(options.get("free", false)):
+		return "free"
+	return "scrap" if String(options.get("mode", "race")) == "scrap" else "race"
+
+
 func _goal() -> int:
-	return 9999 if bool(options.get("free", false)) else clampi(int(options.get("goal", 10)), 1, 250)
+	match _mode():
+		"free":
+			return 9999
+		"scrap":
+			return clampi(int(options.get("goal", Config.SCRAP_GOAL)), 10, 100000)
+	return clampi(int(options.get("goal", 10)), 1, 250)
 
 
 func _prepare_next() -> void:
@@ -144,7 +156,7 @@ func _prepare_next() -> void:
 	if _warm_task != -1 or String(options.get("map", "")) != "":
 		return
 	_next_seed = randi_range(1, 999999)
-	var need := 0 if bool(options.get("free", false)) else MapGenerator.min_cheese(_goal())
+	var need := Match.cheese_needed({"mode": _mode(), "goal": _goal()})
 	_warm_task = WorkerThreadPool.add_task(MapGenerator.warm.bind(_next_seed, need), true, "next map")
 
 
@@ -155,14 +167,13 @@ func _exit_tree() -> void:
 
 
 func _settings() -> Dictionary:
-	var free := bool(options.get("free", false))
 	var skill := clampi(int(options.get("skill", 1)), 0, 2)
 	var seed_value := int(options.get("seed", 0)) if rounds == 0 else 0   # --seed fixes the first map only
 	if seed_value <= 0 and _next_seed > 0:
 		seed_value = _next_seed   # the one generated in the background
 	_next_seed = 0
 	return {
-		"mode": "free" if free else "race",
+		"mode": _mode(),
 		"seed": seed_value if seed_value > 0 else randi_range(1, 999999),
 		"goal": _goal(),
 		"map_file": String(options.get("map", "")),
@@ -246,7 +257,7 @@ func health_line(seconds: float) -> String:
 	var sim: Array = m.perf
 	var nt: Array = net.perf if net != null else [0, 0, 0]
 	var line := "health: %d players, %d bots, round %d (%s, %d-%d, t=%ds), mem %.1f MB, objects %d, nodes %d, orphans %d, sim %.2f ms avg / %.1f max, net %.2f ms avg / %.1f max, tps %.1f" % [
-		net.player_count(), bots, rounds, "lobby" if m.lobby else ("free" if m.free_mode else "race"), m.scores[0], m.scores[1],
+		net.player_count(), bots, rounds, "lobby" if m.lobby else ("free" if m.free_mode else ("scrap" if m.scrap_race else "race")), m.scores[0], m.scores[1],
 		int(m.time), Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
 		int(Performance.get_monitor(Performance.OBJECT_COUNT)), int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)),

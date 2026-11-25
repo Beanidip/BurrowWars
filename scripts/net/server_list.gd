@@ -12,7 +12,7 @@ class_name ServerList
 
 const DEFAULT_URL := "https://raw.githubusercontent.com/Beanidip/BurrowWars/main/servers.json"
 const SETTING := "burrow_wars/server_list_url"
-const MODES := {"race": "Cheese Race", "free": "Free Build", "lobby": "Playground"}
+const MODES := {"race": "Cheese Race", "scrap": "Scrap Race", "free": "Free Build", "lobby": "Playground"}
 
 
 static func list_url() -> String:
@@ -83,7 +83,7 @@ static func describe(st: Dictionary) -> String:
 	## "12/31 players  -  Cheese Race 3-1 (to 10)"
 	var players := "%d/%d players" % [int(st.get("players", 0)), int(st.get("max_players", 0))]
 	var mode := String(MODES.get(String(st.get("mode", "")), ""))
-	if st.get("mode") == "race" and st.get("score") is Array and (st["score"] as Array).size() == 2:
+	if (st.get("mode") == "race" or st.get("mode") == "scrap") and st.get("score") is Array and (st["score"] as Array).size() == 2:
 		mode += " %d-%d (to %d)" % [int(st["score"][0]), int(st["score"][1]), int(st.get("goal", 0))]
 	return players + ("  -  " + mode if mode != "" else "")
 

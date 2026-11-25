@@ -79,6 +79,10 @@ func _run() -> void:
 		check(wsp, "connected over WebSocket (%s)" % OS.get_environment("BW_URL"))
 	if OS.get_environment("BW_NET_TEST") == "join":
 		check(s.m.world.get_cell(Vector3i(VoxelWorld.SX / 2, 1, VoxelWorld.SZ / 2)) != Blocks.AIR, "the map arrived whole")
+		if OS.get_environment("BW_EXPECT_MODE") == "scrap":
+			check(s.m.scrap_race and s.m.goal == 500, "it's a Scrap Race to 500 on our screen too")
+			var st: Array = await fetch(OS.get_environment("BW_URL").replace("ws://", "http://").replace(":24588", ":24589") + "/status")
+			check(st[1] is Dictionary and String(st[1].get("mode", "")) == "scrap", "the status page says Scrap Race (%s)" % str(st[1]))
 		var want := OS.get_environment("BW_EXPECT_RATS")
 		if want != "":
 			await wait(1.0)

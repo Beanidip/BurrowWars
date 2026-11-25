@@ -20,7 +20,7 @@ func _ready() -> void:
 		"mouse_trap", "tnt_chain_and_gate", "ladder_spring_conveyor_gate", "class_abilities",
 		"class_permissions", "win_condition", "vault_raid", "digger_power", "water_exit", "lava_flows", "water_flows", "ladder_stack_and_floor_gadgets",
 		"team_block_and_builder", "ice_slides_off_the_end", "scrap_abundance",
-		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
+		"painted_blocks", "review_fixes", "bot_sees_cheese", "enemy_names_need_sight", "spring_sides_and_cheese", "trap_durability", "team_stash", "jetpack_gear", "effect_sheets", "motion_and_splash_fx", "deep_caves_and_riches", "lobby_playground", "moves_and_blasts", "knight_shield", "bubble_shoes", "decoy_and_squeaker", "bots_scrap_and_decoys", "sound_levels", "pools_springs_raids_sparks", "crumb_trail", "windup_decoy", "bots_chase_windups", "windup_replica", "rat_views", "teleporters", "impulse_grenade", "credits_and_licences", "display_and_audio_settings", "threaded_remesh", "merged_terrain_faces", "safe_saves_and_exit", "tutorial", "gamepad_input", "map_in_parts", "anti_cheat_honest_play", "anti_cheat_catches_cheats", "sixteen_a_side", "server_list", "cheat_code", "audio_buses", "wrecking_ball_smashes_through", "workshop_categories", "bulldozer_turns", "results_stats_and_emotes", "hats", "scrap_race", "bots_finish_a_scrap_race", "held_until_ready", "unstick_nearest", "bot_crosses_trench", "bot_gear_and_dash", "dash_with_cheese", "paint_on_click", "pantograph_transforms", "big_goal_and_map_import", "cheese_drop_and_springs", "ability_cooldowns", "gate_holds_gadgets", "wood_is_scenery", "highway_layer", "siege_floor_conveyor", "wrecking_ball_table", "bonked_pilot", "save_load", "free_build",
 		"stone_and_obsidian", "chisel_rules", "chisel_economy_is_zero_sum", "chisel_collision_and_steps",
 		"chisel_persists", "pantograph", "dynamite_physics", "dynamite_traps", "dynamite_blast",
 		"new_traps_vs_rats", "cannon", "crane_and_dozer", "machine_transport", "machine_rules",
@@ -5562,4 +5562,159 @@ func test_hats() -> void:
 	ns.on_peer_left(55)
 	check(me.is_bot and me.hat == "", "a bot taking over the seat takes the hat off")
 	ns.free()
+	end(m)
+
+
+func test_scrap_race() -> void:
+	## Scrap Race: the score is scrap carried home and banked; cheese banked
+	## raises your own team's scrap value; unbanked scrap is knocked loose by
+	## bonks and lost to spending.
+	var m := new_match({"mode": "scrap", "goal": 40})
+	flat_arena(m, ARENA, 6)
+	check(m.scrap_race and not m.free_mode and m.goal == 40, "a Scrap Race to 40")
+	check(Match.cheese_needed({"mode": "scrap", "goal": 40}) == MapGenerator.min_cheese(Config.SCRAP_CHEESE_REF * 2),
+		"the map still holds plenty of cheese (it's the multiplier)")
+	check(m.scrap_cells.size() > 500, "the bots know where the scrap is (%d blocks)" % m.scrap_cells.size())
+	var a := arena_rat(m, 0, "digger")
+	var b := arena_rat(m, 1, "scout", Vector3(1.0, 0, 0))
+	check(is_equal_approx(m.multiplier(0), 1.0) and is_equal_approx(m.multiplier(1), 1.0), "everyone starts at x1")
+	# banked cheese raises only that team's scrap value; it isn't the score
+	a.carried = 4
+	m._deposit(a)
+	check(m.vault[0] == 4 and m.scores[0] == 0, "cheese goes into the vault, not the score")
+	check(is_equal_approx(m.multiplier(0), 1.0 + 4.0 / Config.SCRAP_CHEESE_REF * Config.GROWTH_BONUS) and is_equal_approx(m.multiplier(1), 1.0),
+		"and raises our scrap value only (x%.2f vs x%.2f)" % [m.multiplier(0), m.multiplier(1)])
+	# mining scrap: worth our value, carried until banked
+	var cell := ARENA + Vector3i(0, 0, -2)
+	m.world.set_block(cell, Blocks.SCRAP)
+	var s0 := a.scrap
+	var n := 0
+	while m.world.get_cell(cell) != Blocks.AIR and n < 40:
+		a.dig_cd = 0.0
+		m.try_dig(a, cell)
+		n += 1
+	var gain := roundi(Config.BASE_SCRAP_PER_BLOCK * m.multiplier(0))
+	check(a.scrap == s0 + gain and a.scrap_held == gain, "a scrap block is worth our value (+%d), carried, not banked" % gain)
+	check(not m.scrap_cells.has(cell), "and the bots forget the mined block")
+	# a bonk knocks half of it loose; anyone can grab it
+	a.scrap_held = 10
+	a.scrap = maxi(a.scrap, 10)
+	var before := a.scrap
+	b.bonk_cd = 0.0
+	check(m.try_bonk(b, a), "bonk")
+	check(a.scrap_held == 5 and a.scrap == before - 5, "a bonk knocks half the unbanked scrap loose (held 10 -> %d)" % a.scrap_held)
+	var loose: Match.Pickup = null
+	for p in m.pickups:
+		if p.kind == "scrap":
+			loose = p
+	check(loose != null and int(loose.mats["scrap"]) == 5, "as a pickup of 5 scrap")
+	loose.lock_t = 0.0
+	loose.pos = b.center()
+	loose.vel = Vector3.ZERO
+	var bs := b.scrap
+	m._step_pickups(DT)
+	check(b.scrap == bs + 5 and b.scrap_held == 5, "the other team grabs it: theirs to bank now")
+	# spending unbanked scrap: that part never counts
+	a.scrap = 3
+	m.step(DT)
+	check(a.scrap_held == 3, "spend it before banking and it's gone from the haul (%d)" % a.scrap_held)
+	# home: it's banked, and it stays yours to spend
+	a.scrap = 30
+	a.scrap_held = 30
+	a.position = MapGenerator.spawn_point(0)
+	m._check_rat_hazards(a, DT)
+	check(m.scores[0] == 30 and a.scrap_held == 0 and a.scrap == 30 and int(a.stats.get("scrapbank", 0)) == 30,
+		"home: 30 scrap banked for the team, still in our pocket to spend")
+	check(not m.over, "not there yet (30 / 40)")
+	a.scrap = 50
+	a.scrap_held = 12
+	m._check_rat_hazards(a, DT)
+	check(m.over and m.winner == 0 and m.scores[0] == 42, "banking past the goal wins (%d)" % m.scores[0])
+	# raids still steal cheese: the other team's scrap value
+	var m2 := new_match({"mode": "scrap", "goal": 500})
+	m2.vault[1] = 2
+	var thief := m2.spawn_rat(0, "scout", false)
+	thief.position = MapGenerator.spawn_point(1)
+	for i in int(Config.RAID_TIME / DT) + 5:
+		m2._check_raid(thief, DT)
+	check(m2.vault[1] == 1 and thief.carried == 1 and m2.scores == [0, 0], "a raid steals a cheese (their scrap value), not scrap")
+	# bots: miners go for scrap anywhere and haul it home; one in three fetches cheese
+	thief.position = MapGenerator.spawn_point(0)   # (out of their vault: nothing to defend)
+	var miner: Rat = null
+	var runner: Rat = null
+	while miner == null or runner == null:
+		var r := m2.spawn_rat(1, "digger", true)
+		var brain: BotBrain = m2.bots[-1]
+		if brain.cheese_runner() and runner == null:
+			runner = r
+		elif not brain.cheese_runner() and miner == null:
+			miner = r
+	var mb: BotBrain = null
+	for br in m2.bots:
+		if br.rat == miner:
+			mb = br
+	mb._retarget()
+	check(mb.mode == "scrap" and m2.world.get_cell(mb.target_cell) == Blocks.SCRAP, "a miner bot heads for scrap (%s)" % mb.mode)
+	miner.scrap = 40
+	miner.scrap_held = Config.BOT_SCRAP_HAUL
+	mb._retarget()
+	check(mb.mode == "home", "with %d scrap on it, it heads home to bank" % Config.BOT_SCRAP_HAUL)
+	# on the wire, and on screen
+	var ns := NetServer.new()
+	ns.m = m2
+	var snap := ns._snapshot(true)
+	check(snap.get("va") == [0, 1], "players get the vaults (%s)" % str(snap.get("va")))
+	check(int(ns._private(miner).get("sh", -1)) == Config.BOT_SCRAP_HAUL, "and their own unbanked scrap")
+	ns.free()
+	var st := {"players": 3, "max_players": 31, "mode": "scrap", "score": [120, 90], "goal": 300}
+	check(ServerList.describe(st) == "3/31 players  -  Scrap Race 120-90 (to 300)", "the server list says so (%s)" % ServerList.describe(st))
+	m.networked = false
+	var rs := ResultsScreen.new()
+	rs.m = m
+	rs.me = a
+	add_child(rs)
+	var shows := false
+	for l in rs.find_children("*", "Label", true, false):
+		shows = shows or (l as Label).text == "Scrap banked"
+	check(shows, "the results screen tallies scrap banked")
+	rs.free()
+	var race := new_match()
+	race.over = true
+	race.winner = 0
+	var r0 := race.spawn_rat(0, "digger", false)
+	rs = ResultsScreen.new()
+	rs.m = race
+	rs.me = r0
+	add_child(rs)
+	shows = false
+	for l in rs.find_children("*", "Label", true, false):
+		shows = shows or (l as Label).text == "Scrap banked"
+	check(not shows, "but not in a Cheese Race")
+	rs.free()
+	end(race)
+	end(m2)
+	end(m)
+
+
+func test_bots_finish_a_scrap_race() -> void:
+	## 2v2 bots, a Scrap Race to the default goal: they mine, haul it home
+	## and bank it, fetch some cheese, and someone wins in reasonable time.
+	var m := new_match({"mode": "scrap", "goal": Config.SCRAP_GOAL, "seed": 7})
+	for team in 2:
+		m.spawn_rat(team, "digger", true)
+		m.spawn_rat(team, "scout", true)
+	var limit := 15.0 * 60.0
+	var dt := 1.0 / 30.0
+	var first_bank := -1.0
+	while not m.over and m.time < limit:
+		m.step(dt)
+		if first_bank < 0.0 and m.scores[0] + m.scores[1] > 0:
+			first_bank = m.time
+	print("    scrap bots: over=%s winner=%d score=%d-%d vault=%d-%d x%.2f/x%.2f sim_time=%.0fs first_bank=%.0fs" % [
+		m.over, m.winner, m.scores[0], m.scores[1], m.vault[0], m.vault[1], m.multiplier(0), m.multiplier(1), m.time, first_bank])
+	check(first_bank > 0.0, "bots mine scrap and bank it")
+	check(m.vault[0] + m.vault[1] > 0, "and still bank some cheese for the multiplier")
+	check(m.over, "a bots-only Scrap Race to %d finishes within 15 simulated minutes" % Config.SCRAP_GOAL)
+	for r in m.rats:
+		check(not r.blocked(), "bot %d is not embedded in terrain" % r.id)
 	end(m)

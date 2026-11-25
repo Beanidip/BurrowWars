@@ -518,7 +518,7 @@ func _snapshot(with_names := false) -> Dictionary:
 	var sticks: Array = []
 	for s in m.dynamite.sticks:
 		sticks.append([s.uid, s.pos, s.vel, s.fuse, s.resting, s.impulse, s.stuck])
-	var snap := {"t": m.time, "sc": [m.scores[0], m.scores[1]], "o": m.over, "w": m.winner, "r": NetCodec.encode_rats(m.rats), "p": picks,
+	var snap := {"t": m.time, "sc": [m.scores[0], m.scores[1]], "va": [m.vault[0], m.vault[1]], "o": m.over, "w": m.winner, "r": NetCodec.encode_rats(m.rats), "p": picks,
 		"mk": m.markers, "mc": machines, "sh": shots, "st": sticks, "wd": m.windup.snapshot(), "tp": m.tele_pads(), "lt": m.lobby_left}
 	if send_names:
 		snap["ro"] = roster()
@@ -546,4 +546,4 @@ func _snapshot(with_names := false) -> Dictionary:
 func _private(r: Rat) -> Dictionary:
 	return {"mats": r.mats, "gadgets": r.gadgets, "scrap": r.scrap, "eq": r.equipped, "mb": r.micro_bank,
 		"acd": r.ability_cd, "ccd": r.class_cd, "cls": r.class_id, "op": r.operating, "ca": r.carried, "raid": r.raid_t,
-		"gear": r.gear, "bank": m.team_bank[r.team]}
+		"gear": r.gear, "bank": m.team_bank[r.team], "sh": r.scrap_held}

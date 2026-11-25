@@ -42,6 +42,8 @@ var _page: VBoxContainer
 var _team := 0
 var _class := "digger"
 var _goal := 8
+var _mode := "race"                 # the setup page: "race" (Cheese Race) or "scrap" (Scrap Race)
+var _scrap_goal := Config.SCRAP_GOAL
 var _team_size := 2
 var _skill := 1
 var _seed_edit: LineEdit
@@ -78,6 +80,8 @@ func _ready() -> void:
 	if not ClassDefs.ORDER.has(_class):
 		_class = "digger"
 	_goal = int(Config.get_value("goal"))
+	_mode = "scrap" if String(Config.get_value("last_mode")) == "scrap" else "race"
+	_scrap_goal = int(Config.get_value("scrap_goal"))
 	_team_size = int(Config.get_value("team_size"))
 	_skill = clampi(int(Config.get_value("bot_skill")), 0, 2)
 	var bg := ColorRect.new()
@@ -138,7 +142,7 @@ func _show_home() -> void:
 	col.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_theme_constant_override("separation", 8)
 	_page.add_child(col)
-	var play := Icons.on_button(UiKit.button("Cheese Race (Bot Game)", _show_setup, Vector2(320, 52)), "cheese")
+	var play := Icons.on_button(UiKit.button("Cheese Race / Scrap Race (Bots)", _show_setup, Vector2(320, 52)), "cheese")
 	if not bool(Config.get_value("tutorial_done")):
 		var hint := UiKit.label("New here? Try Learn to Play first - about five minutes.", 15, UiKit.BRASS)
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -197,7 +201,26 @@ func _show_host_setup() -> void:
 
 func _setup_page() -> void:
 	_clear()
-	_page.add_child(UiKit.label("Host an online game" if _hosting else "Cheese Race setup", 28, UiKit.BRASS))
+	_page.add_child(UiKit.label("Host an online game" if _hosting else "Game setup", 28, UiKit.BRASS))
+	# mode
+	var modes := HBoxContainer.new()
+	modes.add_theme_constant_override("separation", 8)
+	var first_mode: Button = null
+	for mode: String in ["race", "scrap"]:
+		var mb := Icons.on_button(UiKit.button("Cheese Race" if mode == "race" else "Scrap Race", func() -> void:
+			if _mode != mode:
+				_mode = mode
+				_setup_page()
+				_focus_mode(), Vector2(200, 40)), "cheese" if mode == "race" else "scrap")
+		mb.toggle_mode = true
+		mb.button_pressed = mode == _mode
+		mb.set_meta("mode", mode)
+		modes.add_child(mb)
+		if first_mode == null:
+			first_mode = mb
+	var mode_blurb := UiKit.label("Bank the most golden cheese." if _mode == "race" else "Bank scrap; cheese makes yours worth more.", 15, UiKit.PAPER.darkened(0.1))
+	modes.add_child(mode_blurb)
+	_page.add_child(UiKit.row(UiKit.label("Mode"), modes))
 	# team
 	var teams := HBoxContainer.new()
 	teams.add_theme_constant_override("separation", 8)
@@ -225,10 +248,17 @@ func _setup_page() -> void:
 	_page.add_child(_blurb)
 	# goal
 	var goal_label := UiKit.label("", 17)
-	var goal_slider := UiKit.slider(3, 250, 1, _goal, func(v: float) -> void:
-		_goal = int(v)
-		goal_label.text = _goal_text()
-	)
+	var goal_slider: HSlider
+	if _mode == "scrap":
+		goal_slider = UiKit.slider(50, 3000, 50, _scrap_goal, func(v: float) -> void:
+			_scrap_goal = int(v)
+			goal_label.text = _goal_text()
+		)
+	else:
+		goal_slider = UiKit.slider(3, 250, 1, _goal, func(v: float) -> void:
+			_goal = int(v)
+			goal_label.text = _goal_text()
+		)
 	goal_label.text = _goal_text()
 	_page.add_child(UiKit.row(goal_label, goal_slider))
 	var size_label := UiKit.label("", 17)
@@ -294,7 +324,16 @@ func _pick_class(id: String) -> void:
 
 
 func _goal_text() -> String:
+	if _mode == "scrap":
+		return "Scrap goal: %d  (%d scrap blocks at the starting value)" % [_scrap_goal, ceili(_scrap_goal / float(Config.BASE_SCRAP_PER_BLOCK))]
 	return "Cheese goal: %d  (map holds %d+ cheese)" % [_goal, MapGenerator.min_cheese(_goal)]
+
+
+func _focus_mode() -> void:
+	## After switching mode the page is rebuilt: keep the focus on the mode buttons.
+	for b in _page.find_children("*", "Button", true, false):
+		if b.has_meta("mode") and String(b.get_meta("mode")) == _mode:
+			(b as Button).grab_focus()
 
 
 func _map_row() -> Control:
@@ -333,10 +372,12 @@ func _start_race() -> void:
 	Config.set_value("last_team", _team)
 	Config.set_value("last_class", _class)
 	Config.set_value("goal", _goal)
+	Config.set_value("scrap_goal", _scrap_goal)
+	Config.set_value("last_mode", _mode)
 	Config.set_value("team_size", _team_size)
 	Config.set_value("bot_skill", _skill)
 	Config.save()
-	var s := {"mode": "race", "seed": _seed(), "goal": _goal, "team": _team, "class": _class, "team_size": _team_size,
+	var s := {"mode": _mode, "seed": _seed(), "goal": _scrap_goal if _mode == "scrap" else _goal, "team": _team, "class": _class, "team_size": _team_size,
 		"bot_rest": [7.0, 3.0, 0.0][_skill]}
 	if _selected_map() != "":
 		s["map_file"] = _selected_map()
@@ -604,7 +645,7 @@ func _show_online() -> void:
 	buttons.add_theme_constant_override("separation", 12)
 	buttons.add_child(UiKit.button("Back", _show_home, Vector2(160, 46)))
 	if Net.enet_available():   # a browser can't open a server, only join WebSocket ones
-		buttons.add_child(Icons.on_button(UiKit.button("Host Cheese Race...", _show_host_setup, Vector2(230, 46)), "cheese"))
+		buttons.add_child(Icons.on_button(UiKit.button("Host a Race...", _show_host_setup, Vector2(230, 46)), "cheese"))
 		buttons.add_child(Icons.on_button(UiKit.button("Host Free Build", _host_free, Vector2(210, 46)), "hammer"))
 	_page.add_child(buttons)
 	_back = _show_home

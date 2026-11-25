@@ -19,7 +19,7 @@ then press **Join** on a server in the list, or type an address (`1.2.3.4`, `1.2
 or a `ws://` / `wss://` address for a WebSocket server) and press **Join**. A controller can do
 all of this: a name is suggested for you, and the list's Join buttons need no typing.
 
-**Host a game for friends:** **Play Online** > **Host Cheese Race...** sets up a normal Cheese Race
+**Host a game for friends:** **Play Online** > **Host a Race...** sets up a Cheese Race or a Scrap Race
 and opens a server on your machine (default UDP port **24565**). You play in it like any other
 match.
 - **Lobby** (on by default in the host options): instead of starting straight away, you and
@@ -73,7 +73,8 @@ On Windows: `BurrowWars.exe --headless -- --server`.
 |---|---|---|
 | `--port N` | 24565 | UDP port. Run several servers on one machine with different ports. |
 | `--name "..."` | Burrow Wars server | Shown to players (16 characters max). |
-| `--goal N` | 10 | Cheese to win a round (1-250). The map always holds at least 2.5x the goal. |
+| `--mode scrap` | race | Scrap Race instead of a Cheese Race: teams race to bank scrap. |
+| `--goal N` | 10 | Cheese to win a round (1-250). The map always holds at least 2.5x the goal. With `--mode scrap`, the scrap goal (default 300). |
 | `--team-size N` | 4 | Seats per team, bots included (1-16). |
 | `--skill 0/1/2` | 1 | Bot skill: relaxed, normal, fierce. |
 | `--round-break S` | 15 | Seconds between a win and the next map. |

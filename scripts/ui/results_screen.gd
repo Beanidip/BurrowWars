@@ -66,11 +66,16 @@ func _ready() -> void:
 	title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	v.add_child(title)
 	var mine := me != null and me.team == m.winner
-	var sub := UiKit.label("The golden cheese is yours. Squeak with pride!" if mine else "Out-burrowed this time. Dig faster, bonk harder!", 17)
+	var cheer := "The scrap heap is yours. Squeak with pride!" if m.scrap_race else "The golden cheese is yours. Squeak with pride!"
+	var sub := UiKit.label(cheer if mine else "Out-burrowed this time. Dig faster, bonk harder!", 17)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(sub)
-	var score := UiKit.label("Blue %d  -  %d Red        Match time %d:%02d        Final scrap value x%.2f" % [
-		m.scores[0], m.scores[1], int(m.time) / 60, int(m.time) % 60, m.multiplier()], 15, UiKit.BRASS)
+	var line := "Blue %d  -  %d Red        Match time %d:%02d        Final scrap value x%.2f" % [
+		m.scores[0], m.scores[1], int(m.time) / 60, int(m.time) % 60, m.multiplier()]
+	if m.scrap_race:
+		line = "SCRAP RACE   Blue %d  -  %d Red scrap        Cheese banked %d - %d (scrap value x%.2f / x%.2f)        Match time %d:%02d" % [
+			m.scores[0], m.scores[1], m.vault[0], m.vault[1], m.multiplier(0), m.multiplier(1), int(m.time) / 60, int(m.time) % 60]
+	var score := UiKit.label(line, 15, UiKit.BRASS)
 	score.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(score)
 
@@ -168,7 +173,7 @@ static func sorted_team(rats: Array[Rat], team: int) -> Array[Rat]:
 
 static func mvp_score(r: Rat) -> int:
 	var s := r.stats
-	return int(s.get("banked", 0)) * 10 + int(s.get("stolen", 0)) * 6 + int(s.get("mined", 0)) * 4 \
+	return int(s.get("scrapbank", 0)) / 5 + int(s.get("banked", 0)) * 10 + int(s.get("stolen", 0)) * 6 + int(s.get("mined", 0)) * 4 \
 		+ int(s.get("bonks", 0)) * 2 + int(s.get("tnt", 0)) + int(s.get("traps", 0)) + int(s.get("blocks", 0)) / 20
 
 
@@ -251,6 +256,8 @@ func _card(r: Rat, winners: bool) -> Control:
 	v.add_child(grid)
 	var values := {}
 	for k: String in Match.STATS:
+		if Match.SCRAP_RACE_ONLY.has(k) and not m.scrap_race:
+			continue
 		var n := UiKit.label(String(Match.STAT_NAMES[k]), 12, UiKit.PAPER.darkened(0.15))
 		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(n)
@@ -279,6 +286,8 @@ func _refresh(force := false) -> void:
 		if not is_instance_valid(r):
 			continue
 		for k: String in Match.STATS:
+			if not (c["values"] as Dictionary).has(k):
+				continue
 			var n := int(r.stats.get(k, 0))
 			var l: Label = c["values"][k]
 			l.text = str(n)

@@ -99,7 +99,7 @@ func _warm_map(settings: Dictionary, cover: LoadingScreen) -> void:
 	var mode := String(settings.get("mode", "race"))
 	if mode == "lobby" or String(settings.get("net", "")) == "client" or String(settings.get("map_file", "")) != "":
 		return
-	var need := 0 if mode == "free" else MapGenerator.min_cheese(int(settings.get("goal", 8)))
+	var need := Match.cheese_needed(settings)
 	var task := WorkerThreadPool.add_task(MapGenerator.warm.bind(int(settings.get("seed", 1)), need), true)
 	var t := 0.0
 	while not WorkerThreadPool.is_task_completed(task):

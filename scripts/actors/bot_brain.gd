@@ -82,7 +82,7 @@ func _retarget() -> void:
 	if not m.free_mode and rat.carried == 0:
 		# defend: someone is in our vault and we are close enough to matter
 		for other in m.rats:
-			if other.team == enemy and m.in_base(other, rat.team) and other.position.distance_to(rat.position) < 30.0 and m.scores[rat.team] > 0:
+			if other.team == enemy and m.in_base(other, rat.team) and other.position.distance_to(rat.position) < 30.0 and m.vault[rat.team] > 0:
 				mode = "defend"
 				target = other.position
 				return
@@ -96,9 +96,10 @@ func _retarget() -> void:
 	# raid: when clearly behind, half the team goes for the enemy vault instead of digging -
 	# unless someone has been standing guard in it for a while: then it's not worth it
 	var behind := m.scores[enemy] - m.scores[rat.team]
+	var far_behind := 40 if m.scrap_race else 2   # (a Scrap Race raid steals cheese: their scrap value)
 	var guarded := m.guard_t[enemy] >= Config.BOT_RAID_GUARDED
-	if not m.free_mode and m.scores[enemy] > 0 and rat.carried < rat.capacity() and not guarded \
-			and ((mode == "raid" and behind >= 0) or (behind >= 2 and rat.id % 2 == 0 and rat.carried == 0)):
+	if not m.free_mode and m.vault[enemy] > 0 and rat.carried < rat.capacity() and not guarded \
+			and ((mode == "raid" and behind >= 0) or (behind >= far_behind and rat.id % 2 == 0 and rat.carried == 0)):
 		mode = "raid"
 		var ez := MapGenerator.base_zone(enemy)
 		target = ez.position + Vector3(ez.size.x * 0.5, 0.0, ez.size.z * 0.5)
@@ -106,7 +107,8 @@ func _retarget() -> void:
 	var cheese: Variant = _pick_cheese()
 	var full := rat.carried >= rat.capacity()
 	var far := cheese == null or (cheese as Vector3).distance_to(rat.position) > 12.0
-	if rat.carried > 0 and (full or far or mode == "raid"):
+	var hauling := m.scrap_race and rat.scrap_held >= Config.BOT_SCRAP_HAUL   # Scrap Race: time to bank it
+	if (rat.carried > 0 and (full or far or mode == "raid")) or hauling:
 		mode = "home"
 		var zone := MapGenerator.base_zone(rat.team)
 		var gate := MapGenerator.approach_point(rat.team)
@@ -188,19 +190,51 @@ func _pick_cheese() -> Variant:
 	return best
 
 
+func cheese_runner() -> bool:
+	## Scrap Race: one bot in three keeps fetching cheese (it raises the
+	## team's scrap value); the rest mine scrap.
+	return rat.id % 3 == 0
+
+
 func _pick_scrap(cheese: Variant) -> Variant:
 	## Scrap close by, when we aren't hauling cheese: worth a short detour.
+	## In a Scrap Race (miners): the main job - the nearest scrap anywhere.
 	## Sets target_cell to the block to mine.
+	if m.scrap_race and not cheese_runner():
+		if rat.carried > 0:
+			return null
+		var near_cheese: Variant = cheese if cheese != null and (cheese as Vector3).distance_to(rat.position) < 6.0 else null
+		var local: Variant = _scan_scrap(8, near_cheese)
+		return local if local != null or near_cheese != null else _nearest_scrap()
 	if m.unlimited() or rat.carried > 0 or rat.scrap >= SCRAP_ENOUGH:
 		return null
+	return _scan_scrap(SCRAP_REACH, cheese)
+
+
+func _nearest_scrap() -> Variant:
+	## Anywhere on the map (Match keeps an index of scrap blocks).
+	var best: Variant = null
+	var best_cost := INF
+	for c: Vector3i in m.scrap_cells:
+		var p := Vector3(c) + Vector3(0.5, 0.0, 0.5)
+		var noise := fmod(absf(float(c.x * 31 + c.y * 17 + c.z * 13) + jitter), 9.0)
+		var cost := p.distance_to(rat.position) + noise + absf(p.y - rat.position.y) * 0.5
+		if cost < best_cost:
+			best_cost = cost
+			best = p
+			target_cell = c
+	return best
+
+
+func _scan_scrap(reach: int, cheese: Variant) -> Variant:
 	var f := rat.feet_cell()
 	var best: Variant = null
-	var best_d := SCRAP_REACH + 0.5
+	var best_d := reach + 0.5
 	if cheese != null:
 		best_d = minf(best_d, (cheese as Vector3).distance_to(rat.position))   # cheese right there comes first
 	for dy in range(-2, 4):
-		for dz in range(-SCRAP_REACH, SCRAP_REACH + 1):
-			for dx in range(-SCRAP_REACH, SCRAP_REACH + 1):
+		for dz in range(-reach, reach + 1):
+			for dx in range(-reach, reach + 1):
 				var c := f + Vector3i(dx, dy, dz)
 				if m.world.get_cell(c) != Blocks.SCRAP:
 					continue
@@ -222,8 +256,8 @@ func _count_scrap() -> void:
 
 func _bank_scrap() -> void:
 	## At base or beside a team stash: half of what we mined goes to the team.
-	if mined < 2 or not m.can_use_stash(rat):
-		return
+	if mined < 2 or not m.can_use_stash(rat) or m.scrap_race:
+		return   # (in a Scrap Race it all goes on the scoreboard instead)
 	var put := mini(mined / 2, rat.scrap)
 	mined = 0
 	if put > 0 and m.stash_move(rat, "scrap", put) == "":
