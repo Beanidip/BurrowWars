@@ -51,8 +51,8 @@ var lobby_left := -1.0              # seconds until a server's lobby ends; -1 = 
 var _bull_cd: Dictionary = {}       # rat id -> seconds before it can score another bullseye
 var goal := 8
 var scores: Array[int] = [0, 0]   # what wins: cheese banked (Cheese Race) or scrap banked (Scrap Race)
-var vault: Array[int] = [0, 0]
-var scrap_cells: Dictionary = {}   # Scrap Race, authority: every scrap block (for the bots)     # cheese in each team's vault (in a Cheese Race, the same as scores)
+var vault: Array[int] = [0, 0]     # Scrap Race: cheese in each team's vault (a Cheese Race keeps it in scores)
+var scrap_cells: Dictionary = {}   # Scrap Race, authority: every scrap block (for the bots)
 var rats: Array[Rat] = []
 var bots: Array[BotBrain] = []
 var pickups: Array[Pickup] = []
@@ -287,7 +287,13 @@ func multiplier(team := -1) -> float:
 		if team < 0:
 			return maxf(multiplier(0), multiplier(1))
 		return 1.0 + float(vault[clampi(team, 0, 1)]) / float(Config.SCRAP_CHEESE_REF) * growth
-	return 1.0 + float(vault[0] + vault[1]) / float(maxi(goal, 1)) * growth
+	return 1.0 + float(scores[0] + scores[1]) / float(maxi(goal, 1)) * growth
+
+
+func cheese_in_vault(team: int) -> int:
+	## Banked cheese a raid could take: the score in a Cheese Race, the vault
+	## in a Scrap Race.
+	return vault[team] if scrap_race else scores[team]
 
 
 static func cheese_needed(s: Dictionary) -> int:
@@ -556,7 +562,7 @@ func _check_raid(r: Rat, dt: float) -> void:
 	## their own base freezes the raid, and everyone is warned when it starts.
 	## The cheese is moved, never created.
 	var enemy := 1 - r.team
-	if over or free_mode or vault[enemy] <= 0 or r.carried >= r.capacity() or r.stun > 0.0 or r.knock > 0.0 \
+	if over or free_mode or cheese_in_vault(enemy) <= 0 or r.carried >= r.capacity() or r.stun > 0.0 or r.knock > 0.0 \
 			or r.flying or not in_base(r, enemy):
 		r.raid_t = 0.0
 		return
@@ -571,8 +577,9 @@ func _check_raid(r: Rat, dt: float) -> void:
 	r.raid_t += dt
 	if r.raid_t >= Config.RAID_TIME:
 		r.raid_t = 0.0
-		vault[enemy] -= 1
-		if not scrap_race:
+		if scrap_race:
+			vault[enemy] -= 1
+		else:
 			scores[enemy] -= 1
 		r.carried += 1
 		tally(r, "stolen")
@@ -585,8 +592,9 @@ func _deposit(r: Rat) -> void:
 	var n := r.carried
 	r.carried = 0
 	tally(r, "banked", n)
-	vault[r.team] += n
-	if not scrap_race:
+	if scrap_race:
+		vault[r.team] += n
+	else:
 		scores[r.team] += n
 	score_changed.emit()
 	fx.emit("deposit", r.position, r.team)

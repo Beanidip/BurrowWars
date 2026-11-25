@@ -5,7 +5,7 @@
 | Change | Files |
 |---|---|
 | **Scrap Race**, a new mode: the first team to bank the scrap goal wins (default 300; 50-3000). Mined scrap is carried until you step into your base, then it counts for the team and stays yours to spend. Bonks knock half your unbanked scrap loose for anyone to grab; respawning drops it; spending it before you bank it means it never counts | `match/match.gd`, `actors/rat.gd`, `match/match_view.gd`, `core/config.gd` |
-| Cheese is the multiplier, per team: your scrap value is 1 + (your banked cheese / 8) x 1.5. Raids steal a cheese (and some of their scrap value). Cheese now sits in each team's vault in both modes; in a Cheese Race the vault is the score, as before | `match/match.gd`, `actors/bot_brain.gd`, `ui/hud.gd` |
+| Cheese is the multiplier, per team: your scrap value is 1 + (your banked cheese / 8) x 1.5. Raids steal a cheese from the vault (and some of their scrap value). In a Cheese Race nothing changes: the banked cheese is the score | `match/match.gd`, `actors/bot_brain.gd`, `ui/hud.gd` |
 | Bots: two in three mine scrap anywhere on the map and haul it home at 30; the rest fetch cheese. A 2v2 bot match to 300 finishes in about 9 minutes | `actors/bot_brain.gd`, `match/match.gd` |
 | Setup page: pick Cheese Race or Scrap Race (with its own goal slider), for bot games and hosted games. Dedicated servers: `--mode scrap`. The server list, status page, HUD and results screen (Scrap banked tally, both teams' scrap values) know about it. Network protocol 13 | `ui/main_menu.gd`, `net/dedicated_server.gd`, `net/server_list.gd`, `net/net_server.gd`, `net/net_client.gd`, `ui/results_screen.gd` |
 

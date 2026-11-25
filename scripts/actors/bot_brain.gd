@@ -82,7 +82,7 @@ func _retarget() -> void:
 	if not m.free_mode and rat.carried == 0:
 		# defend: someone is in our vault and we are close enough to matter
 		for other in m.rats:
-			if other.team == enemy and m.in_base(other, rat.team) and other.position.distance_to(rat.position) < 30.0 and m.vault[rat.team] > 0:
+			if other.team == enemy and m.in_base(other, rat.team) and other.position.distance_to(rat.position) < 30.0 and m.cheese_in_vault(rat.team) > 0:
 				mode = "defend"
 				target = other.position
 				return
@@ -98,7 +98,7 @@ func _retarget() -> void:
 	var behind := m.scores[enemy] - m.scores[rat.team]
 	var far_behind := 40 if m.scrap_race else 2   # (a Scrap Race raid steals cheese: their scrap value)
 	var guarded := m.guard_t[enemy] >= Config.BOT_RAID_GUARDED
-	if not m.free_mode and m.vault[enemy] > 0 and rat.carried < rat.capacity() and not guarded \
+	if not m.free_mode and m.cheese_in_vault(enemy) > 0 and rat.carried < rat.capacity() and not guarded \
 			and ((mode == "raid" and behind >= 0) or (behind >= far_behind and rat.id % 2 == 0 and rat.carried == 0)):
 		mode = "raid"
 		var ez := MapGenerator.base_zone(enemy)
